@@ -1,4 +1,5 @@
 using EAPlaymateGroup.Data;
+using EAPlaymateGroup.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +14,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddDbContext<EAPlaymateGroupDbContext>(options =>
     options.UseSqlServer(connectionString));
+builder.Services.AddScoped<OrderService>();
 
 builder.Services.AddCors(options =>
 {

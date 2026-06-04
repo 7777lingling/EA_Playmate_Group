@@ -180,3 +180,14 @@ API 的一般驗證錯誤會回傳：
 ```text
 Common/DomainValues.cs
 ```
+
+## Service Layer
+
+目前已建立：
+
+- `Services/ServiceResult.cs`
+- `Services/OrderService.cs`
+- `Services/OrderMapper.cs`
+- `Services/AuditLogWriter.cs`
+
+`OrdersController` 的寫入流程已改成呼叫 `OrderService`，Controller 保留 HTTP request/response 與查詢端點。
