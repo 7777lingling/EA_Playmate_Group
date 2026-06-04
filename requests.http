@@ -1,0 +1,85 @@
+@baseUrl = http://localhost:5177
+
+### Health
+GET {{baseUrl}}/
+
+### List users
+GET {{baseUrl}}/api/users
+
+### List active players
+GET {{baseUrl}}/api/users/players
+
+### List active bosses
+GET {{baseUrl}}/api/users/bosses
+
+### Create player
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "nickname": "PlayerA",
+  "systemRole": "staff",
+  "isPlayer": true,
+  "isBoss": false
+}
+
+### Create boss
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "nickname": "BossA",
+  "systemRole": "staff",
+  "isPlayer": false,
+  "isBoss": true
+}
+
+### Create order
+# Replace ownerUserId and members[0].userId with real IDs from the create/list users responses.
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+
+{
+  "orderNo": "TEST-001",
+  "orderDate": "2026-06-04",
+  "ownerUserId": 2,
+  "amount": 100.00,
+  "commissionRate": 0.1000,
+  "commissionAmount": 10.00,
+  "status": "completed",
+  "customerPaymentStatus": "unpaid",
+  "remark": "Test order",
+  "members": [
+    {
+      "userId": 1,
+      "role": "player",
+      "shareAmount": 90.00
+    }
+  ]
+}
+
+### Mark customer payment paid
+POST {{baseUrl}}/api/orders/1/customer-payment-status
+Content-Type: application/json
+
+{
+  "customerPaymentStatus": "paid"
+}
+
+### Generate monthly payments
+POST {{baseUrl}}/api/payments/generate-monthly
+Content-Type: application/json
+
+{
+  "payMonth": "2026-06",
+  "overwriteExisting": false
+}
+
+### Dashboard summary
+GET {{baseUrl}}/api/dashboard/summary?date=2026-06-04
+
+### Ranking
+GET {{baseUrl}}/api/dashboard/ranking
+
+### Audit logs
+GET {{baseUrl}}/api/auditlogs

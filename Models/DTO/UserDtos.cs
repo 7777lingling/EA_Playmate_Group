@@ -40,3 +40,8 @@ public sealed class UpdateUserRequestDto
     public bool IsActive { get; set; }
     public DateTime? LeftAt { get; set; }
 }
+
+public sealed class LeaveUserRequestDto
+{
+    public DateTime? LeftAt { get; set; }
+}

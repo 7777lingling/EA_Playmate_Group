@@ -120,8 +120,13 @@ http://localhost:5177
 - `GET /`
 - `GET /api/users`
 - `GET /api/users/{id}`
+- `GET /api/users/players`
+- `GET /api/users/bosses`
 - `POST /api/users`
 - `PUT /api/users/{id}`
+- `POST /api/users/{id}/deactivate`
+- `POST /api/users/{id}/activate`
+- `POST /api/users/{id}/leave`
 - `GET /api/orders`
 - `GET /api/orders/{id}`
 - `POST /api/orders`
@@ -144,6 +149,9 @@ http://localhost:5177
 
 - 新增使用者
 - 修改使用者
+- 啟用使用者
+- 停用使用者
+- 使用者離團
 - 新增訂單
 - 修改訂單
 - 取消訂單
