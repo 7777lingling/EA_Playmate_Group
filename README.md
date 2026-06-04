@@ -188,6 +188,9 @@ Common/DomainValues.cs
 - `Services/ServiceResult.cs`
 - `Services/OrderService.cs`
 - `Services/OrderMapper.cs`
+- `Services/PaymentService.cs`
+- `Services/PaymentMapper.cs`
 - `Services/AuditLogWriter.cs`
 
 `OrdersController` 的寫入流程已改成呼叫 `OrderService`，Controller 保留 HTTP request/response 與查詢端點。
+`PaymentsController` 的月結、修改發薪、標記已發薪流程已改成呼叫 `PaymentService`。
