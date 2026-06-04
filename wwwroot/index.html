@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EA Playmate Group</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=20260604-users-split">
 </head>
 <body>
   <aside class="sidebar">
@@ -108,9 +108,9 @@
           <label>銀行帳號<input name="bankAccount" maxlength="200"></label>
           <label>系統權限
             <select name="systemRole">
-              <option value="staff">staff</option>
-              <option value="admin">admin</option>
-              <option value="viewer">viewer</option>
+              <option value="staff">工作人員</option>
+              <option value="admin">管理員</option>
+              <option value="viewer">檢視者</option>
             </select>
           </label>
           <div class="check-grid">
@@ -120,25 +120,47 @@
           <button class="primary" type="submit">新增</button>
         </form>
 
-        <section class="panel">
-          <div class="panel-head">
-            <h2>成員清單</h2>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>暱稱</th>
-                  <th>身份</th>
-                  <th>狀態</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="userRows"></tbody>
-            </table>
-          </div>
-        </section>
+        <div class="grid user-lists">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>團員清單</h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>暱稱</th>
+                    <th>權限</th>
+                    <th>狀態</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="playerRows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>老闆清單</h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>暱稱</th>
+                    <th>權限</th>
+                    <th>狀態</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="bossRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       </div>
     </section>
 
@@ -160,18 +182,18 @@
           <div class="split">
             <label>狀態
               <select name="status">
-                <option value="completed">completed</option>
-                <option value="draft">draft</option>
-                <option value="disputed">disputed</option>
-                <option value="cancelled">cancelled</option>
+                <option value="completed">已完成</option>
+                <option value="draft">草稿</option>
+                <option value="disputed">爭議中</option>
+                <option value="cancelled">已取消</option>
               </select>
             </label>
             <label>客戶收款
               <select name="customerPaymentStatus">
-                <option value="unpaid">unpaid</option>
-                <option value="paid">paid</option>
-                <option value="partial">partial</option>
-                <option value="refunded">refunded</option>
+                <option value="unpaid">未收款</option>
+                <option value="paid">已收款</option>
+                <option value="partial">部分收款</option>
+                <option value="refunded">已退款</option>
               </select>
             </label>
           </div>
@@ -271,6 +293,6 @@
     </section>
   </main>
 
-  <script src="/app.js"></script>
+  <script src="/app.js?v=20260604-users-split"></script>
 </body>
 </html>

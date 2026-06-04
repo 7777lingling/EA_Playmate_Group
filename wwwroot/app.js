@@ -20,6 +20,55 @@ const money = new Intl.NumberFormat("zh-TW", {
   maximumFractionDigits: 2
 });
 
+const labels = {
+  systemRole: {
+    admin: "管理員",
+    staff: "工作人員",
+    viewer: "檢視者"
+  },
+  orderStatus: {
+    draft: "草稿",
+    completed: "已完成",
+    cancelled: "已取消",
+    disputed: "爭議中"
+  },
+  customerPaymentStatus: {
+    unpaid: "未收款",
+    partial: "部分收款",
+    paid: "已收款",
+    refunded: "已退款"
+  },
+  memberRole: {
+    player: "團員",
+    leader: "帶團",
+    trainer: "教學",
+    bonus: "獎金"
+  },
+  paymentStatus: {
+    pending: "待發薪",
+    paid: "已發薪",
+    cancelled: "已取消"
+  },
+  auditAction: {
+    create: "新增",
+    update: "修改",
+    deactivate: "停用",
+    activate: "啟用",
+    leave: "離團",
+    cancel: "取消",
+    update_status: "修改狀態",
+    update_customer_payment_status: "修改收款狀態",
+    generate_monthly: "產生月結",
+    mark_paid: "標記已發薪"
+  },
+  targetType: {
+    users: "成員",
+    orders: "訂單",
+    payments: "發薪",
+    audit_logs: "操作紀錄"
+  }
+};
+
 document.addEventListener("DOMContentLoaded", async () => {
   bindNavigation();
   bindForms();
@@ -175,12 +224,17 @@ function renderRecentOrders() {
 }
 
 function renderUsers() {
-  const body = document.getElementById("userRows");
-  body.innerHTML = state.users.length ? state.users.map((user) => `
+  renderUserTable("playerRows", state.users.filter((user) => user.isPlayer));
+  renderUserTable("bossRows", state.users.filter((user) => user.isBoss));
+}
+
+function renderUserTable(elementId, users) {
+  const body = document.getElementById(elementId);
+  body.innerHTML = users.length ? users.map((user) => `
     <tr>
       <td>${user.id}</td>
       <td>${escapeHtml(user.nickname)}</td>
-      <td>${identityText(user)}</td>
+      <td>${label("systemRole", user.systemRole)}</td>
       <td>${user.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
       <td>
         ${user.isActive
@@ -190,6 +244,10 @@ function renderUsers() {
     </tr>
   `).join("") : emptyRow(5);
 
+  bindUserTableActions(body);
+}
+
+function bindUserTableActions(body) {
   body.querySelectorAll("[data-user-deactivate]").forEach((button) => {
     button.addEventListener("click", async () => {
       await api(`/api/users/${button.dataset.userDeactivate}/deactivate`, { method: "POST", body: "{}" });
@@ -246,8 +304,8 @@ function renderAuditLogs(rows) {
   body.innerHTML = rows.length ? rows.map((log) => `
     <tr>
       <td>${formatDateTime(log.createdAt)}</td>
-      <td>${escapeHtml(log.action)}</td>
-      <td>${escapeHtml(log.targetType)}</td>
+      <td>${escapeHtml(label("auditAction", log.action))}</td>
+      <td>${escapeHtml(label("targetType", log.targetType))}</td>
       <td>${log.targetId || ""}</td>
     </tr>
   `).join("") : emptyRow(4);
@@ -277,10 +335,10 @@ function addMemberRow() {
   row.innerHTML = `
     <select data-member-select></select>
     <select data-member-role>
-      <option value="player">player</option>
-      <option value="leader">leader</option>
-      <option value="trainer">trainer</option>
-      <option value="bonus">bonus</option>
+      <option value="player">團員</option>
+      <option value="leader">帶團</option>
+      <option value="trainer">教學</option>
+      <option value="bonus">獎金</option>
     </select>
     <input data-member-share type="number" step="0.01" min="0" placeholder="分潤">
     <button class="icon-btn" type="button" title="移除">×</button>
@@ -399,17 +457,21 @@ function identityText(user) {
 
 function statusPill(status) {
   const type = status === "completed" ? "good" : status === "cancelled" ? "bad" : "warn";
-  return pill(status, type);
+  return pill(label("orderStatus", status), type);
 }
 
 function paymentPill(status) {
   const type = status === "paid" ? "good" : status === "unpaid" ? "warn" : "";
-  return pill(status, type);
+  return pill(label("customerPaymentStatus", status), type);
 }
 
 function paymentStatusPill(status) {
   const type = status === "paid" ? "good" : status === "cancelled" ? "bad" : "warn";
-  return pill(status, type);
+  return pill(label("paymentStatus", status), type);
+}
+
+function label(group, value) {
+  return labels[group]?.[value] || value || "";
 }
 
 function pill(text, type = "") {
