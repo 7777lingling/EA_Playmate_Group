@@ -160,3 +160,23 @@ http://localhost:5177
 - 產生月結薪資
 - 修改發薪紀錄
 - 標記已發薪
+
+## Error Format
+
+API 的一般驗證錯誤會回傳：
+
+```json
+{
+  "code": "validation_error",
+  "message": "Validation failed.",
+  "errors": {
+    "nickname": ["Nickname is required."]
+  }
+}
+```
+
+領域狀態值集中在：
+
+```text
+Common/DomainValues.cs
+```

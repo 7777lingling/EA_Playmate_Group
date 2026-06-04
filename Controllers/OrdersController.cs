@@ -1,3 +1,4 @@
+using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
@@ -81,12 +82,21 @@ public sealed class OrdersController : ControllerBase
     {
         if (request.Amount <= 0)
         {
-            return BadRequest("Amount must be greater than zero.");
+            return ApiErrors.BadRequest("invalid_amount", "Amount must be greater than zero.");
         }
 
         if (request.Members.Count == 0)
         {
-            return BadRequest("At least one order member is required.");
+            return ApiErrors.BadRequest("missing_order_members", "At least one order member is required.");
+        }
+
+        var validationError = ValidateOrderValues(
+            request.Status,
+            request.CustomerPaymentStatus,
+            request.Members.Select(x => x.Role));
+        if (validationError is not null)
+        {
+            return validationError;
         }
 
         var commissionAmount = request.CommissionAmount
@@ -96,19 +106,19 @@ public sealed class OrdersController : ControllerBase
 
         if (commissionAmount < 0 || commissionAmount > request.Amount)
         {
-            return BadRequest("Commission amount must be between zero and amount.");
+            return ApiErrors.BadRequest("invalid_commission_amount", "Commission amount must be between zero and amount.");
         }
 
         if (shareTotal != distributableAmount)
         {
-            return BadRequest($"Share total must equal amount - commission amount. Expected {distributableAmount}, got {shareTotal}.");
+            return ApiErrors.BadRequest("invalid_share_total", $"Share total must equal amount - commission amount. Expected {distributableAmount}, got {shareTotal}.");
         }
 
         var userIds = request.Members.Select(x => x.UserId).Distinct().ToList();
         var validUserCount = await _db.Users.CountAsync(x => userIds.Contains(x.Id) && x.IsActive);
         if (validUserCount != userIds.Count)
         {
-            return BadRequest("One or more order members do not exist or are inactive.");
+            return ApiErrors.BadRequest("invalid_order_member", "One or more order members do not exist or are inactive.");
         }
 
         if (request.OwnerUserId.HasValue)
@@ -116,7 +126,7 @@ public sealed class OrdersController : ControllerBase
             var ownerExists = await _db.Users.AnyAsync(x => x.Id == request.OwnerUserId.Value && x.IsActive);
             if (!ownerExists)
             {
-                return BadRequest("Owner user does not exist or is inactive.");
+                return ApiErrors.BadRequest("invalid_owner_user", "Owner user does not exist or is inactive.");
             }
         }
 
@@ -177,12 +187,21 @@ public sealed class OrdersController : ControllerBase
 
         if (request.Amount <= 0)
         {
-            return BadRequest("Amount must be greater than zero.");
+            return ApiErrors.BadRequest("invalid_amount", "Amount must be greater than zero.");
         }
 
         if (request.Members.Count == 0)
         {
-            return BadRequest("At least one order member is required.");
+            return ApiErrors.BadRequest("missing_order_members", "At least one order member is required.");
+        }
+
+        var validationError = ValidateOrderValues(
+            request.Status,
+            request.CustomerPaymentStatus,
+            request.Members.Select(x => x.Role));
+        if (validationError is not null)
+        {
+            return validationError;
         }
 
         var distributableAmount = request.Amount - request.CommissionAmount;
@@ -190,19 +209,19 @@ public sealed class OrdersController : ControllerBase
 
         if (request.CommissionAmount < 0 || request.CommissionAmount > request.Amount)
         {
-            return BadRequest("Commission amount must be between zero and amount.");
+            return ApiErrors.BadRequest("invalid_commission_amount", "Commission amount must be between zero and amount.");
         }
 
         if (shareTotal != distributableAmount)
         {
-            return BadRequest($"Share total must equal amount - commission amount. Expected {distributableAmount}, got {shareTotal}.");
+            return ApiErrors.BadRequest("invalid_share_total", $"Share total must equal amount - commission amount. Expected {distributableAmount}, got {shareTotal}.");
         }
 
         var userIds = request.Members.Select(x => x.UserId).Distinct().ToList();
         var validUserCount = await _db.Users.CountAsync(x => userIds.Contains(x.Id) && x.IsActive);
         if (validUserCount != userIds.Count)
         {
-            return BadRequest("One or more order members do not exist or are inactive.");
+            return ApiErrors.BadRequest("invalid_order_member", "One or more order members do not exist or are inactive.");
         }
 
         if (request.OwnerUserId.HasValue)
@@ -210,7 +229,7 @@ public sealed class OrdersController : ControllerBase
             var ownerExists = await _db.Users.AnyAsync(x => x.Id == request.OwnerUserId.Value && x.IsActive);
             if (!ownerExists)
             {
-                return BadRequest("Owner user does not exist or is inactive.");
+                return ApiErrors.BadRequest("invalid_owner_user", "Owner user does not exist or is inactive.");
             }
         }
 
@@ -296,10 +315,9 @@ public sealed class OrdersController : ControllerBase
     [HttpPost("{id:int}/status")]
     public async Task<IActionResult> UpdateStatus(int id, UpdateOrderStatusRequestDto request)
     {
-        var allowedStatuses = new[] { "draft", "completed", "cancelled", "disputed" };
-        if (!allowedStatuses.Contains(request.Status))
+        if (!DomainValues.IsOrderStatus(request.Status))
         {
-            return BadRequest("Invalid order status.");
+            return ApiErrors.BadRequest("invalid_order_status", "Invalid order status.");
         }
 
         var order = await _db.Orders.FirstOrDefaultAsync(x => x.Id == id);
@@ -339,10 +357,9 @@ public sealed class OrdersController : ControllerBase
     [HttpPost("{id:int}/customer-payment-status")]
     public async Task<IActionResult> UpdateCustomerPaymentStatus(int id, UpdateCustomerPaymentStatusRequestDto request)
     {
-        var allowedStatuses = new[] { "unpaid", "partial", "paid", "refunded" };
-        if (!allowedStatuses.Contains(request.CustomerPaymentStatus))
+        if (!DomainValues.IsCustomerPaymentStatus(request.CustomerPaymentStatus))
         {
-            return BadRequest("Invalid customer payment status.");
+            return ApiErrors.BadRequest("invalid_customer_payment_status", "Invalid customer payment status.");
         }
 
         var order = await _db.Orders.FirstOrDefaultAsync(x => x.Id == id);
@@ -409,5 +426,34 @@ public sealed class OrdersController : ControllerBase
                 })
                 .ToList()
         };
+    }
+
+    private static BadRequestObjectResult? ValidateOrderValues(
+        string status,
+        string customerPaymentStatus,
+        IEnumerable<string> memberRoles)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (!DomainValues.IsOrderStatus(status))
+        {
+            errors["status"] = ["Status must be draft, completed, cancelled, or disputed."];
+        }
+
+        if (!DomainValues.IsCustomerPaymentStatus(customerPaymentStatus))
+        {
+            errors["customerPaymentStatus"] = ["CustomerPaymentStatus must be unpaid, partial, paid, or refunded."];
+        }
+
+        var invalidRoles = memberRoles
+            .Where(x => !DomainValues.IsOrderMemberRole(x))
+            .Distinct()
+            .ToList();
+        if (invalidRoles.Count > 0)
+        {
+            errors["members.role"] = [$"Invalid role: {string.Join(", ", invalidRoles)}."];
+        }
+
+        return errors.Count == 0 ? null : ApiErrors.Validation(errors);
     }
 }

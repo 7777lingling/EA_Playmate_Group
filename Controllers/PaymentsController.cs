@@ -1,3 +1,4 @@
+using EAPlaymateGroup.Common;
 using System.Text.Json;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
@@ -62,7 +63,7 @@ public sealed class PaymentsController : ControllerBase
     {
         if (!TryParsePayMonth(request.PayMonth, out var monthStart))
         {
-            return BadRequest("PayMonth must use yyyy-MM format.");
+            return ApiErrors.BadRequest("invalid_pay_month", "PayMonth must use yyyy-MM format.");
         }
 
         var nextMonth = monthStart.AddMonths(1);
@@ -183,6 +184,11 @@ public sealed class PaymentsController : ControllerBase
         if (payment is null)
         {
             return NotFound();
+        }
+
+        if (!DomainValues.IsPaymentStatus(request.PaymentStatus))
+        {
+            return ApiErrors.BadRequest("invalid_payment_status", "PaymentStatus must be pending, paid, or cancelled.");
         }
 
         var before = new

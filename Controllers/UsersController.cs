@@ -1,3 +1,4 @@
+using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
@@ -89,7 +90,15 @@ public sealed class UsersController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Nickname))
         {
-            return BadRequest("Nickname is required.");
+            return ApiErrors.Validation(new Dictionary<string, string[]>
+            {
+                ["nickname"] = ["Nickname is required."]
+            });
+        }
+
+        if (!DomainValues.IsSystemRole(request.SystemRole))
+        {
+            return ApiErrors.BadRequest("invalid_system_role", "SystemRole must be admin, staff, or viewer.");
         }
 
         var user = new User
@@ -131,7 +140,15 @@ public sealed class UsersController : ControllerBase
 
         if (string.IsNullOrWhiteSpace(request.Nickname))
         {
-            return BadRequest("Nickname is required.");
+            return ApiErrors.Validation(new Dictionary<string, string[]>
+            {
+                ["nickname"] = ["Nickname is required."]
+            });
+        }
+
+        if (!DomainValues.IsSystemRole(request.SystemRole))
+        {
+            return ApiErrors.BadRequest("invalid_system_role", "SystemRole must be admin, staff, or viewer.");
         }
 
         user.Nickname = request.Nickname.Trim();

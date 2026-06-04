@@ -1,3 +1,4 @@
+using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
@@ -64,12 +65,18 @@ public sealed class AuditLogsController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Action))
         {
-            return BadRequest("Action is required.");
+            return ApiErrors.Validation(new Dictionary<string, string[]>
+            {
+                ["action"] = ["Action is required."]
+            });
         }
 
         if (string.IsNullOrWhiteSpace(request.TargetType))
         {
-            return BadRequest("TargetType is required.");
+            return ApiErrors.Validation(new Dictionary<string, string[]>
+            {
+                ["targetType"] = ["TargetType is required."]
+            });
         }
 
         var log = new AuditLog
