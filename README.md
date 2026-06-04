@@ -127,3 +127,8 @@ http://localhost:5177
 - `POST /api/orders`
 - `GET /api/dashboard/summary`
 - `GET /api/dashboard/ranking`
+- `GET /api/payments`
+- `GET /api/payments/{id}`
+- `POST /api/payments/generate-monthly`
+- `PUT /api/payments/{id}`
+- `POST /api/payments/{id}/mark-paid`

@@ -44,3 +44,10 @@ public sealed class GenerateMonthlyPaymentsRequestDto
     public string PayMonth { get; set; } = string.Empty;
     public bool OverwriteExisting { get; set; }
 }
+
+public sealed class MarkPaymentPaidRequestDto
+{
+    public decimal? ActualAmount { get; set; }
+    public DateTime? PaidAt { get; set; }
+    public string? Note { get; set; }
+}
