@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EA Playmate Group</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">EA</div>
+      <div>
+        <strong>Playmate Group</strong>
+        <span>管理後台</span>
+      </div>
+    </div>
+    <nav class="nav-tabs" aria-label="主選單">
+      <button class="active" data-view="dashboard">總覽</button>
+      <button data-view="users">成員</button>
+      <button data-view="orders">訂單</button>
+      <button data-view="payments">月結</button>
+      <button data-view="audit">紀錄</button>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow" id="viewEyebrow">Dashboard</p>
+        <h1 id="viewTitle">總覽</h1>
+      </div>
+      <div class="top-actions">
+        <span class="status-dot" id="apiStatus">API</span>
+        <button class="ghost" id="refreshBtn" type="button">重新整理</button>
+      </div>
+    </header>
+
+    <section class="alert" id="alert" hidden></section>
+
+    <section class="view active" id="dashboardView">
+      <div class="stats-grid">
+        <article class="stat">
+          <span>今日營收</span>
+          <strong id="todayRevenue">0</strong>
+        </article>
+        <article class="stat">
+          <span>本月營收</span>
+          <strong id="monthRevenue">0</strong>
+        </article>
+        <article class="stat">
+          <span>本月團抽</span>
+          <strong id="monthCommission">0</strong>
+        </article>
+        <article class="stat warning">
+          <span>待收款</span>
+          <strong id="unpaidCount">0</strong>
+        </article>
+      </div>
+
+      <div class="grid two">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>排行榜</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>團員</th>
+                  <th>分潤</th>
+                  <th>筆數</th>
+                </tr>
+              </thead>
+              <tbody id="rankingRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>近期訂單</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>單號</th>
+                  <th>金額</th>
+                  <th>收款</th>
+                </tr>
+              </thead>
+              <tbody id="recentOrderRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="usersView">
+      <div class="grid form-list">
+        <form class="panel form" id="userForm">
+          <h2>新增成員</h2>
+          <label>暱稱<input name="nickname" required maxlength="50"></label>
+          <label>Discord ID<input name="discordId" maxlength="50"></label>
+          <label>Discord 名稱<input name="discordName" maxlength="100"></label>
+          <label>銀行帳號<input name="bankAccount" maxlength="200"></label>
+          <label>系統權限
+            <select name="systemRole">
+              <option value="staff">staff</option>
+              <option value="admin">admin</option>
+              <option value="viewer">viewer</option>
+            </select>
+          </label>
+          <div class="check-grid">
+            <label><input type="checkbox" name="isPlayer" checked> 團員</label>
+            <label><input type="checkbox" name="isBoss"> 老闆</label>
+          </div>
+          <button class="primary" type="submit">新增</button>
+        </form>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>成員清單</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>暱稱</th>
+                  <th>身份</th>
+                  <th>狀態</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="userRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="ordersView">
+      <div class="grid form-list">
+        <form class="panel form" id="orderForm">
+          <h2>新增訂單</h2>
+          <div class="split">
+            <label>日期<input name="orderDate" type="date" required></label>
+            <label>單號<input name="orderNo" maxlength="30"></label>
+          </div>
+          <label>老闆
+            <select name="ownerUserId" id="bossSelect"></select>
+          </label>
+          <div class="split">
+            <label>金額<input name="amount" type="number" step="0.01" min="0.01" required></label>
+            <label>團抽<input name="commissionAmount" type="number" step="0.01" min="0" required></label>
+          </div>
+          <div class="split">
+            <label>狀態
+              <select name="status">
+                <option value="completed">completed</option>
+                <option value="draft">draft</option>
+                <option value="disputed">disputed</option>
+                <option value="cancelled">cancelled</option>
+              </select>
+            </label>
+            <label>客戶收款
+              <select name="customerPaymentStatus">
+                <option value="unpaid">unpaid</option>
+                <option value="paid">paid</option>
+                <option value="partial">partial</option>
+                <option value="refunded">refunded</option>
+              </select>
+            </label>
+          </div>
+          <label>備註<textarea name="remark" rows="2"></textarea></label>
+
+          <div class="member-editor">
+            <div class="panel-head compact">
+              <h3>分潤</h3>
+              <button class="ghost small" id="addMemberBtn" type="button">新增團員</button>
+            </div>
+            <div id="memberRows"></div>
+            <div class="calc-line">
+              <span>可分潤 <strong id="distributableAmount">0</strong></span>
+              <span>已分配 <strong id="allocatedAmount">0</strong></span>
+            </div>
+          </div>
+
+          <button class="primary" type="submit">新增訂單</button>
+        </form>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>訂單清單</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>日期</th>
+                  <th>單號</th>
+                  <th>金額</th>
+                  <th>分潤</th>
+                  <th>狀態</th>
+                  <th>收款</th>
+                </tr>
+              </thead>
+              <tbody id="orderRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="paymentsView">
+      <div class="grid form-list">
+        <form class="panel form" id="paymentForm">
+          <h2>產生月結</h2>
+          <label>月份<input name="payMonth" type="month" required></label>
+          <label class="inline-check"><input name="overwriteExisting" type="checkbox"> 覆蓋既有月結</label>
+          <button class="primary" type="submit">產生</button>
+        </form>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>發薪紀錄</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>月份</th>
+                  <th>團員</th>
+                  <th>應發</th>
+                  <th>實發</th>
+                  <th>狀態</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="paymentRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="auditView">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>操作紀錄</h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>時間</th>
+                <th>動作</th>
+                <th>目標</th>
+                <th>ID</th>
+              </tr>
+            </thead>
+            <tbody id="auditRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

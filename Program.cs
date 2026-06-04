@@ -29,10 +29,12 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseCors("DefaultCors");
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.MapControllers();
 
-app.MapGet("/", () => Results.Ok(new
+app.MapGet("/api/health", () => Results.Ok(new
 {
     name = "EA Playmate Group API",
     status = "ok"

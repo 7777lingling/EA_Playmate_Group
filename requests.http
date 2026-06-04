@@ -1,7 +1,7 @@
 @baseUrl = http://localhost:5177
 
 ### Health
-GET {{baseUrl}}/
+GET {{baseUrl}}/api/health
 
 ### List users
 GET {{baseUrl}}/api/users

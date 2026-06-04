@@ -115,9 +115,21 @@ dotnet run
 http://localhost:5177
 ```
 
+管理畫面：
+
+```text
+http://localhost:5177/
+```
+
+前端檔案：
+
+- `wwwroot/index.html`
+- `wwwroot/styles.css`
+- `wwwroot/app.js`
+
 第一批 API：
 
-- `GET /`
+- `GET /api/health`
 - `GET /api/users`
 - `GET /api/users/{id}`
 - `GET /api/users/players`
@@ -144,6 +156,16 @@ http://localhost:5177
 - `GET /api/auditlogs`
 - `GET /api/auditlogs/{id}`
 - `POST /api/auditlogs`
+
+## Smoke Test
+
+端到端 API 測試腳本：
+
+```powershell
+.\Scripts\api-smoke-test.ps1
+```
+
+腳本會建立 `E2E_` 前綴的測試團員、老闆、訂單，並產生當月月結，用來確認整條 API 流程正常。
 
 目前會自動寫入 audit log 的操作：
 
