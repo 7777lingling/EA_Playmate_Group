@@ -77,3 +77,24 @@ Models/Entities
 - `AuditLog.cs`
 
 Entity 使用 navigation properties 保留資料表關聯，後續可直接接 `DbContext` 的 Fluent API 設定。
+
+## DbContext
+
+EF Core DbContext 已建立在：
+
+```text
+Data/EAPlaymateGroupDbContext.cs
+```
+
+需要 NuGet package：
+
+```text
+Microsoft.EntityFrameworkCore.SqlServer
+```
+
+ASP.NET Core 註冊範例：
+
+```csharp
+builder.Services.AddDbContext<EAPlaymateGroupDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+```
