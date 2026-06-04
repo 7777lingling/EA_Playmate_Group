@@ -186,6 +186,8 @@ Common/DomainValues.cs
 目前已建立：
 
 - `Services/ServiceResult.cs`
+- `Services/UserService.cs`
+- `Services/UserMapper.cs`
 - `Services/OrderService.cs`
 - `Services/OrderMapper.cs`
 - `Services/PaymentService.cs`
@@ -194,3 +196,4 @@ Common/DomainValues.cs
 
 `OrdersController` 的寫入流程已改成呼叫 `OrderService`，Controller 保留 HTTP request/response 與查詢端點。
 `PaymentsController` 的月結、修改發薪、標記已發薪流程已改成呼叫 `PaymentService`。
+`UsersController` 的新增、修改、啟用、停用、離團流程已改成呼叫 `UserService`。

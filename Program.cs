@@ -14,6 +14,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddDbContext<EAPlaymateGroupDbContext>(options =>
     options.UseSqlServer(connectionString));
+builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<PaymentService>();
 
