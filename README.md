@@ -98,3 +98,32 @@ ASP.NET Core 註冊範例：
 builder.Services.AddDbContext<EAPlaymateGroupDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 ```
+
+## Web API
+
+ASP.NET Core Web API 專案已建立。
+
+啟動：
+
+```powershell
+dotnet run
+```
+
+預設網址：
+
+```text
+http://localhost:5177
+```
+
+第一批 API：
+
+- `GET /`
+- `GET /api/users`
+- `GET /api/users/{id}`
+- `POST /api/users`
+- `PUT /api/users/{id}`
+- `GET /api/orders`
+- `GET /api/orders/{id}`
+- `POST /api/orders`
+- `GET /api/dashboard/summary`
+- `GET /api/dashboard/ranking`
