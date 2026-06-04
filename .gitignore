@@ -1,0 +1,17 @@
+# Local configuration with secrets
+appsettings.Development.json
+appsettings.Production.json
+*.user
+*.suo
+
+# Build output
+bin/
+obj/
+
+# IDE/editor
+.vs/
+.vscode/
+
+# OS files
+Thumbs.db
+Desktop.ini
