@@ -2,6 +2,7 @@ using System.Text.Json;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
+using EAPlaymateGroup.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -160,6 +161,18 @@ public sealed class PaymentsController : ControllerBase
             .Select(x => ToDto(x))
             .ToListAsync();
 
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            action: "generate_monthly",
+            targetType: "payments",
+            after: new
+            {
+                request.PayMonth,
+                request.OverwriteExisting,
+                PaymentCount = payments.Count,
+                TotalExpectedAmount = payments.Sum(x => x.ExpectedAmount)
+            }));
+        await _db.SaveChangesAsync();
+
         return Ok(payments);
     }
 
@@ -172,6 +185,16 @@ public sealed class PaymentsController : ControllerBase
             return NotFound();
         }
 
+        var before = new
+        {
+            payment.ExpectedAmount,
+            payment.ActualAmount,
+            payment.PaymentStatus,
+            payment.SnapshotJson,
+            payment.PaidAt,
+            payment.Note
+        };
+
         payment.ExpectedAmount = request.ExpectedAmount;
         payment.ActualAmount = request.ActualAmount;
         payment.PaymentStatus = request.PaymentStatus;
@@ -181,6 +204,24 @@ public sealed class PaymentsController : ControllerBase
         payment.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            action: "update",
+            targetType: "payments",
+            targetId: payment.Id,
+            targetUuid: payment.Uuid,
+            before: before,
+            after: new
+            {
+                payment.ExpectedAmount,
+                payment.ActualAmount,
+                payment.PaymentStatus,
+                payment.SnapshotJson,
+                payment.PaidAt,
+                payment.Note
+            }));
+        await _db.SaveChangesAsync();
+
         return NoContent();
     }
 
@@ -193,6 +234,14 @@ public sealed class PaymentsController : ControllerBase
             return NotFound();
         }
 
+        var before = new
+        {
+            payment.ActualAmount,
+            payment.PaymentStatus,
+            payment.PaidAt,
+            payment.Note
+        };
+
         payment.ActualAmount = request.ActualAmount ?? payment.ExpectedAmount;
         payment.PaymentStatus = "paid";
         payment.PaidAt = request.PaidAt ?? DateTime.UtcNow;
@@ -200,6 +249,22 @@ public sealed class PaymentsController : ControllerBase
         payment.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            action: "mark_paid",
+            targetType: "payments",
+            targetId: payment.Id,
+            targetUuid: payment.Uuid,
+            before: before,
+            after: new
+            {
+                payment.ActualAmount,
+                payment.PaymentStatus,
+                payment.PaidAt,
+                payment.Note
+            }));
+        await _db.SaveChangesAsync();
+
         return NoContent();
     }
 

@@ -1,6 +1,7 @@
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
+using EAPlaymateGroup.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -81,6 +82,14 @@ public sealed class UsersController : ControllerBase
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            action: "create",
+            targetType: "users",
+            targetId: user.Id,
+            targetUuid: user.Uuid,
+            after: ToDto(user)));
+        await _db.SaveChangesAsync();
+
         var dto = ToDto(user);
         return CreatedAtAction(nameof(GetUser), new { id = user.Id }, dto);
     }
@@ -93,6 +102,8 @@ public sealed class UsersController : ControllerBase
         {
             return NotFound();
         }
+
+        var before = ToDto(user);
 
         if (string.IsNullOrWhiteSpace(request.Nickname))
         {
@@ -111,6 +122,16 @@ public sealed class UsersController : ControllerBase
         user.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            action: "update",
+            targetType: "users",
+            targetId: user.Id,
+            targetUuid: user.Uuid,
+            before: before,
+            after: ToDto(user)));
+        await _db.SaveChangesAsync();
+
         return NoContent();
     }
 

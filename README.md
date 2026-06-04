@@ -132,3 +132,15 @@ http://localhost:5177
 - `POST /api/payments/generate-monthly`
 - `PUT /api/payments/{id}`
 - `POST /api/payments/{id}/mark-paid`
+- `GET /api/auditlogs`
+- `GET /api/auditlogs/{id}`
+- `POST /api/auditlogs`
+
+目前會自動寫入 audit log 的操作：
+
+- 新增使用者
+- 修改使用者
+- 新增訂單
+- 產生月結薪資
+- 修改發薪紀錄
+- 標記已發薪

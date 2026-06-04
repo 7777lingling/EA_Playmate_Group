@@ -1,6 +1,7 @@
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
+using EAPlaymateGroup.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -147,7 +148,17 @@ public sealed class OrdersController : ControllerBase
             .ThenInclude(x => x.User)
             .FirstAsync(x => x.Id == order.Id);
 
-        return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, ToDto(savedOrder));
+        var dto = ToDto(savedOrder);
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            action: "create",
+            targetType: "orders",
+            targetId: order.Id,
+            targetUuid: order.Uuid,
+            after: dto));
+        await _db.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, dto);
     }
 
     private static OrderDto ToDto(Order order)
