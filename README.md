@@ -125,6 +125,10 @@ http://localhost:5177
 - `GET /api/orders`
 - `GET /api/orders/{id}`
 - `POST /api/orders`
+- `PUT /api/orders/{id}`
+- `POST /api/orders/{id}/cancel`
+- `POST /api/orders/{id}/status`
+- `POST /api/orders/{id}/customer-payment-status`
 - `GET /api/dashboard/summary`
 - `GET /api/dashboard/ranking`
 - `GET /api/payments`
@@ -141,6 +145,10 @@ http://localhost:5177
 - 新增使用者
 - 修改使用者
 - 新增訂單
+- 修改訂單
+- 取消訂單
+- 修改訂單狀態
+- 修改客戶付款狀態
 - 產生月結薪資
 - 修改發薪紀錄
 - 標記已發薪

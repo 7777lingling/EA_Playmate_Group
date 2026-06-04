@@ -161,6 +161,221 @@ public sealed class OrdersController : ControllerBase
         return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, dto);
     }
 
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> UpdateOrder(int id, UpdateOrderRequestDto request)
+    {
+        var order = await _db.Orders
+            .Include(x => x.OwnerUser)
+            .Include(x => x.Members)
+            .ThenInclude(x => x.User)
+            .FirstOrDefaultAsync(x => x.Id == id);
+
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        if (request.Amount <= 0)
+        {
+            return BadRequest("Amount must be greater than zero.");
+        }
+
+        if (request.Members.Count == 0)
+        {
+            return BadRequest("At least one order member is required.");
+        }
+
+        var distributableAmount = request.Amount - request.CommissionAmount;
+        var shareTotal = request.Members.Sum(x => x.ShareAmount);
+
+        if (request.CommissionAmount < 0 || request.CommissionAmount > request.Amount)
+        {
+            return BadRequest("Commission amount must be between zero and amount.");
+        }
+
+        if (shareTotal != distributableAmount)
+        {
+            return BadRequest($"Share total must equal amount - commission amount. Expected {distributableAmount}, got {shareTotal}.");
+        }
+
+        var userIds = request.Members.Select(x => x.UserId).Distinct().ToList();
+        var validUserCount = await _db.Users.CountAsync(x => userIds.Contains(x.Id) && x.IsActive);
+        if (validUserCount != userIds.Count)
+        {
+            return BadRequest("One or more order members do not exist or are inactive.");
+        }
+
+        if (request.OwnerUserId.HasValue)
+        {
+            var ownerExists = await _db.Users.AnyAsync(x => x.Id == request.OwnerUserId.Value && x.IsActive);
+            if (!ownerExists)
+            {
+                return BadRequest("Owner user does not exist or is inactive.");
+            }
+        }
+
+        var before = ToDto(order);
+
+        order.OrderNo = string.IsNullOrWhiteSpace(request.OrderNo) ? null : request.OrderNo.Trim();
+        order.OrderDate = request.OrderDate;
+        order.OwnerUserId = request.OwnerUserId;
+        order.Amount = request.Amount;
+        order.CommissionRate = request.CommissionRate;
+        order.CommissionAmount = request.CommissionAmount;
+        order.Status = request.Status;
+        order.CustomerPaymentStatus = request.CustomerPaymentStatus;
+        order.Remark = string.IsNullOrWhiteSpace(request.Remark) ? null : request.Remark.Trim();
+        order.UpdatedAt = DateTime.UtcNow;
+
+        _db.OrderMembers.RemoveRange(order.Members);
+        order.Members = request.Members.Select(x => new OrderMember
+        {
+            OrderId = order.Id,
+            UserId = x.UserId,
+            Role = x.Role,
+            ShareAmount = x.ShareAmount
+        }).ToList();
+
+        await _db.SaveChangesAsync();
+
+        var savedOrder = await _db.Orders.AsNoTracking()
+            .Include(x => x.OwnerUser)
+            .Include(x => x.Members)
+            .ThenInclude(x => x.User)
+            .FirstAsync(x => x.Id == order.Id);
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            action: "update",
+            targetType: "orders",
+            targetId: order.Id,
+            targetUuid: order.Uuid,
+            before: before,
+            after: ToDto(savedOrder)));
+        await _db.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    [HttpPost("{id:int}/cancel")]
+    public async Task<IActionResult> CancelOrder(int id, UpdateOrderStatusRequestDto request)
+    {
+        var order = await _db.Orders.FirstOrDefaultAsync(x => x.Id == id);
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        var before = new
+        {
+            order.Status,
+            order.Remark
+        };
+
+        order.Status = "cancelled";
+        order.Remark = string.IsNullOrWhiteSpace(request.Remark) ? order.Remark : request.Remark.Trim();
+        order.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            action: "cancel",
+            targetType: "orders",
+            targetId: order.Id,
+            targetUuid: order.Uuid,
+            before: before,
+            after: new
+            {
+                order.Status,
+                order.Remark
+            }));
+        await _db.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    [HttpPost("{id:int}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, UpdateOrderStatusRequestDto request)
+    {
+        var allowedStatuses = new[] { "draft", "completed", "cancelled", "disputed" };
+        if (!allowedStatuses.Contains(request.Status))
+        {
+            return BadRequest("Invalid order status.");
+        }
+
+        var order = await _db.Orders.FirstOrDefaultAsync(x => x.Id == id);
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        var before = new
+        {
+            order.Status,
+            order.Remark
+        };
+
+        order.Status = request.Status;
+        order.Remark = string.IsNullOrWhiteSpace(request.Remark) ? order.Remark : request.Remark.Trim();
+        order.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            action: "update_status",
+            targetType: "orders",
+            targetId: order.Id,
+            targetUuid: order.Uuid,
+            before: before,
+            after: new
+            {
+                order.Status,
+                order.Remark
+            }));
+        await _db.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    [HttpPost("{id:int}/customer-payment-status")]
+    public async Task<IActionResult> UpdateCustomerPaymentStatus(int id, UpdateCustomerPaymentStatusRequestDto request)
+    {
+        var allowedStatuses = new[] { "unpaid", "partial", "paid", "refunded" };
+        if (!allowedStatuses.Contains(request.CustomerPaymentStatus))
+        {
+            return BadRequest("Invalid customer payment status.");
+        }
+
+        var order = await _db.Orders.FirstOrDefaultAsync(x => x.Id == id);
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        var before = new
+        {
+            order.CustomerPaymentStatus
+        };
+
+        order.CustomerPaymentStatus = request.CustomerPaymentStatus;
+        order.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            action: "update_customer_payment_status",
+            targetType: "orders",
+            targetId: order.Id,
+            targetUuid: order.Uuid,
+            before: before,
+            after: new
+            {
+                order.CustomerPaymentStatus
+            }));
+        await _db.SaveChangesAsync();
+
+        return NoContent();
+    }
+
     private static OrderDto ToDto(Order order)
     {
         return new OrderDto

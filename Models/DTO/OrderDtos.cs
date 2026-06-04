@@ -48,6 +48,17 @@ public sealed class UpdateOrderRequestDto
     public List<CreateOrderMemberRequestDto> Members { get; set; } = [];
 }
 
+public sealed class UpdateOrderStatusRequestDto
+{
+    public string Status { get; set; } = "completed";
+    public string? Remark { get; set; }
+}
+
+public sealed class UpdateCustomerPaymentStatusRequestDto
+{
+    public string CustomerPaymentStatus { get; set; } = "paid";
+}
+
 public sealed class OrderListItemDto
 {
     public int Id { get; set; }
