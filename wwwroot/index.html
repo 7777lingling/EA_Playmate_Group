@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EA Playmate Group</title>
-  <link rel="stylesheet" href="/styles.css?v=20260604-users-split">
+  <link rel="stylesheet" href="/styles.css?v=20260605-user-edit">
 </head>
 <body>
   <aside class="sidebar">
@@ -101,7 +101,8 @@
     <section class="view" id="usersView">
       <div class="grid form-list">
         <form class="panel form" id="userForm">
-          <h2>新增成員</h2>
+          <h2 id="userFormTitle">新增成員</h2>
+          <input type="hidden" name="userId">
           <label>暱稱<input name="nickname" required maxlength="50"></label>
           <label>Discord ID<input name="discordId" maxlength="50"></label>
           <label>Discord 名稱<input name="discordName" maxlength="100"></label>
@@ -117,7 +118,10 @@
             <label><input type="checkbox" name="isPlayer" checked> 團員</label>
             <label><input type="checkbox" name="isBoss"> 老闆</label>
           </div>
-          <button class="primary" type="submit">新增</button>
+          <div class="form-actions">
+            <button class="primary" id="userSubmitBtn" type="submit">新增</button>
+            <button class="ghost" id="cancelUserEditBtn" type="button" hidden>取消編輯</button>
+          </div>
         </form>
 
         <div class="grid user-lists">
@@ -129,7 +133,7 @@
               <table>
                 <thead>
                   <tr>
-                    <th>ID</th>
+                    <th>Discord 名稱</th>
                     <th>暱稱</th>
                     <th>權限</th>
                     <th>狀態</th>
@@ -149,7 +153,7 @@
               <table>
                 <thead>
                   <tr>
-                    <th>ID</th>
+                    <th>Discord 名稱</th>
                     <th>暱稱</th>
                     <th>權限</th>
                     <th>狀態</th>
@@ -167,7 +171,8 @@
     <section class="view" id="ordersView">
       <div class="grid form-list">
         <form class="panel form" id="orderForm">
-          <h2>新增訂單</h2>
+          <h2 id="orderFormTitle">新增訂單</h2>
+          <input type="hidden" name="orderId">
           <div class="split">
             <label>日期<input name="orderDate" type="date" required></label>
             <label>單號<input name="orderNo" maxlength="30"></label>
@@ -211,7 +216,11 @@
             </div>
           </div>
 
-          <button class="primary" type="submit">新增訂單</button>
+          <div class="form-actions">
+            <button class="primary" id="orderSubmitBtn" type="submit">新增訂單</button>
+            <button class="ghost" id="copyOrderBtn" type="button" hidden>另存新訂單</button>
+            <button class="ghost" id="cancelOrderEditBtn" type="button" hidden>取消編輯</button>
+          </div>
         </form>
 
         <section class="panel">
@@ -229,6 +238,7 @@
                   <th>分潤</th>
                   <th>狀態</th>
                   <th>收款</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="orderRows"></tbody>
@@ -293,6 +303,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=20260604-users-split"></script>
+  <script src="/app.js?v=20260605-order-copy-new"></script>
 </body>
 </html>

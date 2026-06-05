@@ -238,6 +238,16 @@ h3 {
   gap: 12px;
 }
 
+.form-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.form-actions button[hidden] {
+  display: none;
+}
+
 label {
   display: grid;
   gap: 6px;

@@ -97,7 +97,10 @@ function bindNavigation() {
 
 function bindForms() {
   document.getElementById("userForm").addEventListener("submit", submitUser);
+  document.getElementById("cancelUserEditBtn").addEventListener("click", resetUserForm);
   document.getElementById("orderForm").addEventListener("submit", submitOrder);
+  document.getElementById("copyOrderBtn").addEventListener("click", copyOrderAsNew);
+  document.getElementById("cancelOrderEditBtn").addEventListener("click", resetOrderForm);
   document.getElementById("paymentForm").addEventListener("submit", submitPaymentGeneration);
   document.getElementById("orderForm").addEventListener("input", updateOrderCalc);
 }
@@ -232,11 +235,12 @@ function renderUserTable(elementId, users) {
   const body = document.getElementById(elementId);
   body.innerHTML = users.length ? users.map((user) => `
     <tr>
-      <td>${user.id}</td>
+      <td>${escapeHtml(user.discordName || "")}</td>
       <td>${escapeHtml(user.nickname)}</td>
       <td>${label("systemRole", user.systemRole)}</td>
       <td>${user.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
       <td>
+        <button class="ghost small" data-user-edit="${user.id}">編輯</button>
         ${user.isActive
           ? `<button class="ghost small" data-user-deactivate="${user.id}">停用</button>`
           : `<button class="ghost small" data-user-activate="${user.id}">啟用</button>`}
@@ -248,6 +252,15 @@ function renderUserTable(elementId, users) {
 }
 
 function bindUserTableActions(body) {
+  body.querySelectorAll("[data-user-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const user = state.users.find((item) => item.id === Number(button.dataset.userEdit));
+      if (user) {
+        startUserEdit(user);
+      }
+    });
+  });
+
   body.querySelectorAll("[data-user-deactivate]").forEach((button) => {
     button.addEventListener("click", async () => {
       await api(`/api/users/${button.dataset.userDeactivate}/deactivate`, { method: "POST", body: "{}" });
@@ -273,8 +286,18 @@ function renderOrders() {
       <td>${money.format(order.shareTotalAmount)}</td>
       <td>${statusPill(order.status)}</td>
       <td>${paymentPill(order.customerPaymentStatus)}</td>
+      <td><button class="ghost small" data-order-edit="${order.id}">編輯</button></td>
     </tr>
-  `).join("") : emptyRow(7);
+  `).join("") : emptyRow(8);
+
+  body.querySelectorAll("[data-order-edit]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await runAction(async () => {
+        const order = await api(`/api/orders/${button.dataset.orderEdit}`);
+        startOrderEdit(order);
+      });
+    });
+  });
 }
 
 function renderPayments() {
@@ -328,7 +351,7 @@ function renderSelects() {
   });
 }
 
-function addMemberRow() {
+function addMemberRow(member = null) {
   const wrap = document.getElementById("memberRows");
   const row = document.createElement("div");
   row.className = "member-row";
@@ -350,66 +373,205 @@ function addMemberRow() {
   row.addEventListener("input", updateOrderCalc);
   wrap.appendChild(row);
   renderSelects();
+  if (member) {
+    row.querySelector("[data-member-select]").value = member.userId;
+    row.querySelector("[data-member-role]").value = member.role || "player";
+    row.querySelector("[data-member-share]").value = member.shareAmount;
+  }
+  updateOrderCalc();
 }
 
 async function submitUser(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = new FormData(form);
+  const userId = data.get("userId");
+  const isEdit = Boolean(userId);
+  const existingUser = isEdit ? state.users.find((user) => user.id === Number(userId)) : null;
+  const payload = {
+    nickname: data.get("nickname"),
+    discordId: emptyToNull(data.get("discordId")),
+    discordName: emptyToNull(data.get("discordName")),
+    bankAccount: emptyToNull(data.get("bankAccount")),
+    systemRole: data.get("systemRole"),
+    isPlayer: data.get("isPlayer") === "on",
+    isBoss: data.get("isBoss") === "on"
+  };
+
+  if (isEdit) {
+    payload.isActive = existingUser?.isActive ?? true;
+    payload.leftAt = existingUser?.leftAt ?? null;
+  }
+
   await runAction(async () => {
-    await api("/api/users", {
-      method: "POST",
-      body: JSON.stringify({
-        nickname: data.get("nickname"),
-        discordId: emptyToNull(data.get("discordId")),
-        discordName: emptyToNull(data.get("discordName")),
-        bankAccount: emptyToNull(data.get("bankAccount")),
-        systemRole: data.get("systemRole"),
-        isPlayer: data.get("isPlayer") === "on",
-        isBoss: data.get("isBoss") === "on"
-      })
+    await api(isEdit ? `/api/users/${userId}` : "/api/users", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify(payload)
     });
-    form.reset();
-    form.elements.isPlayer.checked = true;
+    resetUserForm();
     await loadUsers();
-    showAlert("成員已新增。", false);
+    showAlert(isEdit ? "成員已更新。" : "成員已新增。", false);
   });
+}
+
+function startUserEdit(user) {
+  const form = document.getElementById("userForm");
+  form.elements.userId.value = user.id;
+  form.elements.nickname.value = user.nickname || "";
+  form.elements.discordId.value = user.discordId || "";
+  form.elements.discordName.value = user.discordName || "";
+  form.elements.bankAccount.value = user.bankAccount || "";
+  form.elements.systemRole.value = user.systemRole || "staff";
+  form.elements.isPlayer.checked = Boolean(user.isPlayer);
+  form.elements.isBoss.checked = Boolean(user.isBoss);
+  document.getElementById("userFormTitle").textContent = "編輯成員";
+  document.getElementById("userSubmitBtn").textContent = "儲存";
+  document.getElementById("cancelUserEditBtn").hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetUserForm() {
+  const form = document.getElementById("userForm");
+  form.reset();
+  form.elements.userId.value = "";
+  form.elements.isPlayer.checked = true;
+  document.getElementById("userFormTitle").textContent = "新增成員";
+  document.getElementById("userSubmitBtn").textContent = "新增";
+  document.getElementById("cancelUserEditBtn").hidden = true;
 }
 
 async function submitOrder(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = new FormData(form);
-  const members = [...document.querySelectorAll(".member-row")].map((row) => ({
+  let orderId = data.get("orderId");
+  const editControlsVisible = !document.getElementById("copyOrderBtn").hidden;
+  if (orderId && !editControlsVisible) {
+    form.elements.orderId.value = "";
+    orderId = "";
+  }
+  const isEdit = Boolean(orderId);
+  const amount = Number(data.get("amount"));
+  const commissionAmount = Number(data.get("commissionAmount"));
+  const memberRows = [...document.querySelectorAll(".member-row")];
+  fillBlankMemberShares(memberRows, amount - commissionAmount);
+  const members = memberRows.map((row) => ({
     userId: Number(row.querySelector("[data-member-select]").value),
     role: row.querySelector("[data-member-role]").value,
     shareAmount: Number(row.querySelector("[data-member-share]").value || 0)
   }));
+  const shareTotal = roundMoney(members.reduce((sum, member) => sum + member.shareAmount, 0));
+  const expectedShareTotal = roundMoney(amount - commissionAmount);
+
+  if (shareTotal !== expectedShareTotal) {
+    showAlert(`分潤總額必須等於金額扣掉團抽。應分配 ${money.format(expectedShareTotal)}，目前分配 ${money.format(shareTotal)}。`);
+    return;
+  }
 
   await runAction(async () => {
-    await api("/api/orders", {
-      method: "POST",
-      body: JSON.stringify({
-        orderNo: emptyToNull(data.get("orderNo")),
-        orderDate: data.get("orderDate"),
-        ownerUserId: data.get("ownerUserId") ? Number(data.get("ownerUserId")) : null,
-        amount: Number(data.get("amount")),
-        commissionRate: 0.1,
-        commissionAmount: Number(data.get("commissionAmount")),
-        status: data.get("status"),
-        customerPaymentStatus: data.get("customerPaymentStatus"),
-        remark: emptyToNull(data.get("remark")),
-        members
-      })
+    const payload = {
+      orderNo: emptyToNull(data.get("orderNo")),
+      orderDate: data.get("orderDate"),
+      ownerUserId: data.get("ownerUserId") ? Number(data.get("ownerUserId")) : null,
+      amount,
+      commissionRate: 0.1,
+      commissionAmount,
+      status: data.get("status"),
+      customerPaymentStatus: data.get("customerPaymentStatus"),
+      remark: emptyToNull(data.get("remark")),
+      members
+    };
+
+    await api(isEdit ? `/api/orders/${orderId}` : "/api/orders", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify(payload)
     });
-    form.reset();
-    document.getElementById("memberRows").innerHTML = "";
-    setDefaultDates();
-    addMemberRow();
+    resetOrderForm();
     await loadOrders();
     await loadDashboard();
-    showAlert("訂單已新增。", false);
+    showAlert(isEdit ? "訂單已更新。" : "訂單已新增。", false);
+    document.getElementById("orderRows").closest(".panel").scrollIntoView({ behavior: "smooth", block: "start" });
   });
+}
+
+function startOrderEdit(order) {
+  const form = document.getElementById("orderForm");
+  form.elements.orderId.value = order.id;
+  form.elements.orderDate.value = order.orderDate;
+  form.elements.orderNo.value = order.orderNo || "";
+  form.elements.ownerUserId.value = order.ownerUserId || "";
+  form.elements.amount.value = order.amount;
+  form.elements.commissionAmount.value = order.commissionAmount;
+  form.elements.status.value = order.status || "completed";
+  form.elements.customerPaymentStatus.value = order.customerPaymentStatus || "unpaid";
+  form.elements.remark.value = order.remark || "";
+  document.getElementById("memberRows").innerHTML = "";
+  (order.members || []).forEach((member) => addMemberRow(member));
+  if (!order.members || order.members.length === 0) {
+    addMemberRow();
+  }
+  document.getElementById("orderFormTitle").textContent = "編輯訂單";
+  document.getElementById("orderSubmitBtn").textContent = "更新此訂單";
+  document.getElementById("copyOrderBtn").hidden = false;
+  document.getElementById("cancelOrderEditBtn").hidden = false;
+  updateOrderCalc();
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function copyOrderAsNew() {
+  const form = document.getElementById("orderForm");
+  form.elements.orderId.value = "";
+  document.getElementById("orderFormTitle").textContent = "新增訂單";
+  document.getElementById("orderSubmitBtn").textContent = "新增訂單";
+  document.getElementById("copyOrderBtn").hidden = true;
+  document.getElementById("cancelOrderEditBtn").hidden = true;
+  showAlert("已切換成新增訂單，送出後會建立新資料，不會覆蓋原訂單。", false);
+}
+
+function resetOrderForm() {
+  const form = document.getElementById("orderForm");
+  form.reset();
+  form.elements.orderId.value = "";
+  document.getElementById("memberRows").innerHTML = "";
+  setDefaultDates();
+  addMemberRow();
+  document.getElementById("orderFormTitle").textContent = "新增訂單";
+  document.getElementById("orderSubmitBtn").textContent = "新增訂單";
+  document.getElementById("copyOrderBtn").hidden = true;
+  document.getElementById("cancelOrderEditBtn").hidden = true;
+  updateOrderCalc();
+}
+
+function fillBlankMemberShares(rows, distributableAmount) {
+  const blankInputs = rows
+    .map((row) => row.querySelector("[data-member-share]"))
+    .filter((input) => !String(input.value || "").trim());
+
+  if (blankInputs.length === 0) {
+    updateOrderCalc();
+    return;
+  }
+
+  const usedAmount = rows
+    .map((row) => row.querySelector("[data-member-share]"))
+    .filter((input) => !blankInputs.includes(input))
+    .reduce((sum, input) => sum + Number(input.value || 0), 0);
+  const remainingCents = Math.round(roundMoney(distributableAmount - usedAmount) * 100);
+  if (remainingCents < 0) {
+    updateOrderCalc();
+    return;
+  }
+
+  const baseCents = Math.trunc(remainingCents / blankInputs.length);
+  let extraCents = remainingCents - baseCents * blankInputs.length;
+
+  blankInputs.forEach((input) => {
+    const cents = baseCents + (extraCents > 0 ? 1 : 0);
+    extraCents -= extraCents > 0 ? 1 : 0;
+    input.value = (cents / 100).toFixed(2).replace(/\.00$/, "");
+  });
+
+  updateOrderCalc();
 }
 
 async function submitPaymentGeneration(event) {
@@ -484,6 +646,10 @@ function emptyRow(colspan) {
 
 function emptyToNull(value) {
   return value && String(value).trim() ? String(value).trim() : null;
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 }
 
 function formatDateTime(value) {
