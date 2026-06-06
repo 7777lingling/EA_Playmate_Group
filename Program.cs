@@ -29,6 +29,7 @@ builder.Services.AddDbContext<EAPlaymateGroupDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services.AddSingleton<PasswordHasher>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<LoginUserService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<PaymentService>();

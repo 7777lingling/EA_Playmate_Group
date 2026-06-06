@@ -19,10 +19,10 @@ public sealed class AuthService
 
     public async Task<bool> IsAuthRequiredAsync()
     {
-        return await _db.Users.AnyAsync(x => x.IsActive && x.LoginAccount != null && x.PasswordHash != null);
+        return await _db.LoginUsers.AnyAsync(x => x.IsActive);
     }
 
-    public async Task<UserDto?> GetCurrentUserAsync(HttpContext httpContext)
+    public async Task<LoginUserDto?> GetCurrentUserAsync(HttpContext httpContext)
     {
         var userId = httpContext.Session.GetInt32(SessionUserId);
         if (!userId.HasValue)
@@ -30,11 +30,11 @@ public sealed class AuthService
             return null;
         }
 
-        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == userId.Value && x.IsActive);
-        return user is null ? null : UserMapper.ToDto(user);
+        var user = await _db.LoginUsers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == userId.Value && x.IsActive);
+        return user is null ? null : LoginUserMapper.ToDto(user);
     }
 
-    public async Task<UserDto?> LoginAsync(LoginRequestDto request)
+    public async Task<LoginUserDto?> LoginAsync(LoginRequestDto request)
     {
         var loginAccount = request.LoginAccount.Trim();
         if (string.IsNullOrWhiteSpace(loginAccount) || string.IsNullOrWhiteSpace(request.Password))
@@ -42,8 +42,8 @@ public sealed class AuthService
             return null;
         }
 
-        var user = await _db.Users.FirstOrDefaultAsync(x => x.LoginAccount == loginAccount && x.IsActive);
-        if (user?.PasswordHash is null || !_passwordHasher.Verify(request.Password, user.PasswordHash))
+        var user = await _db.LoginUsers.FirstOrDefaultAsync(x => x.LoginAccount == loginAccount && x.IsActive);
+        if (user is null || !_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
             return null;
         }
@@ -51,6 +51,6 @@ public sealed class AuthService
         user.LastLoginAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        return UserMapper.ToDto(user);
+        return LoginUserMapper.ToDto(user);
     }
 }

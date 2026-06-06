@@ -1,5 +1,6 @@
 const state = {
   users: [],
+  loginUsers: [],
   players: [],
   bosses: [],
   orders: [],
@@ -145,7 +146,7 @@ function showApp() {
   document.getElementById("loginAlert").hidden = true;
   const currentUser = document.getElementById("currentUser");
   if (state.auth?.user) {
-    currentUser.textContent = state.auth.user.nickname;
+    currentUser.textContent = state.auth.user.displayName;
     currentUser.hidden = false;
     document.getElementById("logoutBtn").hidden = false;
   }
@@ -232,8 +233,11 @@ async function refreshAll() {
     if (state.view === "dashboard") {
       await loadDashboard();
     }
-    if (state.view === "users" || state.view === "loginUsers" || state.view === "orders") {
+    if (state.view === "users" || state.view === "orders") {
       await loadUsers();
+    }
+    if (state.view === "loginUsers") {
+      await loadLoginUsers();
     }
     if (state.view === "orders" || state.view === "dashboard") {
       await loadOrders();
@@ -266,6 +270,11 @@ async function loadUsers() {
   state.bosses = await api("/api/users/bosses");
   renderUsers();
   renderSelects();
+}
+
+async function loadLoginUsers() {
+  state.loginUsers = await api("/api/loginusers");
+  renderLoginUsers();
 }
 
 async function loadOrders() {
@@ -311,7 +320,6 @@ function renderRecentOrders() {
 function renderUsers() {
   renderUserTable("playerRows", state.users.filter((user) => user.isPlayer));
   renderUserTable("bossRows", state.users.filter((user) => user.isBoss));
-  renderLoginUsers();
 }
 
 function renderLoginUsers() {
@@ -320,14 +328,14 @@ function renderLoginUsers() {
     return;
   }
 
-  const users = state.users.filter((user) => user.loginAccount);
+  const users = state.loginUsers;
   body.innerHTML = users.length ? users.map((user) => `
     <tr>
       <td>${escapeHtml(user.loginAccount || "")}</td>
-      <td>${escapeHtml(user.nickname)}</td>
+      <td>${escapeHtml(user.displayName)}</td>
       <td>${label("systemRole", user.systemRole)}</td>
       <td>${user.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
-      <td>${user.hasPassword ? pill("已設定", "good") : pill("未設定", "warn")}</td>
+      <td>${pill("已設定", "good")}</td>
     </tr>
   `).join("") : emptyRow(5);
 }
@@ -494,8 +502,6 @@ async function submitUser(event) {
     discordId: emptyToNull(data.get("discordId")),
     discordName: emptyToNull(data.get("discordName")),
     bankAccount: emptyToNull(data.get("bankAccount")),
-    loginAccount: emptyToNull(data.get("loginAccount")),
-    password: emptyToNull(data.get("password")),
     systemRole: data.get("systemRole"),
     isPlayer: data.get("isPlayer") === "on",
     isBoss: data.get("isBoss") === "on"
@@ -523,20 +529,18 @@ async function submitLoginUser(event) {
   const data = new FormData(form);
 
   await runAction(async () => {
-    await api("/api/users", {
+    await api("/api/loginusers", {
       method: "POST",
       body: JSON.stringify({
-        nickname: data.get("nickname"),
+        displayName: data.get("nickname"),
         loginAccount: data.get("loginAccount"),
         password: data.get("password"),
-        systemRole: data.get("systemRole"),
-        isPlayer: false,
-        isBoss: false
+        systemRole: data.get("systemRole")
       })
     });
     form.reset();
     form.elements.systemRole.value = "admin";
-    await loadUsers();
+    await loadLoginUsers();
     showAlert("登入者已新增。", false);
   });
 }
@@ -548,8 +552,6 @@ function startUserEdit(user) {
   form.elements.discordId.value = user.discordId || "";
   form.elements.discordName.value = user.discordName || "";
   form.elements.bankAccount.value = user.bankAccount || "";
-  form.elements.loginAccount.value = user.loginAccount || "";
-  form.elements.password.value = "";
   form.elements.systemRole.value = user.systemRole || "staff";
   form.elements.isPlayer.checked = Boolean(user.isPlayer);
   form.elements.isBoss.checked = Boolean(user.isBoss);
@@ -563,7 +565,6 @@ function resetUserForm() {
   const form = document.getElementById("userForm");
   form.reset();
   form.elements.userId.value = "";
-  form.elements.password.value = "";
   form.elements.isPlayer.checked = true;
   document.getElementById("userFormTitle").textContent = "新增成員";
   document.getElementById("userSubmitBtn").textContent = "新增";

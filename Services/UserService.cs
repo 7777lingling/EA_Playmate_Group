@@ -9,17 +9,18 @@ namespace EAPlaymateGroup.Services;
 public sealed class UserService
 {
     private readonly EAPlaymateGroupDbContext _db;
-    private readonly PasswordHasher _passwordHasher;
 
-    public UserService(EAPlaymateGroupDbContext db, PasswordHasher passwordHasher)
+    public UserService(EAPlaymateGroupDbContext db)
     {
         _db = db;
-        _passwordHasher = passwordHasher;
     }
 
     public async Task<ServiceResult<UserDto>> CreateUserAsync(CreateUserRequestDto request)
     {
-        var validationResult = ValidateUser(request.Nickname, request.SystemRole);
+        var validationResult = await ValidateUserAsync(
+            request.Nickname,
+            request.SystemRole,
+            request.DiscordId);
         if (!validationResult.Succeeded)
         {
             return ToGenericResult<UserDto>(validationResult);
@@ -31,8 +32,6 @@ public sealed class UserService
             DiscordId = string.IsNullOrWhiteSpace(request.DiscordId) ? null : request.DiscordId.Trim(),
             DiscordName = string.IsNullOrWhiteSpace(request.DiscordName) ? null : request.DiscordName.Trim(),
             BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount.Trim(),
-            LoginAccount = string.IsNullOrWhiteSpace(request.LoginAccount) ? null : request.LoginAccount.Trim(),
-            PasswordHash = string.IsNullOrWhiteSpace(request.Password) ? null : _passwordHasher.Hash(request.Password),
             SystemRole = request.SystemRole,
             IsPlayer = request.IsPlayer,
             IsBoss = request.IsBoss
@@ -62,7 +61,11 @@ public sealed class UserService
             return ServiceResult.Missing();
         }
 
-        var validationResult = ValidateUser(request.Nickname, request.SystemRole);
+        var validationResult = await ValidateUserAsync(
+            request.Nickname,
+            request.SystemRole,
+            request.DiscordId,
+            id);
         if (!validationResult.Succeeded)
         {
             return validationResult;
@@ -74,11 +77,6 @@ public sealed class UserService
         user.DiscordId = string.IsNullOrWhiteSpace(request.DiscordId) ? null : request.DiscordId.Trim();
         user.DiscordName = string.IsNullOrWhiteSpace(request.DiscordName) ? null : request.DiscordName.Trim();
         user.BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount.Trim();
-        user.LoginAccount = string.IsNullOrWhiteSpace(request.LoginAccount) ? null : request.LoginAccount.Trim();
-        if (!string.IsNullOrWhiteSpace(request.Password))
-        {
-            user.PasswordHash = _passwordHasher.Hash(request.Password);
-        }
         user.SystemRole = request.SystemRole;
         user.IsPlayer = request.IsPlayer;
         user.IsBoss = request.IsBoss;
@@ -183,19 +181,50 @@ public sealed class UserService
         return ServiceResult.Success();
     }
 
-    private static ServiceResult ValidateUser(string nickname, string systemRole)
+    private async Task<ServiceResult> ValidateUserAsync(
+        string nickname,
+        string systemRole,
+        string? discordId,
+        int? excludeUserId = null)
     {
+        var errors = new Dictionary<string, string[]>();
         if (string.IsNullOrWhiteSpace(nickname))
         {
-            return ServiceResult.Validation(new Dictionary<string, string[]>
-            {
-                ["nickname"] = ["Nickname is required."]
-            });
+            errors["nickname"] = ["請輸入暱稱。"];
         }
 
         if (!DomainValues.IsSystemRole(systemRole))
         {
-            return ServiceResult.Failure("invalid_system_role", "SystemRole must be admin, staff, or viewer.");
+            errors["systemRole"] = ["系統權限必須是 admin、staff 或 viewer。"];
+        }
+
+        if (!string.IsNullOrWhiteSpace(nickname))
+        {
+            var normalizedNickname = nickname.Trim();
+            var nicknameExists = await _db.Users.AnyAsync(x =>
+                x.Nickname == normalizedNickname &&
+                (!excludeUserId.HasValue || x.Id != excludeUserId.Value));
+            if (nicknameExists)
+            {
+                errors["nickname"] = ["此暱稱已存在，請換一個。"];
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(discordId))
+        {
+            var normalizedDiscordId = discordId.Trim();
+            var discordIdExists = await _db.Users.AnyAsync(x =>
+                x.DiscordId == normalizedDiscordId &&
+                (!excludeUserId.HasValue || x.Id != excludeUserId.Value));
+            if (discordIdExists)
+            {
+                errors["discordId"] = ["此 Discord ID 已存在，請換一個。"];
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return ServiceResult.Validation(errors);
         }
 
         return ServiceResult.Success();

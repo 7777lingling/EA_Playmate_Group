@@ -10,5 +10,5 @@ public sealed class AuthMeDto
 {
     public bool AuthRequired { get; set; }
     public bool IsAuthenticated { get; set; }
-    public UserDto? User { get; set; }
+    public LoginUserDto? User { get; set; }
 }

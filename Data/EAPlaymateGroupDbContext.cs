@@ -11,6 +11,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
     }
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<LoginUser> LoginUsers => Set<LoginUser>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderMember> OrderMembers => Set<OrderMember>();
     public DbSet<Payment> Payments => Set<Payment>();
@@ -21,6 +22,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         base.OnModelCreating(modelBuilder);
 
         ConfigureUser(modelBuilder);
+        ConfigureLoginUser(modelBuilder);
         ConfigureOrder(modelBuilder);
         ConfigureOrderMember(modelBuilder);
         ConfigurePayment(modelBuilder);
@@ -65,6 +67,32 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             .IsUnique()
             .HasFilter("[discord_id] IS NOT NULL")
             .HasDatabaseName("UQ_users_discord_id");
+    }
+
+    private static void ConfigureLoginUser(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<LoginUser>();
+
+        entity.ToTable("login_users", "dbo", table =>
+        {
+            table.HasCheckConstraint("CK_login_users_system_role", "[system_role] IN (N'admin', N'staff', N'viewer')");
+        });
+
+        entity.HasKey(x => x.Id).HasName("PK_login_users");
+
+        entity.Property(x => x.Id).HasColumnName("id");
+        entity.Property(x => x.Uuid).HasColumnName("uuid").HasDefaultValueSql("NEWID()");
+        entity.Property(x => x.DisplayName).HasColumnName("display_name").HasMaxLength(50).IsRequired();
+        entity.Property(x => x.LoginAccount).HasColumnName("login_account").HasMaxLength(50).IsRequired();
+        entity.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(500).IsRequired();
+        entity.Property(x => x.SystemRole).HasColumnName("system_role").HasMaxLength(20).HasDefaultValue("staff").IsRequired();
+        entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
+        entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        entity.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
+
+        entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_login_users_uuid");
+        entity.HasIndex(x => x.LoginAccount).IsUnique().HasDatabaseName("UQ_login_users_login_account");
     }
 
     private static void ConfigureOrder(ModelBuilder modelBuilder)

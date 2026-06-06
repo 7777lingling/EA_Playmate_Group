@@ -1,6 +1,6 @@
 使用來自 E:\ling\EA_Playmate_Group\Properties\launchSettings.json 的啟動設定...
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (26ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      Executed DbCommand (18ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
       IF COL_LENGTH('dbo.users', 'login_account') IS NULL
 BEGIN
     ALTER TABLE dbo.users ADD login_account NVARCHAR(50) NULL;
@@ -36,7 +36,7 @@ info: Microsoft.Hosting.Lifetime[0]
 info: Microsoft.Hosting.Lifetime[0]
       Content root path: E:\ling\EA_Playmate_Group
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (14ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      Executed DbCommand (16ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
       SELECT CASE
           WHEN EXISTS (
               SELECT 1
@@ -45,28 +45,17 @@ info: Microsoft.EntityFrameworkCore.Database.Command[20101]
           ELSE CAST(0 AS bit)
       END
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
-      SELECT CASE
-          WHEN EXISTS (
-              SELECT 1
-              FROM [dbo].[users] AS [u]
-              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
-          ELSE CAST(0 AS bit)
-      END
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (2ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
-      SELECT [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
+      Executed DbCommand (9ms) [Parameters=[@__loginAccount_0='?' (Size = 50)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
       FROM [dbo].[users] AS [u]
-      ORDER BY [u].[nickname]
+      WHERE [u].[login_account] = @__loginAccount_0 AND [u].[is_active] = CAST(1 AS bit)
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (3ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
-      SELECT CASE
-          WHEN EXISTS (
-              SELECT 1
-              FROM [dbo].[users] AS [u]
-              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
-          ELSE CAST(0 AS bit)
-      END
+      Executed DbCommand (2ms) [Parameters=[@p1='?' (DbType = Int32), @p0='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      SET IMPLICIT_TRANSACTIONS OFF;
+      SET NOCOUNT ON;
+      UPDATE [dbo].[users] SET [last_login_at] = @p0
+      OUTPUT 1
+      WHERE [id] = @p1;
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
       Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
       SELECT CASE
@@ -77,12 +66,12 @@ info: Microsoft.EntityFrameworkCore.Database.Command[20101]
           ELSE CAST(0 AS bit)
       END
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (9ms) [Parameters=[@__targetDate_0='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      Executed DbCommand (2ms) [Parameters=[@__targetDate_0='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
       SELECT COALESCE(SUM([o].[amount]), 0.0)
       FROM [dbo].[orders] AS [o]
       WHERE [o].[status] = N'completed' AND [o].[order_date] = @__targetDate_0
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (2ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
       SELECT COALESCE(SUM([o].[amount]), 0.0)
       FROM [dbo].[orders] AS [o]
       WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
@@ -92,13 +81,13 @@ info: Microsoft.EntityFrameworkCore.Database.Command[20101]
       FROM [dbo].[orders] AS [o]
       WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (4ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      Executed DbCommand (3ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
       SELECT COALESCE(SUM([o].[share_amount]), 0.0)
       FROM [dbo].[order_members] AS [o]
       INNER JOIN [dbo].[orders] AS [o0] ON [o].[order_id] = [o0].[id]
       WHERE [o0].[status] = N'completed' AND [o0].[order_date] >= @__monthStart_0 AND [o0].[order_date] < @__nextMonth_1
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (2ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
       SELECT COUNT(*)
       FROM [dbo].[orders] AS [o]
       WHERE [o].[status] = N'completed' AND [o].[customer_payment_status] = N'unpaid'
@@ -126,7 +115,7 @@ info: Microsoft.EntityFrameworkCore.Database.Command[20101]
       GROUP BY [o].[user_id], [u].[nickname]
       ORDER BY COALESCE(SUM([o].[share_amount]), 0.0) DESC, COUNT(DISTINCT ([o].[order_id])) DESC, [u].[nickname]
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (4ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
       SELECT CASE
           WHEN EXISTS (
               SELECT 1
@@ -151,15 +140,6 @@ info: Microsoft.EntityFrameworkCore.Database.Command[20101]
       LEFT JOIN [dbo].[users] AS [u] ON [o0].[owner_user_id] = [u].[id]
       ORDER BY [o0].[order_date] DESC, [o0].[id] DESC
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (3ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
-      SELECT CASE
-          WHEN EXISTS (
-              SELECT 1
-              FROM [dbo].[users] AS [u]
-              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
-          ELSE CAST(0 AS bit)
-      END
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
       Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
       SELECT CASE
           WHEN EXISTS (
@@ -169,112 +149,7 @@ info: Microsoft.EntityFrameworkCore.Database.Command[20101]
           ELSE CAST(0 AS bit)
       END
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (3ms) [Parameters=[@p0='?' (Size = 200), @p1='?' (Size = 50), @p2='?' (Size = 100), @p3='?' (DbType = Boolean), @p4='?' (DbType = DateTime2), @p5='?' (DbType = DateTime2), @p6='?' (Size = 50), @p7='?' (Size = 50), @p8='?' (Size = 500), @p9='?' (Size = 20), @p10='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
-      SET IMPLICIT_TRANSACTIONS OFF;
-      SET NOCOUNT ON;
-      INSERT INTO [dbo].[users] ([bank_account], [discord_id], [discord_name], [is_player], [last_login_at], [left_at], [login_account], [nickname], [password_hash], [system_role], [updated_at])
-      OUTPUT INSERTED.[id], INSERTED.[created_at], INSERTED.[is_active], INSERTED.[is_boss], INSERTED.[uuid]
-      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10);
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (3ms) [Parameters=[@p0='?' (Size = 50), @p1='?' (Size = 4000), @p2='?' (Size = 4000), @p3='?' (DbType = Int32), @p4='?' (Size = 50), @p5='?' (DbType = Guid), @p6='?' (DbType = Int32)], CommandType='Text', CommandTimeout='30']
-      SET IMPLICIT_TRANSACTIONS OFF;
-      SET NOCOUNT ON;
-      INSERT INTO [dbo].[audit_logs] ([action], [after_json], [before_json], [target_id], [target_type], [target_uuid], [user_id])
-      OUTPUT INSERTED.[id], INSERTED.[created_at]
-      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6);
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (9ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
-      SELECT CASE
-          WHEN EXISTS (
-              SELECT 1
-              FROM [dbo].[users] AS [u]
-              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
-          ELSE CAST(0 AS bit)
-      END
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
-      SELECT CASE
-          WHEN EXISTS (
-              SELECT 1
-              FROM [dbo].[users] AS [u]
-              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
-          ELSE CAST(0 AS bit)
-      END
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (2ms) [Parameters=[@__loginAccount_0='?' (Size = 50)], CommandType='Text', CommandTimeout='30']
-      SELECT TOP(1) [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
-      FROM [dbo].[users] AS [u]
-      WHERE [u].[login_account] = @__loginAccount_0 AND [u].[is_active] = CAST(1 AS bit)
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (5ms) [Parameters=[@p1='?' (DbType = Int32), @p0='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
-      SET IMPLICIT_TRANSACTIONS OFF;
-      SET NOCOUNT ON;
-      UPDATE [dbo].[users] SET [last_login_at] = @p0
-      OUTPUT 1
-      WHERE [id] = @p1;
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (1ms) [Parameters=[@__loginAccount_0='?' (Size = 50)], CommandType='Text', CommandTimeout='30']
-      SELECT TOP(1) [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
-      FROM [dbo].[users] AS [u]
-      WHERE [u].[login_account] = @__loginAccount_0 AND [u].[is_active] = CAST(1 AS bit)
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (2ms) [Parameters=[@p1='?' (DbType = Int32), @p0='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
-      SET IMPLICIT_TRANSACTIONS OFF;
-      SET NOCOUNT ON;
-      UPDATE [dbo].[users] SET [last_login_at] = @p0
-      OUTPUT 1
-      WHERE [id] = @p1;
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
-      SELECT CASE
-          WHEN EXISTS (
-              SELECT 1
-              FROM [dbo].[users] AS [u]
-              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
-          ELSE CAST(0 AS bit)
-      END
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (2ms) [Parameters=[@__id_0='?' (DbType = Int32)], CommandType='Text', CommandTimeout='30']
-      SELECT TOP(1) [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
-      FROM [dbo].[users] AS [u]
-      WHERE [u].[id] = @__id_0
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (2ms) [Parameters=[@p2='?' (DbType = Int32), @p0='?' (Size = 50), @p1='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
-      SET IMPLICIT_TRANSACTIONS OFF;
-      SET NOCOUNT ON;
-      UPDATE [dbo].[users] SET [nickname] = @p0, [updated_at] = @p1
-      OUTPUT 1
-      WHERE [id] = @p2;
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (2ms) [Parameters=[@p0='?' (Size = 50), @p1='?' (Size = 4000), @p2='?' (Size = 4000), @p3='?' (DbType = Int32), @p4='?' (Size = 50), @p5='?' (DbType = Guid), @p6='?' (DbType = Int32)], CommandType='Text', CommandTimeout='30']
-      SET IMPLICIT_TRANSACTIONS OFF;
-      SET NOCOUNT ON;
-      INSERT INTO [dbo].[audit_logs] ([action], [after_json], [before_json], [target_id], [target_type], [target_uuid], [user_id])
-      OUTPUT INSERTED.[id], INSERTED.[created_at]
-      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6);
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (1ms) [Parameters=[@__loginAccount_0='?' (Size = 50)], CommandType='Text', CommandTimeout='30']
-      SELECT TOP(1) [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
-      FROM [dbo].[users] AS [u]
-      WHERE [u].[login_account] = @__loginAccount_0 AND [u].[is_active] = CAST(1 AS bit)
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (2ms) [Parameters=[@p1='?' (DbType = Int32), @p0='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
-      SET IMPLICIT_TRANSACTIONS OFF;
-      SET NOCOUNT ON;
-      UPDATE [dbo].[users] SET [last_login_at] = @p0
-      OUTPUT 1
-      WHERE [id] = @p1;
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
-      SELECT CASE
-          WHEN EXISTS (
-              SELECT 1
-              FROM [dbo].[users] AS [u]
-              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
-          ELSE CAST(0 AS bit)
-      END
-info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (5ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      Executed DbCommand (2ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
       SELECT [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
       FROM [dbo].[users] AS [u]
       ORDER BY [u].[nickname]
@@ -288,19 +163,152 @@ info: Microsoft.EntityFrameworkCore.Database.Command[20101]
           ELSE CAST(0 AS bit)
       END
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (3ms) [Parameters=[@__loginAccount_0='?' (Size = 50)], CommandType='Text', CommandTimeout='30']
+      Executed DbCommand (2ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
+      FROM [dbo].[users] AS [u]
+      WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[is_player] = CAST(1 AS bit)
+      ORDER BY [u].[nickname]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (2ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
+      FROM [dbo].[users] AS [u]
+      WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[is_boss] = CAST(1 AS bit)
+      ORDER BY [u].[nickname]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (4ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (2ms) [Parameters=[@__normalizedNickname_0='?' (Size = 50)], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[nickname] = @__normalizedNickname_0) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (2ms) [Parameters=[@__normalizedLoginAccount_0='?' (Size = 50)], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[login_account] = @__normalizedLoginAccount_0) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (8ms) [Parameters=[@__loginAccount_0='?' (Size = 50)], CommandType='Text', CommandTimeout='30']
       SELECT TOP(1) [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
       FROM [dbo].[users] AS [u]
       WHERE [u].[login_account] = @__loginAccount_0 AND [u].[is_active] = CAST(1 AS bit)
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
-      Executed DbCommand (2ms) [Parameters=[@p1='?' (DbType = Int32), @p0='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      Executed DbCommand (7ms) [Parameters=[@p1='?' (DbType = Int32), @p0='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
       SET IMPLICIT_TRANSACTIONS OFF;
       SET NOCOUNT ON;
       UPDATE [dbo].[users] SET [last_login_at] = @p0
       OUTPUT 1
       WHERE [id] = @p1;
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (6ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (2ms) [Parameters=[@__normalizedNickname_0='?' (Size = 50)], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[nickname] = @__normalizedNickname_0) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__normalizedLoginAccount_0='?' (Size = 50)], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[login_account] = @__normalizedLoginAccount_0) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
       Executed DbCommand (2ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (4ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
+      FROM [dbo].[users] AS [u]
+      ORDER BY [u].[nickname]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (2ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
+      FROM [dbo].[users] AS [u]
+      WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[is_player] = CAST(1 AS bit)
+      ORDER BY [u].[nickname]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (3ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
+      FROM [dbo].[users] AS [u]
+      WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[is_boss] = CAST(1 AS bit)
+      ORDER BY [u].[nickname]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (7ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (2ms) [Parameters=[@__userId_Value_0='?' (DbType = Int32)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
+      FROM [dbo].[users] AS [u]
+      WHERE [u].[id] = @__userId_Value_0 AND [u].[is_active] = CAST(1 AS bit)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
       SELECT CASE
           WHEN EXISTS (
               SELECT 1
@@ -325,6 +333,295 @@ info: Microsoft.EntityFrameworkCore.Database.Command[20101]
       WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
 info: Microsoft.EntityFrameworkCore.Database.Command[20101]
       Executed DbCommand (2ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[share_amount]), 0.0)
+      FROM [dbo].[order_members] AS [o]
+      INNER JOIN [dbo].[orders] AS [o0] ON [o].[order_id] = [o0].[id]
+      WHERE [o0].[status] = N'completed' AND [o0].[order_date] >= @__monthStart_0 AND [o0].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT COUNT(*)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[customer_payment_status] = N'unpaid'
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COUNT(*)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (3ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [o].[user_id] AS [UserId], [u].[nickname] AS [Nickname], COALESCE(SUM([o].[share_amount]), 0.0) AS [TotalShareAmount], COUNT(DISTINCT ([o].[order_id])) AS [OrderCount]
+      FROM [dbo].[order_members] AS [o]
+      INNER JOIN [dbo].[orders] AS [o0] ON [o].[order_id] = [o0].[id]
+      INNER JOIN [dbo].[users] AS [u] ON [o].[user_id] = [u].[id]
+      WHERE [o0].[status] = N'completed'
+      GROUP BY [o].[user_id], [u].[nickname]
+      ORDER BY COALESCE(SUM([o].[share_amount]), 0.0) DESC, COUNT(DISTINCT ([o].[order_id])) DESC, [u].[nickname]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (5ms) [Parameters=[@__p_0='?' (DbType = Int32)], CommandType='Text', CommandTimeout='30']
+      SELECT [o0].[id] AS [Id], [o0].[uuid] AS [Uuid], [o0].[order_no] AS [OrderNo], [o0].[order_date] AS [OrderDate], [u].[nickname] AS [OwnerNickname], [o0].[amount] AS [Amount], [o0].[commission_amount] AS [CommissionAmount], (
+          SELECT COALESCE(SUM([o1].[share_amount]), 0.0)
+          FROM [dbo].[order_members] AS [o1]
+          WHERE [o0].[id] = [o1].[order_id]) AS [ShareTotalAmount], (
+          SELECT COUNT(*)
+          FROM [dbo].[order_members] AS [o2]
+          WHERE [o0].[id] = [o2].[order_id]) AS [MemberCount], [o0].[status] AS [Status], [o0].[customer_payment_status] AS [CustomerPaymentStatus]
+      FROM (
+          SELECT TOP(@__p_0) [o].[id], [o].[amount], [o].[commission_amount], [o].[customer_payment_status], [o].[order_date], [o].[order_no], [o].[owner_user_id], [o].[status], [o].[uuid]
+          FROM [dbo].[orders] AS [o]
+          ORDER BY [o].[order_date] DESC, [o].[id] DESC
+      ) AS [o0]
+      LEFT JOIN [dbo].[users] AS [u] ON [o0].[owner_user_id] = [u].[id]
+      ORDER BY [o0].[order_date] DESC, [o0].[id] DESC
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (7ms) [Parameters=[@__loginAccount_0='?' (Size = 50)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
+      FROM [dbo].[users] AS [u]
+      WHERE [u].[login_account] = @__loginAccount_0 AND [u].[is_active] = CAST(1 AS bit)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (7ms) [Parameters=[@p1='?' (DbType = Int32), @p0='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      SET IMPLICIT_TRANSACTIONS OFF;
+      SET NOCOUNT ON;
+      UPDATE [dbo].[users] SET [last_login_at] = @p0
+      OUTPUT 1
+      WHERE [id] = @p1;
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__targetDate_0='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[amount]), 0.0)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] = @__targetDate_0
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[amount]), 0.0)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[commission_amount]), 0.0)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[share_amount]), 0.0)
+      FROM [dbo].[order_members] AS [o]
+      INNER JOIN [dbo].[orders] AS [o0] ON [o].[order_id] = [o0].[id]
+      WHERE [o0].[status] = N'completed' AND [o0].[order_date] >= @__monthStart_0 AND [o0].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT COUNT(*)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[customer_payment_status] = N'unpaid'
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COUNT(*)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (3ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [o].[user_id] AS [UserId], [u].[nickname] AS [Nickname], COALESCE(SUM([o].[share_amount]), 0.0) AS [TotalShareAmount], COUNT(DISTINCT ([o].[order_id])) AS [OrderCount]
+      FROM [dbo].[order_members] AS [o]
+      INNER JOIN [dbo].[orders] AS [o0] ON [o].[order_id] = [o0].[id]
+      INNER JOIN [dbo].[users] AS [u] ON [o].[user_id] = [u].[id]
+      WHERE [o0].[status] = N'completed'
+      GROUP BY [o].[user_id], [u].[nickname]
+      ORDER BY COALESCE(SUM([o].[share_amount]), 0.0) DESC, COUNT(DISTINCT ([o].[order_id])) DESC, [u].[nickname]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (2ms) [Parameters=[@__p_0='?' (DbType = Int32)], CommandType='Text', CommandTimeout='30']
+      SELECT [o0].[id] AS [Id], [o0].[uuid] AS [Uuid], [o0].[order_no] AS [OrderNo], [o0].[order_date] AS [OrderDate], [u].[nickname] AS [OwnerNickname], [o0].[amount] AS [Amount], [o0].[commission_amount] AS [CommissionAmount], (
+          SELECT COALESCE(SUM([o1].[share_amount]), 0.0)
+          FROM [dbo].[order_members] AS [o1]
+          WHERE [o0].[id] = [o1].[order_id]) AS [ShareTotalAmount], (
+          SELECT COUNT(*)
+          FROM [dbo].[order_members] AS [o2]
+          WHERE [o0].[id] = [o2].[order_id]) AS [MemberCount], [o0].[status] AS [Status], [o0].[customer_payment_status] AS [CustomerPaymentStatus]
+      FROM (
+          SELECT TOP(@__p_0) [o].[id], [o].[amount], [o].[commission_amount], [o].[customer_payment_status], [o].[order_date], [o].[order_no], [o].[owner_user_id], [o].[status], [o].[uuid]
+          FROM [dbo].[orders] AS [o]
+          ORDER BY [o].[order_date] DESC, [o].[id] DESC
+      ) AS [o0]
+      LEFT JOIN [dbo].[users] AS [u] ON [o0].[owner_user_id] = [u].[id]
+      ORDER BY [o0].[order_date] DESC, [o0].[id] DESC
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__userId_Value_0='?' (DbType = Int32)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
+      FROM [dbo].[users] AS [u]
+      WHERE [u].[id] = @__userId_Value_0 AND [u].[is_active] = CAST(1 AS bit)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (2ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__targetDate_0='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[amount]), 0.0)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] = @__targetDate_0
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[amount]), 0.0)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[commission_amount]), 0.0)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[share_amount]), 0.0)
+      FROM [dbo].[order_members] AS [o]
+      INNER JOIN [dbo].[orders] AS [o0] ON [o].[order_id] = [o0].[id]
+      WHERE [o0].[status] = N'completed' AND [o0].[order_date] >= @__monthStart_0 AND [o0].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT COUNT(*)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[customer_payment_status] = N'unpaid'
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COUNT(*)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [o].[user_id] AS [UserId], [u].[nickname] AS [Nickname], COALESCE(SUM([o].[share_amount]), 0.0) AS [TotalShareAmount], COUNT(DISTINCT ([o].[order_id])) AS [OrderCount]
+      FROM [dbo].[order_members] AS [o]
+      INNER JOIN [dbo].[orders] AS [o0] ON [o].[order_id] = [o0].[id]
+      INNER JOIN [dbo].[users] AS [u] ON [o].[user_id] = [u].[id]
+      WHERE [o0].[status] = N'completed'
+      GROUP BY [o].[user_id], [u].[nickname]
+      ORDER BY COALESCE(SUM([o].[share_amount]), 0.0) DESC, COUNT(DISTINCT ([o].[order_id])) DESC, [u].[nickname]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__p_0='?' (DbType = Int32)], CommandType='Text', CommandTimeout='30']
+      SELECT [o0].[id] AS [Id], [o0].[uuid] AS [Uuid], [o0].[order_no] AS [OrderNo], [o0].[order_date] AS [OrderDate], [u].[nickname] AS [OwnerNickname], [o0].[amount] AS [Amount], [o0].[commission_amount] AS [CommissionAmount], (
+          SELECT COALESCE(SUM([o1].[share_amount]), 0.0)
+          FROM [dbo].[order_members] AS [o1]
+          WHERE [o0].[id] = [o1].[order_id]) AS [ShareTotalAmount], (
+          SELECT COUNT(*)
+          FROM [dbo].[order_members] AS [o2]
+          WHERE [o0].[id] = [o2].[order_id]) AS [MemberCount], [o0].[status] AS [Status], [o0].[customer_payment_status] AS [CustomerPaymentStatus]
+      FROM (
+          SELECT TOP(@__p_0) [o].[id], [o].[amount], [o].[commission_amount], [o].[customer_payment_status], [o].[order_date], [o].[order_no], [o].[owner_user_id], [o].[status], [o].[uuid]
+          FROM [dbo].[orders] AS [o]
+          ORDER BY [o].[order_date] DESC, [o].[id] DESC
+      ) AS [o0]
+      LEFT JOIN [dbo].[users] AS [u] ON [o0].[owner_user_id] = [u].[id]
+      ORDER BY [o0].[order_date] DESC, [o0].[id] DESC
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (10ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (5ms) [Parameters=[@__userId_Value_0='?' (DbType = Int32)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [u].[id], [u].[bank_account], [u].[created_at], [u].[discord_id], [u].[discord_name], [u].[is_active], [u].[is_boss], [u].[is_player], [u].[last_login_at], [u].[left_at], [u].[login_account], [u].[nickname], [u].[password_hash], [u].[system_role], [u].[updated_at], [u].[uuid]
+      FROM [dbo].[users] AS [u]
+      WHERE [u].[id] = @__userId_Value_0 AND [u].[is_active] = CAST(1 AS bit)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT CASE
+          WHEN EXISTS (
+              SELECT 1
+              FROM [dbo].[users] AS [u]
+              WHERE [u].[is_active] = CAST(1 AS bit) AND [u].[login_account] IS NOT NULL AND [u].[password_hash] IS NOT NULL) THEN CAST(1 AS bit)
+          ELSE CAST(0 AS bit)
+      END
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (2ms) [Parameters=[@__targetDate_0='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[amount]), 0.0)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] = @__targetDate_0
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[amount]), 0.0)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT COALESCE(SUM([o].[commission_amount]), 0.0)
+      FROM [dbo].[orders] AS [o]
+      WHERE [o].[status] = N'completed' AND [o].[order_date] >= @__monthStart_0 AND [o].[order_date] < @__nextMonth_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (3ms) [Parameters=[@__monthStart_0='?' (DbType = Date), @__nextMonth_1='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
       SELECT COALESCE(SUM([o].[share_amount]), 0.0)
       FROM [dbo].[order_members] AS [o]
       INNER JOIN [dbo].[orders] AS [o0] ON [o].[order_id] = [o0].[id]
