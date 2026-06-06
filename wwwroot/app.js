@@ -99,8 +99,10 @@ function bindNavigation() {
 }
 
 function bindForms() {
+  ensureLoginUserEditControls();
   document.getElementById("loginForm").addEventListener("submit", submitLogin);
   document.getElementById("loginUserForm").addEventListener("submit", submitLoginUser);
+  document.getElementById("cancelLoginUserEditBtn").addEventListener("click", resetLoginUserForm);
   document.getElementById("logoutBtn").addEventListener("click", logout);
   document.getElementById("userForm").addEventListener("submit", submitUser);
   document.getElementById("cancelUserEditBtn").addEventListener("click", resetUserForm);
@@ -109,6 +111,55 @@ function bindForms() {
   document.getElementById("cancelOrderEditBtn").addEventListener("click", resetOrderForm);
   document.getElementById("paymentForm").addEventListener("submit", submitPaymentGeneration);
   document.getElementById("orderForm").addEventListener("input", updateOrderCalc);
+}
+
+function ensureLoginUserEditControls() {
+  const form = document.getElementById("loginUserForm");
+  if (!form) {
+    return;
+  }
+
+  let idInput = form.elements.loginUserId;
+  if (!idInput) {
+    idInput = document.createElement("input");
+    idInput.type = "hidden";
+    idInput.name = "loginUserId";
+    form.prepend(idInput);
+  }
+
+  const heading = form.querySelector("h2");
+  if (heading && !heading.id) {
+    heading.id = "loginUserFormTitle";
+  }
+
+  const passwordInput = form.elements.password;
+  if (passwordInput) {
+    passwordInput.required = true;
+  }
+
+  const submitButton = form.querySelector("button[type='submit']");
+  if (submitButton && !submitButton.id) {
+    submitButton.id = "loginUserSubmitBtn";
+  }
+
+  if (!document.getElementById("cancelLoginUserEditBtn")) {
+    const cancelButton = document.createElement("button");
+    cancelButton.className = "ghost";
+    cancelButton.id = "cancelLoginUserEditBtn";
+    cancelButton.type = "button";
+    cancelButton.hidden = true;
+    cancelButton.textContent = "取消編輯";
+
+    const actions = document.createElement("div");
+    actions.className = "form-actions";
+
+    if (submitButton) {
+      submitButton.parentNode?.insertBefore(actions, submitButton);
+      actions.append(submitButton, cancelButton);
+    } else {
+      form.append(cancelButton);
+    }
+  }
 }
 
 function setDefaultDates() {
@@ -336,8 +387,47 @@ function renderLoginUsers() {
       <td>${label("systemRole", user.systemRole)}</td>
       <td>${user.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
       <td>${pill("已設定", "good")}</td>
+      <td>
+        <button class="ghost small" data-login-user-edit="${user.id}">編輯</button>
+        ${user.isActive
+          ? `<button class="ghost small" data-login-user-deactivate="${user.id}">停用</button>`
+          : `<button class="ghost small" data-login-user-activate="${user.id}">啟用</button>`}
+      </td>
     </tr>
-  `).join("") : emptyRow(5);
+  `).join("") : emptyRow(6);
+
+  bindLoginUserTableActions(body);
+}
+
+function bindLoginUserTableActions(body) {
+  body.querySelectorAll("[data-login-user-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const loginUser = state.loginUsers.find((item) => item.id === Number(button.dataset.loginUserEdit));
+      if (loginUser) {
+        startLoginUserEdit(loginUser);
+      }
+    });
+  });
+
+  body.querySelectorAll("[data-login-user-deactivate]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await runAction(async () => {
+        await api(`/api/loginusers/${button.dataset.loginUserDeactivate}/deactivate`, { method: "POST", body: "{}" });
+        await loadLoginUsers();
+        showAlert("登入者已停用。", false);
+      });
+    });
+  });
+
+  body.querySelectorAll("[data-login-user-activate]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await runAction(async () => {
+        await api(`/api/loginusers/${button.dataset.loginUserActivate}/activate`, { method: "POST", body: "{}" });
+        await loadLoginUsers();
+        showAlert("登入者已啟用。", false);
+      });
+    });
+  });
 }
 
 function renderUserTable(elementId, users) {
@@ -527,22 +617,76 @@ async function submitLoginUser(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = new FormData(form);
+  const loginUserId = data.get("loginUserId");
+  const isEdit = Boolean(loginUserId);
+  const existingLoginUser = isEdit
+    ? state.loginUsers.find((loginUser) => loginUser.id === Number(loginUserId))
+    : null;
+  const password = emptyToNull(data.get("password"));
 
   await runAction(async () => {
-    await api("/api/loginusers", {
-      method: "POST",
-      body: JSON.stringify({
-        displayName: data.get("nickname"),
-        loginAccount: data.get("loginAccount"),
-        password: data.get("password"),
-        systemRole: data.get("systemRole")
-      })
+    const payload = {
+      displayName: data.get("nickname"),
+      loginAccount: data.get("loginAccount"),
+      systemRole: data.get("systemRole")
+    };
+
+    if (password) {
+      payload.password = password;
+    }
+
+    if (isEdit) {
+      payload.isActive = existingLoginUser?.isActive ?? true;
+    } else {
+      payload.password = data.get("password");
+    }
+
+    await api(isEdit ? `/api/loginusers/${loginUserId}` : "/api/loginusers", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify(payload)
     });
-    form.reset();
-    form.elements.systemRole.value = "admin";
+    resetLoginUserForm();
     await loadLoginUsers();
-    showAlert("登入者已新增。", false);
+    showAlert(isEdit ? "登入者已更新。" : "登入者已新增。", false);
   });
+}
+
+function startLoginUserEdit(loginUser) {
+  const form = document.getElementById("loginUserForm");
+  form.elements.loginUserId.value = loginUser.id;
+  form.elements.nickname.value = loginUser.displayName || "";
+  form.elements.loginAccount.value = loginUser.loginAccount || "";
+  form.elements.password.value = "";
+  form.elements.systemRole.value = loginUser.systemRole || "staff";
+  setLoginUserEditMode(true);
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetLoginUserForm() {
+  const form = document.getElementById("loginUserForm");
+  form.reset();
+  form.elements.loginUserId.value = "";
+  form.elements.systemRole.value = "admin";
+  setLoginUserEditMode(false);
+}
+
+function setLoginUserEditMode(isEdit) {
+  const title = document.getElementById("loginUserFormTitle");
+  const submitButton = document.getElementById("loginUserSubmitBtn");
+  const cancelButton = document.getElementById("cancelLoginUserEditBtn");
+  const passwordInput = document.getElementById("loginUserForm").elements.password;
+
+  if (title) {
+    title.textContent = isEdit ? "編輯登入者" : "新增登入者";
+  }
+  if (submitButton) {
+    submitButton.textContent = isEdit ? "儲存" : "新增登入者";
+  }
+  if (cancelButton) {
+    cancelButton.hidden = !isEdit;
+  }
+  passwordInput.required = !isEdit;
+  passwordInput.placeholder = isEdit ? "留空代表不變更密碼" : "";
 }
 
 function startUserEdit(user) {

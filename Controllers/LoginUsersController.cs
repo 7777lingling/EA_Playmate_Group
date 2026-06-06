@@ -50,4 +50,37 @@ public sealed class LoginUsersController : ControllerBase
             ? ApiErrors.Validation(result.ValidationErrors)
             : ApiErrors.BadRequest(result.ErrorCode ?? "operation_failed", result.ErrorMessage ?? "Operation failed.");
     }
+
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<LoginUserDto>> UpdateLoginUser(int id, UpdateLoginUserRequestDto request)
+    {
+        var result = await _loginUserService.UpdateAsync(id, request);
+        if (result.Succeeded)
+        {
+            return Ok(result.Value);
+        }
+
+        if (result.NotFound)
+        {
+            return NotFound();
+        }
+
+        return result.ValidationErrors is not null
+            ? ApiErrors.Validation(result.ValidationErrors)
+            : ApiErrors.BadRequest(result.ErrorCode ?? "operation_failed", result.ErrorMessage ?? "Operation failed.");
+    }
+
+    [HttpPost("{id:int}/deactivate")]
+    public async Task<IActionResult> DeactivateLoginUser(int id)
+    {
+        var result = await _loginUserService.SetActiveAsync(id, false);
+        return result.NotFound ? NotFound() : NoContent();
+    }
+
+    [HttpPost("{id:int}/activate")]
+    public async Task<IActionResult> ActivateLoginUser(int id)
+    {
+        var result = await _loginUserService.SetActiveAsync(id, true);
+        return result.NotFound ? NotFound() : NoContent();
+    }
 }

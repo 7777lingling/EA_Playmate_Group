@@ -203,6 +203,42 @@ API 的一般驗證錯誤會回傳：
 Common/DomainValues.cs
 ```
 
+## Windows Installer
+
+本專案可以使用 Inno Setup 打包成 Windows 安裝檔。
+
+打包指令：
+
+```powershell
+cd /d E:\ling\EA_Playmate_Group
+PowerShell -ExecutionPolicy Bypass -File .\Scripts\Build-Installer.ps1
+```
+
+輸出位置：
+
+```text
+artifacts\installer\EAPlaymateGroup_Setup_0.1.0.exe
+```
+
+安裝包設定檔：
+
+```text
+installer\EAPlaymateGroup.iss
+```
+
+版本號在 `installer\EAPlaymateGroup.iss` 的 `MyAppVersion` 調整。
+
+更新方式：
+
+1. 修改程式。
+2. 調整 `MyAppVersion`。
+3. 執行 `Scripts\Build-Installer.ps1`。
+4. 將新的 `EAPlaymateGroup_Setup_x.x.x.exe` 給使用者安裝覆蓋。
+
+更新安裝時會保留已安裝資料夾內既有的 `appsettings.json`，避免覆蓋資料庫連線設定。
+
+資料本身存在 SQL Server 的 `EAPlaymateGroup` 資料庫，重新安裝或更新程式不會清空資料庫。
+
 ## Service Layer
 
 目前已建立：
