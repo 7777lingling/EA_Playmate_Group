@@ -25,6 +25,42 @@ body {
   font-family: "Microsoft JhengHei", "Noto Sans TC", Arial, sans-serif;
 }
 
+body.auth-locked {
+  display: block;
+}
+
+body.auth-locked .sidebar,
+body.auth-locked .main {
+  display: none;
+}
+
+.login-view {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 20px;
+}
+
+.login-view[hidden] {
+  display: none;
+}
+
+.login-panel {
+  width: min(420px, 100%);
+  padding: 24px;
+}
+
+.login-brand {
+  margin-bottom: 6px;
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 button,
 input,
 select,

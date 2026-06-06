@@ -9,10 +9,12 @@ namespace EAPlaymateGroup.Services;
 public sealed class UserService
 {
     private readonly EAPlaymateGroupDbContext _db;
+    private readonly PasswordHasher _passwordHasher;
 
-    public UserService(EAPlaymateGroupDbContext db)
+    public UserService(EAPlaymateGroupDbContext db, PasswordHasher passwordHasher)
     {
         _db = db;
+        _passwordHasher = passwordHasher;
     }
 
     public async Task<ServiceResult<UserDto>> CreateUserAsync(CreateUserRequestDto request)
@@ -29,6 +31,8 @@ public sealed class UserService
             DiscordId = string.IsNullOrWhiteSpace(request.DiscordId) ? null : request.DiscordId.Trim(),
             DiscordName = string.IsNullOrWhiteSpace(request.DiscordName) ? null : request.DiscordName.Trim(),
             BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount.Trim(),
+            LoginAccount = string.IsNullOrWhiteSpace(request.LoginAccount) ? null : request.LoginAccount.Trim(),
+            PasswordHash = string.IsNullOrWhiteSpace(request.Password) ? null : _passwordHasher.Hash(request.Password),
             SystemRole = request.SystemRole,
             IsPlayer = request.IsPlayer,
             IsBoss = request.IsBoss
@@ -70,6 +74,11 @@ public sealed class UserService
         user.DiscordId = string.IsNullOrWhiteSpace(request.DiscordId) ? null : request.DiscordId.Trim();
         user.DiscordName = string.IsNullOrWhiteSpace(request.DiscordName) ? null : request.DiscordName.Trim();
         user.BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount.Trim();
+        user.LoginAccount = string.IsNullOrWhiteSpace(request.LoginAccount) ? null : request.LoginAccount.Trim();
+        if (!string.IsNullOrWhiteSpace(request.Password))
+        {
+            user.PasswordHash = _passwordHasher.Hash(request.Password);
+        }
         user.SystemRole = request.SystemRole;
         user.IsPlayer = request.IsPlayer;
         user.IsBoss = request.IsBoss;

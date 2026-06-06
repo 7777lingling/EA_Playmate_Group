@@ -8,6 +8,8 @@ public sealed class UserDto
     public string? DiscordId { get; set; }
     public string? DiscordName { get; set; }
     public string? BankAccount { get; set; }
+    public string? LoginAccount { get; set; }
+    public bool HasPassword { get; set; }
     public string SystemRole { get; set; } = "staff";
     public bool IsPlayer { get; set; }
     public bool IsBoss { get; set; }
@@ -23,6 +25,8 @@ public sealed class CreateUserRequestDto
     public string? DiscordId { get; set; }
     public string? DiscordName { get; set; }
     public string? BankAccount { get; set; }
+    public string? LoginAccount { get; set; }
+    public string? Password { get; set; }
     public string SystemRole { get; set; } = "staff";
     public bool IsPlayer { get; set; } = true;
     public bool IsBoss { get; set; }
@@ -34,6 +38,8 @@ public sealed class UpdateUserRequestDto
     public string? DiscordId { get; set; }
     public string? DiscordName { get; set; }
     public string? BankAccount { get; set; }
+    public string? LoginAccount { get; set; }
+    public string? Password { get; set; }
     public string SystemRole { get; set; } = "staff";
     public bool IsPlayer { get; set; }
     public bool IsBoss { get; set; }

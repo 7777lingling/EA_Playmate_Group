@@ -4,9 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EA Playmate Group</title>
-  <link rel="stylesheet" href="/styles.css?v=20260605-user-edit">
+  <link rel="stylesheet" href="/styles.css?v=20260606-login-users">
 </head>
 <body>
+  <section class="login-view" id="loginView" hidden>
+    <form class="panel form login-panel" id="loginForm">
+      <div class="brand login-brand">
+        <div class="brand-mark">EA</div>
+        <div>
+          <strong>Playmate Group</strong>
+          <span>管理後台登入</span>
+        </div>
+      </div>
+      <label>登入帳號<input name="loginAccount" autocomplete="username" required></label>
+      <label>密碼<input name="password" type="password" autocomplete="current-password" required></label>
+      <section class="alert" id="loginAlert" hidden></section>
+      <button class="primary" type="submit">登入</button>
+      <p class="muted">只有已啟用且設定帳密的成員可以登入。</p>
+    </form>
+  </section>
+
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-mark">EA</div>
@@ -18,6 +35,7 @@
     <nav class="nav-tabs" aria-label="主選單">
       <button class="active" data-view="dashboard">總覽</button>
       <button data-view="users">成員</button>
+      <button data-view="loginUsers">登入者</button>
       <button data-view="orders">訂單</button>
       <button data-view="payments">月結</button>
       <button data-view="audit">紀錄</button>
@@ -32,6 +50,8 @@
       </div>
       <div class="top-actions">
         <span class="status-dot" id="apiStatus">API</span>
+        <span class="status-dot" id="currentUser" hidden></span>
+        <button class="ghost" id="logoutBtn" type="button" hidden>登出</button>
         <button class="ghost" id="refreshBtn" type="button">重新整理</button>
       </div>
     </header>
@@ -107,6 +127,10 @@
           <label>Discord ID<input name="discordId" maxlength="50"></label>
           <label>Discord 名稱<input name="discordName" maxlength="100"></label>
           <label>銀行帳號<input name="bankAccount" maxlength="200"></label>
+          <div class="split">
+            <label>登入帳號<input name="loginAccount" maxlength="50" autocomplete="off"></label>
+            <label>設定密碼<input name="password" type="password" autocomplete="new-password"></label>
+          </div>
           <label>系統權限
             <select name="systemRole">
               <option value="staff">工作人員</option>
@@ -165,6 +189,45 @@
             </div>
           </section>
         </div>
+      </div>
+    </section>
+
+    <section class="view" id="loginUsersView">
+      <div class="grid form-list">
+        <form class="panel form" id="loginUserForm">
+          <h2>新增登入者</h2>
+          <label>顯示名稱<input name="nickname" required maxlength="50"></label>
+          <label>登入帳號<input name="loginAccount" required maxlength="50" autocomplete="off"></label>
+          <label>登入密碼<input name="password" type="password" required autocomplete="new-password"></label>
+          <label>系統權限
+            <select name="systemRole">
+              <option value="admin">管理員</option>
+              <option value="staff">工作人員</option>
+              <option value="viewer">檢視者</option>
+            </select>
+          </label>
+          <button class="primary" type="submit">新增登入者</button>
+        </form>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>登入者清單</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>登入帳號</th>
+                  <th>顯示名稱</th>
+                  <th>權限</th>
+                  <th>狀態</th>
+                  <th>密碼</th>
+                </tr>
+              </thead>
+              <tbody id="loginUserRows"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </section>
 
@@ -303,6 +366,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=20260605-order-copy-new"></script>
+  <script src="/app.js?v=20260606-login-users"></script>
 </body>
 </html>

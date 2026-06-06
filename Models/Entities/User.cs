@@ -9,6 +9,8 @@ public sealed class User
     public string? DiscordId { get; set; }
     public string? DiscordName { get; set; }
     public string? BankAccount { get; set; }
+    public string? LoginAccount { get; set; }
+    public string? PasswordHash { get; set; }
 
     public string SystemRole { get; set; } = "staff";
     public bool IsPlayer { get; set; } = true;
@@ -19,6 +21,7 @@ public sealed class User
 
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public DateTime? LastLoginAt { get; set; }
 
     public ICollection<Order> OwnedOrders { get; set; } = [];
     public ICollection<OrderMember> OrderMembers { get; set; } = [];

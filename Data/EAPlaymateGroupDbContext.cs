@@ -44,6 +44,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.DiscordId).HasColumnName("discord_id").HasMaxLength(50);
         entity.Property(x => x.DiscordName).HasColumnName("discord_name").HasMaxLength(100);
         entity.Property(x => x.BankAccount).HasColumnName("bank_account").HasMaxLength(200);
+        entity.Property(x => x.LoginAccount).HasColumnName("login_account").HasMaxLength(50);
+        entity.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(500);
         entity.Property(x => x.SystemRole).HasColumnName("system_role").HasMaxLength(20).HasDefaultValue("staff").IsRequired();
         entity.Property(x => x.IsPlayer).HasColumnName("is_player").HasDefaultValue(true);
         entity.Property(x => x.IsBoss).HasColumnName("is_boss").HasDefaultValue(false);
@@ -51,9 +53,14 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.LeftAt).HasColumnName("left_at");
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
         entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        entity.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
 
         entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_users_uuid");
         entity.HasIndex(x => x.Nickname).IsUnique().HasDatabaseName("UQ_users_nickname");
+        entity.HasIndex(x => x.LoginAccount)
+            .IsUnique()
+            .HasFilter("[login_account] IS NOT NULL")
+            .HasDatabaseName("UQ_users_login_account");
         entity.HasIndex(x => x.DiscordId)
             .IsUnique()
             .HasFilter("[discord_id] IS NOT NULL")

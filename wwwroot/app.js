@@ -4,12 +4,14 @@ const state = {
   bosses: [],
   orders: [],
   payments: [],
-  view: "dashboard"
+  view: "dashboard",
+  auth: null
 };
 
 const titles = {
   dashboard: ["Dashboard", "總覽"],
   users: ["Users", "成員"],
+  loginUsers: ["Login Users", "登入者"],
   orders: ["Orders", "訂單"],
   payments: ["Payments", "月結"],
   audit: ["Audit", "紀錄"]
@@ -74,7 +76,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindForms();
   setDefaultDates();
   addMemberRow();
-  await refreshAll();
+  await initializeAuth();
 });
 
 function bindNavigation() {
@@ -96,6 +98,9 @@ function bindNavigation() {
 }
 
 function bindForms() {
+  document.getElementById("loginForm").addEventListener("submit", submitLogin);
+  document.getElementById("loginUserForm").addEventListener("submit", submitLoginUser);
+  document.getElementById("logoutBtn").addEventListener("click", logout);
   document.getElementById("userForm").addEventListener("submit", submitUser);
   document.getElementById("cancelUserEditBtn").addEventListener("click", resetUserForm);
   document.getElementById("orderForm").addEventListener("submit", submitOrder);
@@ -111,16 +116,56 @@ function setDefaultDates() {
   document.querySelector("[name='payMonth']").value = today.slice(0, 7);
 }
 
+async function initializeAuth() {
+  try {
+    state.auth = await api("/api/auth/me", { skipAuthRedirect: true });
+    if (state.auth.authRequired && !state.auth.isAuthenticated) {
+      showLogin();
+      return;
+    }
+
+    showApp();
+    await refreshAll();
+  } catch (error) {
+    showLogin();
+    showLoginError(error.message);
+  }
+}
+
+function showLogin() {
+  document.body.classList.add("auth-locked");
+  document.getElementById("loginView").hidden = false;
+  document.getElementById("logoutBtn").hidden = true;
+  document.getElementById("currentUser").hidden = true;
+}
+
+function showApp() {
+  document.body.classList.remove("auth-locked");
+  document.getElementById("loginView").hidden = true;
+  document.getElementById("loginAlert").hidden = true;
+  const currentUser = document.getElementById("currentUser");
+  if (state.auth?.user) {
+    currentUser.textContent = state.auth.user.nickname;
+    currentUser.hidden = false;
+    document.getElementById("logoutBtn").hidden = false;
+  }
+}
+
 async function api(path, options = {}) {
+  const { skipAuthRedirect, ...fetchOptions } = options;
   const response = await fetch(path, {
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {})
     },
-    ...options
+    ...fetchOptions
   });
 
   if (!response.ok) {
+    if (response.status === 401 && !skipAuthRedirect) {
+      showLogin();
+    }
+
     let message = `${response.status} ${response.statusText}`;
     try {
       const error = await response.json();
@@ -141,6 +186,43 @@ async function api(path, options = {}) {
   return response.json();
 }
 
+async function submitLogin(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+
+  try {
+    state.auth = await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        loginAccount: data.get("loginAccount"),
+        password: data.get("password")
+      }),
+      skipAuthRedirect: true
+    });
+    form.reset();
+    showApp();
+    hideAlert();
+    await refreshAll();
+  } catch (error) {
+    showLoginError(error.message);
+  }
+}
+
+async function logout() {
+  await api("/api/auth/logout", { method: "POST", body: "{}" });
+  state.auth = null;
+  showLogin();
+}
+
+function showLoginError(message) {
+  const alert = document.getElementById("loginAlert");
+  alert.hidden = false;
+  alert.textContent = message;
+  alert.style.background = "#fff1df";
+  alert.style.color = "var(--warn)";
+}
+
 async function refreshAll() {
   try {
     await api("/api/health");
@@ -150,7 +232,7 @@ async function refreshAll() {
     if (state.view === "dashboard") {
       await loadDashboard();
     }
-    if (state.view === "users" || state.view === "orders") {
+    if (state.view === "users" || state.view === "loginUsers" || state.view === "orders") {
       await loadUsers();
     }
     if (state.view === "orders" || state.view === "dashboard") {
@@ -229,6 +311,25 @@ function renderRecentOrders() {
 function renderUsers() {
   renderUserTable("playerRows", state.users.filter((user) => user.isPlayer));
   renderUserTable("bossRows", state.users.filter((user) => user.isBoss));
+  renderLoginUsers();
+}
+
+function renderLoginUsers() {
+  const body = document.getElementById("loginUserRows");
+  if (!body) {
+    return;
+  }
+
+  const users = state.users.filter((user) => user.loginAccount);
+  body.innerHTML = users.length ? users.map((user) => `
+    <tr>
+      <td>${escapeHtml(user.loginAccount || "")}</td>
+      <td>${escapeHtml(user.nickname)}</td>
+      <td>${label("systemRole", user.systemRole)}</td>
+      <td>${user.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
+      <td>${user.hasPassword ? pill("已設定", "good") : pill("未設定", "warn")}</td>
+    </tr>
+  `).join("") : emptyRow(5);
 }
 
 function renderUserTable(elementId, users) {
@@ -393,6 +494,8 @@ async function submitUser(event) {
     discordId: emptyToNull(data.get("discordId")),
     discordName: emptyToNull(data.get("discordName")),
     bankAccount: emptyToNull(data.get("bankAccount")),
+    loginAccount: emptyToNull(data.get("loginAccount")),
+    password: emptyToNull(data.get("password")),
     systemRole: data.get("systemRole"),
     isPlayer: data.get("isPlayer") === "on",
     isBoss: data.get("isBoss") === "on"
@@ -414,6 +517,30 @@ async function submitUser(event) {
   });
 }
 
+async function submitLoginUser(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+
+  await runAction(async () => {
+    await api("/api/users", {
+      method: "POST",
+      body: JSON.stringify({
+        nickname: data.get("nickname"),
+        loginAccount: data.get("loginAccount"),
+        password: data.get("password"),
+        systemRole: data.get("systemRole"),
+        isPlayer: false,
+        isBoss: false
+      })
+    });
+    form.reset();
+    form.elements.systemRole.value = "admin";
+    await loadUsers();
+    showAlert("登入者已新增。", false);
+  });
+}
+
 function startUserEdit(user) {
   const form = document.getElementById("userForm");
   form.elements.userId.value = user.id;
@@ -421,6 +548,8 @@ function startUserEdit(user) {
   form.elements.discordId.value = user.discordId || "";
   form.elements.discordName.value = user.discordName || "";
   form.elements.bankAccount.value = user.bankAccount || "";
+  form.elements.loginAccount.value = user.loginAccount || "";
+  form.elements.password.value = "";
   form.elements.systemRole.value = user.systemRole || "staff";
   form.elements.isPlayer.checked = Boolean(user.isPlayer);
   form.elements.isBoss.checked = Boolean(user.isBoss);
@@ -434,6 +563,7 @@ function resetUserForm() {
   const form = document.getElementById("userForm");
   form.reset();
   form.elements.userId.value = "";
+  form.elements.password.value = "";
   form.elements.isPlayer.checked = true;
   document.getElementById("userFormTitle").textContent = "新增成員";
   document.getElementById("userSubmitBtn").textContent = "新增";
