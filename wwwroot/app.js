@@ -1,11 +1,14 @@
 const state = {
   users: [],
   loginUsers: [],
+  serviceItems: [],
+  giftRecords: [],
   players: [],
   bosses: [],
   orders: [],
   payments: [],
   view: "dashboard",
+  serviceCategory: "boost",
   auth: null
 };
 
@@ -14,9 +17,12 @@ const titles = {
   users: ["Users", "成員"],
   loginUsers: ["Login Users", "登入者"],
   orders: ["Orders", "訂單"],
+  gifts: ["Gifts", "禮物"],
   payments: ["Payments", "月結"],
   audit: ["Audit", "紀錄"]
 };
+
+titles.services = ["Services", "服務"];
 
 const money = new Intl.NumberFormat("zh-TW", {
   minimumFractionDigits: 0,
@@ -68,6 +74,7 @@ const labels = {
     users: "成員",
     orders: "訂單",
     payments: "發薪",
+    gift_records: "送禮紀錄",
     audit_logs: "操作紀錄"
   }
 };
@@ -75,6 +82,7 @@ const labels = {
 document.addEventListener("DOMContentLoaded", async () => {
   bindNavigation();
   bindForms();
+  bindPriceGallery();
   setDefaultDates();
   addMemberRow();
   await initializeAuth();
@@ -109,8 +117,49 @@ function bindForms() {
   document.getElementById("orderForm").addEventListener("submit", submitOrder);
   document.getElementById("copyOrderBtn").addEventListener("click", copyOrderAsNew);
   document.getElementById("cancelOrderEditBtn").addEventListener("click", resetOrderForm);
+  document.getElementById("giftRecordForm").addEventListener("submit", submitGiftRecord);
+  document.getElementById("cancelGiftRecordEditBtn").addEventListener("click", resetGiftRecordForm);
+  document.getElementById("giftItemSelect").addEventListener("change", applySelectedGiftItem);
   document.getElementById("paymentForm").addEventListener("submit", submitPaymentGeneration);
   document.getElementById("orderForm").addEventListener("input", updateOrderCalc);
+}
+
+function bindPriceGallery() {
+  document.querySelectorAll(".price-gallery").forEach((gallery) => {
+    const links = [...gallery.querySelectorAll("[data-price-preview]")];
+    if (links.length === 0) {
+      return;
+    }
+
+    const board = document.createElement("section");
+    board.className = "price-board";
+
+    const display = document.createElement("section");
+    display.className = "price-display";
+    display.innerHTML = `
+      <img alt="">
+    `;
+
+    gallery.parentNode?.insertBefore(board, gallery);
+    board.append(gallery, display);
+
+    const displayImg = display.querySelector("img");
+    const setActive = (link) => {
+      links.forEach((item) => item.classList.toggle("active", item === link));
+      const image = link.querySelector("img");
+      displayImg.src = link.getAttribute("href");
+      displayImg.alt = image?.alt || "";
+    };
+
+    links.forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        setActive(link);
+      });
+    });
+
+    setActive(links[0]);
+  });
 }
 
 function ensureLoginUserEditControls() {
@@ -165,6 +214,7 @@ function ensureLoginUserEditControls() {
 function setDefaultDates() {
   const today = new Date().toISOString().slice(0, 10);
   document.querySelector("[name='orderDate']").value = today;
+  document.querySelector("[name='giftDate']").value = today;
   document.querySelector("[name='payMonth']").value = today.slice(0, 7);
 }
 
@@ -284,11 +334,17 @@ async function refreshAll() {
     if (state.view === "dashboard") {
       await loadDashboard();
     }
-    if (state.view === "users" || state.view === "orders") {
+    if (state.view === "users" || state.view === "orders" || state.view === "gifts") {
       await loadUsers();
     }
     if (state.view === "loginUsers") {
       await loadLoginUsers();
+    }
+    if (state.view === "services" || state.view === "gifts") {
+      await loadServiceItems();
+    }
+    if (state.view === "gifts") {
+      await loadGiftRecords();
     }
     if (state.view === "orders" || state.view === "dashboard") {
       await loadOrders();
@@ -326,6 +382,18 @@ async function loadUsers() {
 async function loadLoginUsers() {
   state.loginUsers = await api("/api/loginusers");
   renderLoginUsers();
+}
+
+async function loadServiceItems() {
+  state.serviceItems = await api("/api/serviceitems");
+  renderServiceItems();
+  renderGiftItems();
+  renderSelects();
+}
+
+async function loadGiftRecords() {
+  state.giftRecords = await api("/api/giftrecords");
+  renderGiftRecords();
 }
 
 async function loadOrders() {
@@ -426,6 +494,111 @@ function bindLoginUserTableActions(body) {
         await loadLoginUsers();
         showAlert("登入者已啟用。", false);
       });
+    });
+  });
+}
+
+function renderServiceItems() {
+  const body = document.getElementById("serviceItemRows");
+  if (!body) {
+    return;
+  }
+
+  renderServiceCategoryTabs();
+  const rows = state.serviceItems.filter((item) => item.category === state.serviceCategory && item.isActive);
+
+  body.innerHTML = rows.length ? rows.map((item) => `
+    <tr>
+      <td>${escapeHtml(item.subcategory || serviceCategoryText(item.category))}</td>
+      <td>${escapeHtml(item.name)}</td>
+      <td>${escapeHtml(servicePriceText(item))}</td>
+      <td>${escapeHtml(unitTypeText(item.unitType))}</td>
+      <td>${escapeHtml(item.remark || "")}</td>
+      <td>${item.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
+    </tr>
+  `).join("") : emptyRow(6);
+}
+
+function renderGiftItems() {
+  const body = document.getElementById("giftItemRows");
+  if (!body) {
+    return;
+  }
+
+  const rows = state.serviceItems.filter((item) => item.category === "gift" && item.isActive);
+  body.innerHTML = rows.length ? rows.map((item) => `
+    <tr>
+      <td>${escapeHtml(item.name)}</td>
+      <td>${escapeHtml(servicePriceText(item))}</td>
+      <td>${escapeHtml(unitTypeText(item.unitType))}</td>
+      <td>${escapeHtml(item.remark || "")}</td>
+      <td>${item.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
+    </tr>
+  `).join("") : emptyRow(5);
+}
+
+function renderGiftRecords() {
+  const body = document.getElementById("giftRecordRows");
+  if (!body) {
+    return;
+  }
+
+  body.innerHTML = state.giftRecords.length ? state.giftRecords.map((record) => `
+    <tr>
+      <td>${record.giftDate}</td>
+      <td>${escapeHtml(record.bossNickname)}</td>
+      <td>${escapeHtml(record.recipientNickname)}</td>
+      <td>${escapeHtml(record.giftName)}${record.quantity && record.quantity !== 1 ? ` × ${money.format(record.quantity)}` : ""}</td>
+      <td>${money.format(record.amount)}</td>
+      <td>${paymentPill(record.customerPaymentStatus)}</td>
+      <td>
+        <button class="ghost small" data-gift-edit="${record.id}">編輯</button>
+        ${record.status === "cancelled" ? pill("已取消", "bad") : `<button class="ghost small" data-gift-cancel="${record.id}">取消</button>`}
+      </td>
+    </tr>
+  `).join("") : emptyRow(7);
+
+  body.querySelectorAll("[data-gift-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const record = state.giftRecords.find((item) => item.id === Number(button.dataset.giftEdit));
+      if (record) {
+        startGiftRecordEdit(record);
+      }
+    });
+  });
+
+  body.querySelectorAll("[data-gift-cancel]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await runAction(async () => {
+        await api(`/api/giftrecords/${button.dataset.giftCancel}/cancel`, { method: "POST", body: "{}" });
+        await loadGiftRecords();
+        showAlert("送禮紀錄已取消。", false);
+      });
+    });
+  });
+}
+
+function renderServiceCategoryTabs() {
+  const tabs = document.getElementById("serviceCategoryTabs");
+  if (!tabs) {
+    return;
+  }
+
+  const categories = [
+    ["boost", "代打"],
+    ["grind", "代肝"],
+    ["play", "陪玩"],
+    ["deposit_bonus", "預存"]
+  ];
+
+  tabs.innerHTML = categories.map(([value, text]) => `
+    <button class="ghost small ${state.serviceCategory === value ? "active" : ""}" data-service-category="${value}" type="button">${text}</button>
+  `).join("");
+
+  tabs.querySelectorAll("[data-service-category]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.serviceCategory = button.dataset.serviceCategory;
+      renderServiceItems();
     });
   });
 }
@@ -538,6 +711,38 @@ function renderSelects() {
   bossSelect.innerHTML = `<option value="">未指定</option>${state.bosses.map((boss) =>
     `<option value="${boss.id}">${escapeHtml(boss.nickname)}</option>`
   ).join("")}`;
+
+  const giftBossSelect = document.getElementById("giftBossSelect");
+  if (giftBossSelect) {
+    const currentValue = giftBossSelect.value;
+    giftBossSelect.innerHTML = state.bosses.map((boss) =>
+      `<option value="${boss.id}">${escapeHtml(boss.nickname)}</option>`
+    ).join("");
+    if (currentValue) {
+      giftBossSelect.value = currentValue;
+    }
+  }
+
+  const giftRecipientSelect = document.getElementById("giftRecipientSelect");
+  if (giftRecipientSelect) {
+    const currentValue = giftRecipientSelect.value;
+    giftRecipientSelect.innerHTML = state.players.map((player) =>
+      `<option value="${player.id}">${escapeHtml(player.nickname)}</option>`
+    ).join("");
+    if (currentValue) {
+      giftRecipientSelect.value = currentValue;
+    }
+  }
+
+  const giftItemSelect = document.getElementById("giftItemSelect");
+  if (giftItemSelect) {
+    const currentValue = giftItemSelect.value;
+    const giftItems = state.serviceItems.filter((item) => item.category === "gift" && item.isActive);
+    giftItemSelect.innerHTML = `<option value="">自訂打賞</option>${giftItems.map((item) =>
+      `<option value="${item.id}">${escapeHtml(item.name)}${item.defaultPrice == null ? "" : ` - ${money.format(item.defaultPrice)}`}</option>`
+    ).join("")}`;
+    giftItemSelect.value = currentValue;
+  }
 
   document.querySelectorAll("[data-member-select]").forEach((select) => {
     const currentValue = select.value;
@@ -715,6 +920,86 @@ function resetUserForm() {
   document.getElementById("cancelUserEditBtn").hidden = true;
 }
 
+async function submitGiftRecord(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const giftRecordId = data.get("giftRecordId");
+  const isEdit = Boolean(giftRecordId);
+
+  await runAction(async () => {
+    const payload = {
+      giftDate: data.get("giftDate"),
+      bossUserId: Number(data.get("bossUserId")),
+      recipientUserId: Number(data.get("recipientUserId")),
+      serviceItemId: data.get("serviceItemId") ? Number(data.get("serviceItemId")) : null,
+      giftName: emptyToNull(data.get("giftName")),
+      amount: Number(data.get("amount")),
+      quantity: Number(data.get("quantity") || 1),
+      customerPaymentStatus: data.get("customerPaymentStatus"),
+      status: data.get("status"),
+      remark: emptyToNull(data.get("remark"))
+    };
+
+    await api(isEdit ? `/api/giftrecords/${giftRecordId}` : "/api/giftrecords", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify(payload)
+    });
+
+    resetGiftRecordForm();
+    await loadGiftRecords();
+    showAlert(isEdit ? "送禮紀錄已更新。" : "送禮紀錄已新增。", false);
+    document.getElementById("giftRecordRows").closest(".panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function startGiftRecordEdit(record) {
+  const form = document.getElementById("giftRecordForm");
+  form.elements.giftRecordId.value = record.id;
+  form.elements.giftDate.value = record.giftDate;
+  form.elements.bossUserId.value = record.bossUserId;
+  form.elements.recipientUserId.value = record.recipientUserId;
+  form.elements.serviceItemId.value = record.serviceItemId || "";
+  form.elements.giftName.value = record.serviceItemId ? "" : record.giftName;
+  form.elements.amount.value = record.amount;
+  form.elements.quantity.value = record.quantity || 1;
+  form.elements.customerPaymentStatus.value = record.customerPaymentStatus || "unpaid";
+  form.elements.status.value = record.status || "completed";
+  form.elements.remark.value = record.remark || "";
+  document.getElementById("giftRecordFormTitle").textContent = "編輯送禮紀錄";
+  document.getElementById("giftRecordSubmitBtn").textContent = "更新紀錄";
+  document.getElementById("cancelGiftRecordEditBtn").hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetGiftRecordForm() {
+  const form = document.getElementById("giftRecordForm");
+  form.reset();
+  form.elements.giftRecordId.value = "";
+  form.elements.quantity.value = 1;
+  form.elements.customerPaymentStatus.value = "unpaid";
+  form.elements.status.value = "completed";
+  document.getElementById("giftRecordFormTitle").textContent = "新增送禮紀錄";
+  document.getElementById("giftRecordSubmitBtn").textContent = "新增紀錄";
+  document.getElementById("cancelGiftRecordEditBtn").hidden = true;
+  setDefaultDates();
+  renderSelects();
+}
+
+function applySelectedGiftItem() {
+  const form = document.getElementById("giftRecordForm");
+  const itemId = Number(form.elements.serviceItemId.value);
+  const item = state.serviceItems.find((serviceItem) => serviceItem.id === itemId);
+  if (!item) {
+    return;
+  }
+
+  form.elements.giftName.value = "";
+  if (item.defaultPrice != null) {
+    form.elements.amount.value = item.defaultPrice;
+  }
+}
+
 async function submitOrder(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -890,6 +1175,38 @@ function identityText(user) {
   if (user.isPlayer) parts.push("團員");
   if (user.isBoss) parts.push("老闆");
   return parts.join(" / ") || "-";
+}
+
+function serviceCategoryText(category) {
+  return {
+    boost: "代打",
+    grind: "代肝",
+    play: "陪玩",
+    gift: "禮物",
+    deposit_bonus: "預存",
+    other: "其他"
+  }[category] || category;
+}
+
+function servicePriceText(item) {
+  if (item.defaultPrice != null && item.unitType !== "amount") {
+    return money.format(item.defaultPrice);
+  }
+
+  return item.priceNote || (item.defaultPrice == null ? "另議" : money.format(item.defaultPrice));
+}
+
+function unitTypeText(unitType) {
+  return {
+    custom: "自訂",
+    week: "週",
+    day: "日",
+    match: "場",
+    star: "星",
+    hour_person: "小時 / 人",
+    item: "項",
+    amount: "金額"
+  }[unitType] || unitType;
 }
 
 function statusPill(status) {

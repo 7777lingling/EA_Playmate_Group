@@ -439,6 +439,88 @@ th {
   font-weight: 800;
 }
 
+.price-board {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: start;
+}
+
+.price-gallery {
+  display: grid;
+  gap: 10px;
+  max-height: calc(100vh - 180px);
+  overflow-x: auto;
+  overflow-y: auto;
+  padding-bottom: 6px;
+}
+
+.price-shot {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  height: 106px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111;
+  color: #fff;
+  text-decoration: none;
+}
+
+.price-shot.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px #d9ebe6;
+}
+
+.price-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.price-shot span {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: rgb(0 0 0 / 58%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.price-display {
+  display: grid;
+  min-height: 640px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111;
+  overflow: hidden;
+}
+
+.price-display img {
+  width: 100%;
+  max-height: min(76vh, 920px);
+  object-fit: contain;
+  display: block;
+}
+
+.category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.category-tabs button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
 @media (max-width: 980px) {
   body {
     grid-template-columns: 1fr;
@@ -450,7 +532,7 @@ th {
   }
 
   .nav-tabs {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   .nav-tabs button {
@@ -461,6 +543,22 @@ th {
   .two,
   .form-list {
     grid-template-columns: 1fr;
+  }
+
+  .price-board {
+    grid-template-columns: 1fr;
+  }
+
+  .price-gallery {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(150px, 1fr);
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .price-display {
+    min-height: 520px;
   }
 }
 
@@ -478,5 +576,13 @@ th {
   .topbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .price-shot {
+    height: 96px;
+  }
+
+  .price-display {
+    min-height: 430px;
   }
 }

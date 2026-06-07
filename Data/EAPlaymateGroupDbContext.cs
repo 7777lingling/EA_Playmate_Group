@@ -16,6 +16,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
     public DbSet<OrderMember> OrderMembers => Set<OrderMember>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<ServiceItem> ServiceItems => Set<ServiceItem>();
+    public DbSet<GiftRecord> GiftRecords => Set<GiftRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -27,6 +29,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         ConfigureOrderMember(modelBuilder);
         ConfigurePayment(modelBuilder);
         ConfigureAuditLog(modelBuilder);
+        ConfigureServiceItem(modelBuilder);
+        ConfigureGiftRecord(modelBuilder);
     }
 
     private static void ConfigureUser(ModelBuilder modelBuilder)
@@ -241,6 +245,91 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             .WithMany(x => x.AuditLogs)
             .HasForeignKey(x => x.UserId)
             .HasConstraintName("FK_audit_logs_user")
+            .OnDelete(DeleteBehavior.NoAction);
+    }
+
+    private static void ConfigureServiceItem(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<ServiceItem>();
+
+        entity.ToTable("service_items", "dbo", table =>
+        {
+            table.HasCheckConstraint("CK_service_items_default_price", "[default_price] IS NULL OR [default_price] >= 0");
+            table.HasCheckConstraint("CK_service_items_category", "[category] IN (N'boost', N'grind', N'play', N'gift', N'deposit_bonus', N'other')");
+        });
+
+        entity.HasKey(x => x.Id).HasName("PK_service_items");
+
+        entity.Property(x => x.Id).HasColumnName("id");
+        entity.Property(x => x.Uuid).HasColumnName("uuid").HasDefaultValueSql("NEWID()");
+        entity.Property(x => x.SeedKey).HasColumnName("seed_key").HasMaxLength(80).IsRequired();
+        entity.Property(x => x.Category).HasColumnName("category").HasMaxLength(30).IsRequired();
+        entity.Property(x => x.Subcategory).HasColumnName("subcategory").HasMaxLength(50);
+        entity.Property(x => x.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+        entity.Property(x => x.UnitType).HasColumnName("unit_type").HasMaxLength(30).HasDefaultValue("custom").IsRequired();
+        entity.Property(x => x.DefaultPrice).HasColumnName("default_price").HasPrecision(12, 2);
+        entity.Property(x => x.PriceNote).HasColumnName("price_note").HasMaxLength(200);
+        entity.Property(x => x.Remark).HasColumnName("remark").HasMaxLength(1000);
+        entity.Property(x => x.SortOrder).HasColumnName("sort_order").HasDefaultValue(0);
+        entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
+        entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+
+        entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_service_items_uuid");
+        entity.HasIndex(x => x.SeedKey).IsUnique().HasDatabaseName("UQ_service_items_seed_key");
+        entity.HasIndex(x => new { x.Category, x.SortOrder }).HasDatabaseName("IX_service_items_category_sort");
+    }
+
+    private static void ConfigureGiftRecord(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<GiftRecord>();
+
+        entity.ToTable("gift_records", "dbo", table =>
+        {
+            table.HasCheckConstraint("CK_gift_records_amount", "[amount] > 0");
+            table.HasCheckConstraint("CK_gift_records_quantity", "[quantity] > 0");
+            table.HasCheckConstraint("CK_gift_records_customer_payment_status", "[customer_payment_status] IN (N'unpaid', N'partial', N'paid', N'refunded')");
+            table.HasCheckConstraint("CK_gift_records_status", "[status] IN (N'completed', N'cancelled')");
+        });
+
+        entity.HasKey(x => x.Id).HasName("PK_gift_records");
+
+        entity.Property(x => x.Id).HasColumnName("id");
+        entity.Property(x => x.Uuid).HasColumnName("uuid").HasDefaultValueSql("NEWID()");
+        entity.Property(x => x.GiftDate).HasColumnName("gift_date");
+        entity.Property(x => x.BossUserId).HasColumnName("boss_user_id");
+        entity.Property(x => x.RecipientUserId).HasColumnName("recipient_user_id");
+        entity.Property(x => x.ServiceItemId).HasColumnName("service_item_id");
+        entity.Property(x => x.GiftName).HasColumnName("gift_name").HasMaxLength(100).IsRequired();
+        entity.Property(x => x.Amount).HasColumnName("amount").HasPrecision(12, 2);
+        entity.Property(x => x.Quantity).HasColumnName("quantity").HasPrecision(12, 2).HasDefaultValue(1m);
+        entity.Property(x => x.CustomerPaymentStatus).HasColumnName("customer_payment_status").HasMaxLength(20).HasDefaultValue("unpaid").IsRequired();
+        entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(20).HasDefaultValue("completed").IsRequired();
+        entity.Property(x => x.Remark).HasColumnName("remark").HasMaxLength(500);
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
+        entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+
+        entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_gift_records_uuid");
+        entity.HasIndex(x => new { x.GiftDate, x.Status }).HasDatabaseName("IX_gift_records_date_status");
+        entity.HasIndex(x => new { x.BossUserId, x.GiftDate }).HasDatabaseName("IX_gift_records_boss_date");
+        entity.HasIndex(x => new { x.RecipientUserId, x.GiftDate }).HasDatabaseName("IX_gift_records_recipient_date");
+
+        entity.HasOne(x => x.BossUser)
+            .WithMany(x => x.SentGiftRecords)
+            .HasForeignKey(x => x.BossUserId)
+            .HasConstraintName("FK_gift_records_boss_user")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        entity.HasOne(x => x.RecipientUser)
+            .WithMany(x => x.ReceivedGiftRecords)
+            .HasForeignKey(x => x.RecipientUserId)
+            .HasConstraintName("FK_gift_records_recipient_user")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        entity.HasOne(x => x.ServiceItem)
+            .WithMany()
+            .HasForeignKey(x => x.ServiceItemId)
+            .HasConstraintName("FK_gift_records_service_item")
             .OnDelete(DeleteBehavior.NoAction);
     }
 }
