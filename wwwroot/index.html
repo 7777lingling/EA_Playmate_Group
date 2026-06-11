@@ -36,6 +36,7 @@
       <button class="active" data-view="dashboard">總覽</button>
       <button data-view="users">成員</button>
       <button data-view="loginUsers">登入者</button>
+      <button data-view="organization">組織</button>
       <button data-view="services">服務</button>
       <button data-view="gifts">禮物</button>
       <button data-view="orders">訂單</button>
@@ -225,6 +226,46 @@
               <tbody id="loginUserRows"></tbody>
             </table>
           </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="organizationView">
+      <div class="grid form-list">
+        <div class="grid user-lists">
+          <form class="panel form" id="departmentForm">
+            <h2 id="departmentFormTitle">新增部門</h2>
+            <input type="hidden" name="departmentId">
+            <label>部門名稱<input name="name" required maxlength="50"></label>
+            <label>英文名稱<input name="englishName" maxlength="80"></label>
+            <label>排序<input name="sortOrder" type="number" step="1" value="0"></label>
+            <label>職責<textarea name="description" rows="4"></textarea></label>
+            <label class="inline-check"><input name="isActive" type="checkbox" checked> 啟用</label>
+            <div class="form-actions">
+              <button class="primary" id="departmentSubmitBtn" type="submit">新增部門</button>
+              <button class="ghost" id="cancelDepartmentEditBtn" type="button" hidden>取消編輯</button>
+            </div>
+          </form>
+
+          <form class="panel form" id="departmentMemberForm">
+            <h2>加入部門成員</h2>
+            <label>部門
+              <select name="departmentId" id="departmentSelect" required></select>
+            </label>
+            <label>成員
+              <select name="userId" id="departmentUserSelect" required></select>
+            </label>
+            <label>職稱<input name="positionTitle" maxlength="80" placeholder="例如：主管、客服、設計"></label>
+            <label class="inline-check"><input name="isManager" type="checkbox"> 主管</label>
+            <button class="primary" type="submit">加入 / 更新</button>
+          </form>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>部門清單</h2>
+          </div>
+          <div id="departmentCards" class="department-list"></div>
         </section>
       </div>
     </section>

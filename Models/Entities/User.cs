@@ -29,4 +29,5 @@ public sealed class User
     public ICollection<AuditLog> AuditLogs { get; set; } = [];
     public ICollection<GiftRecord> SentGiftRecords { get; set; } = [];
     public ICollection<GiftRecord> ReceivedGiftRecords { get; set; } = [];
+    public ICollection<DepartmentMember> DepartmentMembers { get; set; } = [];
 }

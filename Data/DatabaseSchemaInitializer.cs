@@ -54,7 +54,9 @@ BEGIN
     ON dbo.users(login_account)
     WHERE login_account IS NOT NULL;');
 END;
+""");
 
+        await db.Database.ExecuteSqlRawAsync("""
 INSERT INTO dbo.login_users
 (
     display_name,
@@ -294,6 +296,92 @@ BEGIN
     CREATE INDEX IX_gift_records_boss_date ON dbo.gift_records(boss_user_id, gift_date);
     CREATE INDEX IX_gift_records_recipient_date ON dbo.gift_records(recipient_user_id, gift_date);
 END;
+""");
+
+        await db.Database.ExecuteSqlRawAsync("""
+IF OBJECT_ID(N'dbo.departments', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.departments
+    (
+        id INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_departments PRIMARY KEY,
+        uuid UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_departments_uuid DEFAULT NEWID(),
+        name NVARCHAR(50) NOT NULL,
+        english_name NVARCHAR(80) NULL,
+        description NVARCHAR(1000) NULL,
+        sort_order INT NOT NULL CONSTRAINT DF_departments_sort_order DEFAULT 0,
+        is_active BIT NOT NULL CONSTRAINT DF_departments_is_active DEFAULT 1,
+        created_at DATETIME2 NOT NULL CONSTRAINT DF_departments_created_at DEFAULT SYSUTCDATETIME(),
+        updated_at DATETIME2 NULL
+    );
+
+    CREATE UNIQUE INDEX UQ_departments_uuid ON dbo.departments(uuid);
+    CREATE UNIQUE INDEX UQ_departments_name ON dbo.departments(name);
+    CREATE INDEX IX_departments_sort ON dbo.departments(sort_order, name);
+END;
+
+IF OBJECT_ID(N'dbo.department_members', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.department_members
+    (
+        id INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_department_members PRIMARY KEY,
+        department_id INT NOT NULL,
+        user_id INT NOT NULL,
+        position_title NVARCHAR(80) NULL,
+        is_manager BIT NOT NULL CONSTRAINT DF_department_members_is_manager DEFAULT 0,
+        joined_at DATETIME2 NOT NULL CONSTRAINT DF_department_members_joined_at DEFAULT SYSUTCDATETIME(),
+        left_at DATETIME2 NULL,
+        created_at DATETIME2 NOT NULL CONSTRAINT DF_department_members_created_at DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT FK_department_members_department FOREIGN KEY (department_id) REFERENCES dbo.departments(id) ON DELETE CASCADE,
+        CONSTRAINT FK_department_members_user FOREIGN KEY (user_id) REFERENCES dbo.users(id)
+    );
+
+    CREATE UNIQUE INDEX UQ_department_members_active
+    ON dbo.department_members(department_id, user_id)
+    WHERE left_at IS NULL;
+    CREATE INDEX IX_department_members_user ON dbo.department_members(user_id, department_id);
+END;
+
+WITH seed_departments AS
+(
+    SELECT *
+    FROM (VALUES
+        (N'管理層', N'Management', N'制定營運方向；價格策略與財務審核；主管招募與危機處理；對外合作決策。', 100),
+        (N'營運部', N'Operations', N'訂單管理；排班調度；加單、取消訂單處理；服務品質控管；客訴與黑名單管理。', 200),
+        (N'人資部', N'HR', N'招募與面試；新人培訓；停權、退團管理。', 300),
+        (N'客服部', N'Customer Service', N'售前報價與推薦；售中協調時間與更換人員；售後糾紛、退款、補單處理。', 400),
+        (N'陪玩部', N'Playmate', N'接單與陪玩服務；客戶互動維護；服務回報。', 500),
+        (N'財務部', N'Finance', N'收款與匯款；薪資結算；抽成計算。', 600),
+        (N'行銷部', N'Marketing', N'社群經營；廣告投放；活動企劃；短影音製作；數據追蹤分析。', 700),
+        (N'美術設計部', N'Design', N'品牌視覺設計；陪玩師介紹卡；海報與宣傳素材；影片剪輯；LOGO 與吉祥物設計。', 800),
+        (N'資訊部', N'IT', N'ERP 系統開發；Discord Bot 開發；官網維護；資料庫管理；伺服器與備份；流程自動化。', 900),
+        (N'品管部', N'QA', N'服務品質稽核；抽查語音與聊天紀錄；客戶評價追蹤；違規管理。', 1000),
+        (N'商務部', N'Business Development', N'實況主合作；VTuber 合作；公會／戰隊合作；聯名活動；分潤方案；推廣碼規劃。', 1100),
+        (N'數據分析部', N'BI', N'客戶數量、回購率、客單價、留存率分析；陪玩師接單率、好評率、平均時薪、熱門角色排行分析。', 1200)
+    ) AS v(name, english_name, description, sort_order)
+)
+INSERT INTO dbo.departments
+(
+    name,
+    english_name,
+    description,
+    sort_order,
+    is_active,
+    created_at
+)
+SELECT
+    s.name,
+    s.english_name,
+    s.description,
+    s.sort_order,
+    1,
+    SYSUTCDATETIME()
+FROM seed_departments s
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.departments existing
+    WHERE existing.name = s.name
+);
 """);
     }
 }

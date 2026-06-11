@@ -34,6 +34,7 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<GiftRecordService>();
+builder.Services.AddScoped<DepartmentService>();
 
 builder.Services.AddCors(options =>
 {

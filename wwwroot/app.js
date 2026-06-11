@@ -3,6 +3,7 @@ const state = {
   loginUsers: [],
   serviceItems: [],
   giftRecords: [],
+  departments: [],
   players: [],
   bosses: [],
   orders: [],
@@ -16,6 +17,7 @@ const titles = {
   dashboard: ["Dashboard", "總覽"],
   users: ["Users", "成員"],
   loginUsers: ["Login Users", "登入者"],
+  organization: ["Organization", "組織"],
   orders: ["Orders", "訂單"],
   gifts: ["Gifts", "禮物"],
   payments: ["Payments", "月結"],
@@ -75,6 +77,8 @@ const labels = {
     orders: "訂單",
     payments: "發薪",
     gift_records: "送禮紀錄",
+    departments: "部門",
+    department_members: "部門成員",
     audit_logs: "操作紀錄"
   }
 };
@@ -114,6 +118,9 @@ function bindForms() {
   document.getElementById("logoutBtn").addEventListener("click", logout);
   document.getElementById("userForm").addEventListener("submit", submitUser);
   document.getElementById("cancelUserEditBtn").addEventListener("click", resetUserForm);
+  document.getElementById("departmentForm").addEventListener("submit", submitDepartment);
+  document.getElementById("cancelDepartmentEditBtn").addEventListener("click", resetDepartmentForm);
+  document.getElementById("departmentMemberForm").addEventListener("submit", submitDepartmentMember);
   document.getElementById("orderForm").addEventListener("submit", submitOrder);
   document.getElementById("copyOrderBtn").addEventListener("click", copyOrderAsNew);
   document.getElementById("cancelOrderEditBtn").addEventListener("click", resetOrderForm);
@@ -334,8 +341,11 @@ async function refreshAll() {
     if (state.view === "dashboard") {
       await loadDashboard();
     }
-    if (state.view === "users" || state.view === "orders" || state.view === "gifts") {
+    if (state.view === "users" || state.view === "orders" || state.view === "gifts" || state.view === "organization") {
       await loadUsers();
+    }
+    if (state.view === "organization") {
+      await loadDepartments();
     }
     if (state.view === "loginUsers") {
       await loadLoginUsers();
@@ -394,6 +404,12 @@ async function loadServiceItems() {
 async function loadGiftRecords() {
   state.giftRecords = await api("/api/giftrecords");
   renderGiftRecords();
+}
+
+async function loadDepartments() {
+  state.departments = await api("/api/departments?activeOnly=false");
+  renderDepartments();
+  renderSelects();
 }
 
 async function loadOrders() {
@@ -578,6 +594,58 @@ function renderGiftRecords() {
   });
 }
 
+function renderDepartments() {
+  const wrap = document.getElementById("departmentCards");
+  if (!wrap) {
+    return;
+  }
+
+  wrap.innerHTML = state.departments.length ? state.departments.map((department) => `
+    <article class="department-card">
+      <div class="department-head">
+        <div>
+          <h3>${escapeHtml(department.name)}</h3>
+          <p>${escapeHtml(department.englishName || "")}</p>
+        </div>
+        <div class="department-actions">
+          ${department.isActive ? pill("啟用", "good") : pill("停用", "bad")}
+          <button class="ghost small" data-department-edit="${department.id}" type="button">編輯</button>
+        </div>
+      </div>
+      <p class="department-description">${escapeHtml(department.description || "")}</p>
+      <div class="department-members">
+        ${(department.members || []).length ? department.members.map((member) => `
+          <span class="member-chip">
+            ${escapeHtml(member.nickname)}
+            ${member.positionTitle ? ` / ${escapeHtml(member.positionTitle)}` : ""}
+            ${member.isManager ? " / 主管" : ""}
+            <button type="button" data-department-member-remove="${member.id}" title="移除">×</button>
+          </span>
+        `).join("") : `<span class="muted">尚未加入成員</span>`}
+      </div>
+    </article>
+  `).join("") : `<p class="muted">尚未建立部門。</p>`;
+
+  wrap.querySelectorAll("[data-department-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const department = state.departments.find((item) => item.id === Number(button.dataset.departmentEdit));
+      if (department) {
+        startDepartmentEdit(department);
+      }
+    });
+  });
+
+  wrap.querySelectorAll("[data-department-member-remove]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await runAction(async () => {
+        await api(`/api/departments/members/${button.dataset.departmentMemberRemove}/remove`, { method: "POST", body: "{}" });
+        await loadDepartments();
+        showAlert("部門成員已移除。", false);
+      });
+    });
+  });
+}
+
 function renderServiceCategoryTabs() {
   const tabs = document.getElementById("serviceCategoryTabs");
   if (!tabs) {
@@ -742,6 +810,28 @@ function renderSelects() {
       `<option value="${item.id}">${escapeHtml(item.name)}${item.defaultPrice == null ? "" : ` - ${money.format(item.defaultPrice)}`}</option>`
     ).join("")}`;
     giftItemSelect.value = currentValue;
+  }
+
+  const departmentSelect = document.getElementById("departmentSelect");
+  if (departmentSelect) {
+    const currentValue = departmentSelect.value;
+    departmentSelect.innerHTML = state.departments.filter((department) => department.isActive).map((department) =>
+      `<option value="${department.id}">${escapeHtml(department.name)}</option>`
+    ).join("");
+    if (currentValue) {
+      departmentSelect.value = currentValue;
+    }
+  }
+
+  const departmentUserSelect = document.getElementById("departmentUserSelect");
+  if (departmentUserSelect) {
+    const currentValue = departmentUserSelect.value;
+    departmentUserSelect.innerHTML = state.users.filter((user) => user.isActive).map((user) =>
+      `<option value="${user.id}">${escapeHtml(user.nickname)}</option>`
+    ).join("");
+    if (currentValue) {
+      departmentUserSelect.value = currentValue;
+    }
   }
 
   document.querySelectorAll("[data-member-select]").forEach((select) => {
@@ -918,6 +1008,84 @@ function resetUserForm() {
   document.getElementById("userFormTitle").textContent = "新增成員";
   document.getElementById("userSubmitBtn").textContent = "新增";
   document.getElementById("cancelUserEditBtn").hidden = true;
+}
+
+async function submitDepartment(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const departmentId = data.get("departmentId");
+  const isEdit = Boolean(departmentId);
+
+  await runAction(async () => {
+    const payload = {
+      name: data.get("name"),
+      englishName: emptyToNull(data.get("englishName")),
+      description: emptyToNull(data.get("description")),
+      sortOrder: Number(data.get("sortOrder") || 0),
+      isActive: data.get("isActive") === "on"
+    };
+
+    if (!isEdit) {
+      delete payload.isActive;
+    }
+
+    await api(isEdit ? `/api/departments/${departmentId}` : "/api/departments", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify(payload)
+    });
+
+    resetDepartmentForm();
+    await loadDepartments();
+    showAlert(isEdit ? "部門已更新。" : "部門已新增。", false);
+  });
+}
+
+async function submitDepartmentMember(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const departmentId = data.get("departmentId");
+
+  await runAction(async () => {
+    await api(`/api/departments/${departmentId}/members`, {
+      method: "POST",
+      body: JSON.stringify({
+        userId: Number(data.get("userId")),
+        positionTitle: emptyToNull(data.get("positionTitle")),
+        isManager: data.get("isManager") === "on"
+      })
+    });
+
+    form.reset();
+    await loadDepartments();
+    showAlert("部門成員已更新。", false);
+  });
+}
+
+function startDepartmentEdit(department) {
+  const form = document.getElementById("departmentForm");
+  form.elements.departmentId.value = department.id;
+  form.elements.name.value = department.name;
+  form.elements.englishName.value = department.englishName || "";
+  form.elements.sortOrder.value = department.sortOrder || 0;
+  form.elements.description.value = department.description || "";
+  form.elements.isActive.checked = department.isActive;
+  document.getElementById("departmentFormTitle").textContent = "編輯部門";
+  document.getElementById("departmentSubmitBtn").textContent = "更新部門";
+  document.getElementById("cancelDepartmentEditBtn").hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetDepartmentForm() {
+  const form = document.getElementById("departmentForm");
+  form.reset();
+  form.elements.departmentId.value = "";
+  form.elements.sortOrder.value = 0;
+  form.elements.isActive.checked = true;
+  document.getElementById("departmentFormTitle").textContent = "新增部門";
+  document.getElementById("departmentSubmitBtn").textContent = "新增部門";
+  document.getElementById("cancelDepartmentEditBtn").hidden = true;
 }
 
 async function submitGiftRecord(event) {

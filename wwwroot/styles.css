@@ -414,6 +414,71 @@ th {
   color: var(--danger);
 }
 
+.department-list {
+  display: grid;
+  gap: 12px;
+}
+
+.department-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.department-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.department-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.department-head p,
+.department-description {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.department-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.department-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 4px 8px 4px 10px;
+  background: #eef3f1;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.member-chip button {
+  min-height: 22px;
+  width: 22px;
+  padding: 0;
+  border-radius: 999px;
+  background: #f7e9e7;
+  color: var(--danger);
+}
+
 .status-dot {
   display: inline-flex;
   align-items: center;

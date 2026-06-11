@@ -18,6 +18,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<ServiceItem> ServiceItems => Set<ServiceItem>();
     public DbSet<GiftRecord> GiftRecords => Set<GiftRecord>();
+    public DbSet<Department> Departments => Set<Department>();
+    public DbSet<DepartmentMember> DepartmentMembers => Set<DepartmentMember>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,6 +33,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         ConfigureAuditLog(modelBuilder);
         ConfigureServiceItem(modelBuilder);
         ConfigureGiftRecord(modelBuilder);
+        ConfigureDepartment(modelBuilder);
+        ConfigureDepartmentMember(modelBuilder);
     }
 
     private static void ConfigureUser(ModelBuilder modelBuilder)
@@ -330,6 +334,63 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             .WithMany()
             .HasForeignKey(x => x.ServiceItemId)
             .HasConstraintName("FK_gift_records_service_item")
+            .OnDelete(DeleteBehavior.NoAction);
+    }
+
+    private static void ConfigureDepartment(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<Department>();
+
+        entity.ToTable("departments", "dbo");
+        entity.HasKey(x => x.Id).HasName("PK_departments");
+
+        entity.Property(x => x.Id).HasColumnName("id");
+        entity.Property(x => x.Uuid).HasColumnName("uuid").HasDefaultValueSql("NEWID()");
+        entity.Property(x => x.Name).HasColumnName("name").HasMaxLength(50).IsRequired();
+        entity.Property(x => x.EnglishName).HasColumnName("english_name").HasMaxLength(80);
+        entity.Property(x => x.Description).HasColumnName("description").HasMaxLength(1000);
+        entity.Property(x => x.SortOrder).HasColumnName("sort_order").HasDefaultValue(0);
+        entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
+        entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+
+        entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_departments_uuid");
+        entity.HasIndex(x => x.Name).IsUnique().HasDatabaseName("UQ_departments_name");
+        entity.HasIndex(x => new { x.SortOrder, x.Name }).HasDatabaseName("IX_departments_sort");
+    }
+
+    private static void ConfigureDepartmentMember(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<DepartmentMember>();
+
+        entity.ToTable("department_members", "dbo");
+        entity.HasKey(x => x.Id).HasName("PK_department_members");
+
+        entity.Property(x => x.Id).HasColumnName("id");
+        entity.Property(x => x.DepartmentId).HasColumnName("department_id");
+        entity.Property(x => x.UserId).HasColumnName("user_id");
+        entity.Property(x => x.PositionTitle).HasColumnName("position_title").HasMaxLength(80);
+        entity.Property(x => x.IsManager).HasColumnName("is_manager").HasDefaultValue(false);
+        entity.Property(x => x.JoinedAt).HasColumnName("joined_at").HasDefaultValueSql("SYSUTCDATETIME()");
+        entity.Property(x => x.LeftAt).HasColumnName("left_at");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
+
+        entity.HasIndex(x => new { x.DepartmentId, x.UserId })
+            .HasFilter("[left_at] IS NULL")
+            .IsUnique()
+            .HasDatabaseName("UQ_department_members_active");
+        entity.HasIndex(x => new { x.UserId, x.DepartmentId }).HasDatabaseName("IX_department_members_user");
+
+        entity.HasOne(x => x.Department)
+            .WithMany(x => x.Members)
+            .HasForeignKey(x => x.DepartmentId)
+            .HasConstraintName("FK_department_members_department")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasOne(x => x.User)
+            .WithMany(x => x.DepartmentMembers)
+            .HasForeignKey(x => x.UserId)
+            .HasConstraintName("FK_department_members_user")
             .OnDelete(DeleteBehavior.NoAction);
     }
 }
