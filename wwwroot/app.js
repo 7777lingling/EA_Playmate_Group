@@ -86,6 +86,7 @@ const labels = {
 document.addEventListener("DOMContentLoaded", async () => {
   bindNavigation();
   bindForms();
+  bindOrganizationEditor();
   bindPriceGallery();
   setDefaultDates();
   addMemberRow();
@@ -129,6 +130,21 @@ function bindForms() {
   document.getElementById("giftItemSelect").addEventListener("change", applySelectedGiftItem);
   document.getElementById("paymentForm").addEventListener("submit", submitPaymentGeneration);
   document.getElementById("orderForm").addEventListener("input", updateOrderCalc);
+}
+
+function bindOrganizationEditor() {
+  document.querySelectorAll("[data-org-tab]").forEach((button) => {
+    button.addEventListener("click", () => activateOrganizationTab(button.dataset.orgTab));
+  });
+}
+
+function activateOrganizationTab(tab) {
+  document.querySelectorAll("[data-org-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.orgTab === tab);
+  });
+  document.querySelectorAll("[data-org-panel]").forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.orgPanel === tab);
+  });
 }
 
 function bindPriceGallery() {
@@ -600,6 +616,8 @@ function renderDepartments() {
     return;
   }
 
+  renderDepartmentSummary();
+
   wrap.innerHTML = state.departments.length ? state.departments.map((department) => `
     <article class="department-card">
       <div class="department-head">
@@ -611,6 +629,10 @@ function renderDepartments() {
           ${department.isActive ? pill("啟用", "good") : pill("停用", "bad")}
           <button class="ghost small" data-department-edit="${department.id}" type="button">編輯</button>
         </div>
+      </div>
+      <div class="department-meta">
+        <span>${(department.members || []).length} 位成員</span>
+        <span>排序 ${department.sortOrder ?? 0}</span>
       </div>
       <p class="department-description">${escapeHtml(department.description || "")}</p>
       <div class="department-members">
@@ -644,6 +666,16 @@ function renderDepartments() {
       });
     });
   });
+}
+
+function renderDepartmentSummary() {
+  const total = state.departments.length;
+  const active = state.departments.filter((department) => department.isActive).length;
+  const members = state.departments.reduce((sum, department) => sum + (department.members || []).length, 0);
+
+  document.getElementById("departmentTotal").textContent = total;
+  document.getElementById("departmentActiveTotal").textContent = active;
+  document.getElementById("departmentMemberTotal").textContent = members;
 }
 
 function renderServiceCategoryTabs() {
@@ -850,15 +882,17 @@ function addMemberRow(member = null) {
   const row = document.createElement("div");
   row.className = "member-row";
   row.innerHTML = `
-    <select data-member-select></select>
-    <select data-member-role>
-      <option value="player">團員</option>
-      <option value="leader">帶團</option>
-      <option value="trainer">教學</option>
-      <option value="bonus">獎金</option>
-    </select>
-    <input data-member-share type="number" step="0.01" min="0" placeholder="分潤">
-    <button class="icon-btn" type="button" title="移除">×</button>
+    <label class="member-field member-user">團員<select data-member-select></select></label>
+    <label class="member-field member-role">角色
+      <select data-member-role>
+        <option value="player">團員</option>
+        <option value="leader">帶團</option>
+        <option value="trainer">教學</option>
+        <option value="bonus">獎金</option>
+      </select>
+    </label>
+    <label class="member-field member-share">分潤<input data-member-share type="number" step="0.01" min="0" placeholder="0"></label>
+    <button class="icon-btn member-remove" type="button" title="移除">×</button>
   `;
   row.querySelector("button").addEventListener("click", () => {
     row.remove();
@@ -1064,6 +1098,7 @@ async function submitDepartmentMember(event) {
 }
 
 function startDepartmentEdit(department) {
+  activateOrganizationTab("department");
   const form = document.getElementById("departmentForm");
   form.elements.departmentId.value = department.id;
   form.elements.name.value = department.name;
@@ -1074,7 +1109,7 @@ function startDepartmentEdit(department) {
   document.getElementById("departmentFormTitle").textContent = "編輯部門";
   document.getElementById("departmentSubmitBtn").textContent = "更新部門";
   document.getElementById("cancelDepartmentEditBtn").hidden = false;
-  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.querySelector(".org-editor")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function resetDepartmentForm() {

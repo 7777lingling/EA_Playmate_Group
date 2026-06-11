@@ -25,7 +25,7 @@ public sealed class PaymentService
 
         var nextMonth = monthStart.AddMonths(1);
 
-        var incomeRows = await _db.OrderMembers.AsNoTracking()
+        var orderRows = await _db.OrderMembers.AsNoTracking()
             .Where(x => x.Order.Status == "completed"
                 && x.Order.OrderDate >= monthStart
                 && x.Order.OrderDate < nextMonth)
@@ -43,30 +43,67 @@ public sealed class PaymentService
             })
             .ToListAsync();
 
-        var groupedRows = incomeRows
-            .GroupBy(x => new { x.UserId, x.Nickname })
+        var giftRows = await _db.GiftRecords.AsNoTracking()
+            .Where(x => x.Status == "completed"
+                && x.GiftDate >= monthStart
+                && x.GiftDate < nextMonth)
+            .Select(x => new
+            {
+                UserId = x.RecipientUserId,
+                Nickname = x.RecipientUser!.Nickname,
+                GiftRecordId = x.Id,
+                x.GiftDate,
+                x.GiftName,
+                x.Amount,
+                x.Quantity,
+                TotalAmount = x.Amount * x.Quantity,
+                x.BossUserId,
+                BossNickname = x.BossUser!.Nickname,
+                x.CustomerPaymentStatus
+            })
+            .ToListAsync();
+
+        var userIds = orderRows.Select(x => x.UserId)
+            .Concat(giftRows.Select(x => x.UserId))
+            .Distinct()
             .ToList();
 
-        if (groupedRows.Count == 0)
+        if (userIds.Count == 0)
         {
             return ServiceResult<List<PaymentDto>>.Success([]);
         }
 
-        var userIds = groupedRows.Select(x => x.Key.UserId).ToList();
+        var nicknames = orderRows.Select(x => new { x.UserId, x.Nickname })
+            .Concat(giftRows.Select(x => new { x.UserId, x.Nickname }))
+            .GroupBy(x => x.UserId)
+            .ToDictionary(x => x.Key, x => x.First().Nickname);
+        var orderGroups = orderRows.GroupBy(x => x.UserId).ToDictionary(x => x.Key, x => x.ToList());
+        var giftGroups = giftRows.GroupBy(x => x.UserId).ToDictionary(x => x.Key, x => x.ToList());
+
         var existingPayments = await _db.Payments
             .Where(x => x.PayMonth == request.PayMonth && userIds.Contains(x.UserId))
             .ToDictionaryAsync(x => x.UserId);
 
-        foreach (var group in groupedRows)
+        foreach (var userId in userIds)
         {
-            var expectedAmount = group.Sum(x => x.ShareAmount);
+            orderGroups.TryGetValue(userId, out var userOrders);
+            giftGroups.TryGetValue(userId, out var userGifts);
+
+            userOrders ??= [];
+            userGifts ??= [];
+
+            var orderAmount = userOrders.Sum(x => x.ShareAmount);
+            var giftAmount = userGifts.Sum(x => x.TotalAmount);
+            var expectedAmount = orderAmount + giftAmount;
             var snapshot = new
             {
                 pay_month = request.PayMonth,
-                user_id = group.Key.UserId,
-                nickname = group.Key.Nickname,
+                user_id = userId,
+                nickname = nicknames[userId],
                 expected_amount = expectedAmount,
-                orders = group
+                order_amount = orderAmount,
+                gift_amount = giftAmount,
+                orders = userOrders
                     .OrderBy(x => x.OrderDate)
                     .ThenBy(x => x.OrderId)
                     .Select(x => new
@@ -78,12 +115,27 @@ public sealed class PaymentService
                         commission_amount = x.CommissionAmount,
                         role = x.Role,
                         share_amount = x.ShareAmount
+                    }),
+                gifts = userGifts
+                    .OrderBy(x => x.GiftDate)
+                    .ThenBy(x => x.GiftRecordId)
+                    .Select(x => new
+                    {
+                        gift_record_id = x.GiftRecordId,
+                        gift_date = x.GiftDate,
+                        gift_name = x.GiftName,
+                        boss_user_id = x.BossUserId,
+                        boss_nickname = x.BossNickname,
+                        amount = x.Amount,
+                        quantity = x.Quantity,
+                        total_amount = x.TotalAmount,
+                        customer_payment_status = x.CustomerPaymentStatus
                     })
             };
 
             var snapshotJson = JsonSerializer.Serialize(snapshot);
 
-            if (existingPayments.TryGetValue(group.Key.UserId, out var existingPayment))
+            if (existingPayments.TryGetValue(userId, out var existingPayment))
             {
                 if (!request.OverwriteExisting)
                 {
@@ -101,7 +153,7 @@ public sealed class PaymentService
             {
                 _db.Payments.Add(new Payment
                 {
-                    UserId = group.Key.UserId,
+                    UserId = userId,
                     PayMonth = request.PayMonth,
                     ExpectedAmount = expectedAmount,
                     PaymentStatus = "pending",

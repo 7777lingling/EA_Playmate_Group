@@ -1,5 +1,6 @@
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Services;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,12 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
 builder.WebHost.UseUrls("http://localhost:5177");
+
+var dataProtectionKeysPath = Path.Combine(builder.Environment.ContentRootPath, "DataProtectionKeys");
+Directory.CreateDirectory(dataProtectionKeysPath);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
+    .SetApplicationName("EAPlaymateGroup");
 
 builder.Services.AddControllers();
 builder.Services.AddDistributedMemoryCache();
