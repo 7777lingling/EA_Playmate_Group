@@ -8,7 +8,7 @@ IF NOT EXISTS (
 )
 BEGIN
     CREATE LOGIN [ea_playmate_app]
-    WITH PASSWORD = N'EaApp@2026!',
+    WITH PASSWORD = N'$(EA_PLAYMATE_DB_PASSWORD)',
          CHECK_POLICY = ON,
          CHECK_EXPIRATION = OFF;
 END
