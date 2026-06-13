@@ -128,6 +128,36 @@ public sealed class UsersController : ControllerBase
         return result.Succeeded ? NoContent() : ToActionResult(result);
     }
 
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteUser(int id)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(x => x.Id == id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        var isReferenced =
+            await _db.Orders.AnyAsync(x => x.OwnerUserId == id) ||
+            await _db.OrderMembers.AnyAsync(x => x.UserId == id) ||
+            await _db.Payments.AnyAsync(x => x.UserId == id) ||
+            await _db.GiftRecords.AnyAsync(x => x.BossUserId == id || x.RecipientUserId == id) ||
+            await _db.DepartmentMembers.AnyAsync(x => x.UserId == id) ||
+            await _db.AuditLogs.AnyAsync(x => x.UserId == id);
+
+        if (isReferenced)
+        {
+            return Conflict(new { message = "此成員已有關聯資料，無法刪除；請改為停用。" });
+        }
+
+        var before = UserMapper.ToDto(user);
+        _db.Users.Remove(user);
+        await _db.SaveChangesAsync();
+        _db.AuditLogs.Add(AuditLogWriter.Create("delete", "users", id, user.Uuid, before: before));
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     private ActionResult ToActionResult(ServiceResult result)
     {
         if (result.NotFound)

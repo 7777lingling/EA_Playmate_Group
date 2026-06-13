@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EA Playmate Group</title>
-  <link rel="stylesheet" href="/styles.css?v=20260612-overflow-fix">
+  <link rel="stylesheet" href="/styles.css?v=20260613-audit-actor">
 </head>
 <body>
   <section class="login-view" id="loginView" hidden>
@@ -27,21 +27,23 @@
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-mark">EA</div>
-      <div>
+      <div class="brand-copy">
         <strong>Playmate Group</strong>
         <span>管理後台</span>
       </div>
+      <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="收合側欄" aria-expanded="true">‹</button>
     </div>
     <nav class="nav-tabs" aria-label="主選單">
-      <button class="active" data-view="dashboard">總覽</button>
-      <button data-view="users">成員</button>
-      <button data-view="loginUsers">登入者</button>
-      <button data-view="organization">組織</button>
-      <button data-view="services">服務</button>
-      <button data-view="gifts">禮物</button>
-      <button data-view="orders">訂單</button>
-      <button data-view="payments">月結</button>
-      <button data-view="audit">紀錄</button>
+      <button class="active" data-view="dashboard" data-short="總">總覽</button>
+      <button data-view="users" data-short="員">成員</button>
+      <button data-view="loginUsers" data-short="登">登入者</button>
+      <button data-view="organization" data-short="組">組織</button>
+      <button data-view="services" data-short="服">服務</button>
+      <button data-view="giftRecords" data-short="禮">送禮紀錄</button>
+      <button data-view="giftCatalog" data-short="清">禮物清單</button>
+      <button data-view="orders" data-short="訂">訂單</button>
+      <button data-view="payments" data-short="月">月結</button>
+      <button data-view="audit" data-short="錄">紀錄</button>
     </nav>
   </aside>
 
@@ -105,7 +107,7 @@
             <h2>近期訂單</h2>
           </div>
           <div class="table-wrap">
-            <table>
+            <table class="recent-orders-table">
               <thead>
                 <tr>
                   <th>日期</th>
@@ -213,7 +215,7 @@
             <h2>登入者清單</h2>
           </div>
           <div class="table-wrap">
-            <table>
+            <table class="login-user-table">
               <thead>
                 <tr>
                   <th>登入帳號</th>
@@ -221,6 +223,7 @@
                   <th>權限</th>
                   <th>狀態</th>
                   <th>密碼</th>
+                  <th class="actions-col">操作</th>
                 </tr>
               </thead>
               <tbody id="loginUserRows"></tbody>
@@ -284,6 +287,7 @@
           </form>
 
           <form class="form org-tab-panel" id="departmentMemberForm" data-org-panel="member">
+            <input type="hidden" name="memberId">
             <h2>加入部門成員</h2>
             <label>部門
               <select name="departmentId" id="departmentSelect" required></select>
@@ -293,7 +297,10 @@
             </label>
             <label>職稱<input name="positionTitle" maxlength="80" placeholder="例如：主管、客服、設計"></label>
             <label class="inline-check"><input name="isManager" type="checkbox"> 主管</label>
-            <button class="primary" type="submit">加入 / 更新</button>
+            <div class="form-actions">
+              <button class="primary" id="departmentMemberSubmitBtn" type="submit">加入 / 更新</button>
+              <button class="ghost" id="cancelDepartmentMemberEditBtn" type="button" hidden>取消編輯</button>
+            </div>
           </form>
         </aside>
       </div>
@@ -333,7 +340,7 @@
                 <th>價格</th>
                 <th>單位</th>
                 <th>備註</th>
-                <th>狀態</th>
+                <th>點單</th>
               </tr>
             </thead>
             <tbody id="serviceItemRows"></tbody>
@@ -342,19 +349,12 @@
       </section>
     </section>
 
-    <section class="view" id="giftsView">
-      <section class="price-gallery" aria-label="禮物價目表圖片">
-        <a class="price-shot" href="/價目表/禮物.png" data-price-preview>
-          <img src="/價目表/禮物.png" alt="禮物價目表">
-          <span>禮物</span>
-        </a>
-      </section>
-
-      <div class="grid form-list">
+    <section class="view" id="giftRecordsView">
+      <div class="gift-layout">
         <form class="panel form" id="giftRecordForm">
           <h2 id="giftRecordFormTitle">新增送禮紀錄</h2>
           <input type="hidden" name="giftRecordId">
-          <div class="split">
+          <div class="gift-form-grid">
             <label>日期<input name="giftDate" type="date" required></label>
             <label>收款狀態
               <select name="customerPaymentStatus">
@@ -364,29 +364,31 @@
                 <option value="refunded">已退款</option>
               </select>
             </label>
+            <label>狀態
+              <select name="status">
+                <option value="completed">已完成</option>
+                <option value="cancelled">已取消</option>
+              </select>
+            </label>
           </div>
-          <label>老闆
-            <select name="bossUserId" id="giftBossSelect" required></select>
-          </label>
-          <label>送給
-            <select name="recipientUserId" id="giftRecipientSelect" required></select>
-          </label>
-          <label>禮物 / 打賞
-            <select name="serviceItemId" id="giftItemSelect">
-              <option value="">自訂打賞</option>
-            </select>
-          </label>
-          <label>自訂名稱<input name="giftName" maxlength="100" placeholder="例如：現金打賞、生日禮物"></label>
-          <div class="split">
+          <div class="gift-form-grid">
+            <label>老闆
+              <select name="bossUserId" id="giftBossSelect" required></select>
+            </label>
+            <label>送給
+              <select name="recipientUserId" id="giftRecipientSelect" required></select>
+            </label>
+            <label>禮物 / 打賞
+              <select name="serviceItemId" id="giftItemSelect">
+                <option value="">自訂打賞</option>
+              </select>
+            </label>
+          </div>
+          <div class="gift-pricing-grid">
+            <label>自訂名稱<input name="giftName" maxlength="100" placeholder="例如：現金打賞、生日禮物"></label>
             <label>金額<input name="amount" type="number" step="0.01" min="0.01" required></label>
             <label>數量<input name="quantity" type="number" step="0.01" min="0.01" value="1" required></label>
           </div>
-          <label>狀態
-            <select name="status">
-              <option value="completed">已完成</option>
-              <option value="cancelled">已取消</option>
-            </select>
-          </label>
           <label>備註<textarea name="remark" rows="2"></textarea></label>
           <div class="form-actions">
             <button class="primary" id="giftRecordSubmitBtn" type="submit">新增紀錄</button>
@@ -394,69 +396,99 @@
           </div>
         </form>
 
-        <div class="grid user-lists">
-          <section class="panel">
-            <div class="panel-head">
-              <h2>送禮紀錄</h2>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th>老闆</th>
-                    <th>送給</th>
-                    <th>禮物 / 打賞</th>
-                    <th>金額</th>
-                    <th>收款</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="giftRecordRows"></tbody>
-              </table>
-            </div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <h2>禮物清單</h2>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>項目</th>
-                    <th>價格</th>
-                    <th>單位</th>
-                    <th>備註</th>
-                    <th>狀態</th>
-                  </tr>
-                </thead>
-                <tbody id="giftItemRows"></tbody>
-              </table>
-            </div>
-          </section>
-        </div>
+        <section class="panel">
+          <div class="panel-head">
+            <h2>送禮紀錄</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>老闆</th>
+                  <th>送給</th>
+                  <th>禮物 / 打賞</th>
+                  <th>金額</th>
+                  <th>收款</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="giftRecordRows"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </section>
 
+    <section class="view" id="giftCatalogView">
+      <section class="price-gallery" aria-label="禮物價目表圖片">
+        <a class="price-shot" href="/價目表/禮物.png" data-price-preview>
+          <img src="/價目表/禮物.png" alt="禮物價目表">
+          <span>禮物</span>
+        </a>
+      </section>
+
+      <section class="panel gift-donate-settings">
+        <div class="panel-head">
+          <h2>贈送設定</h2>
+        </div>
+        <div class="gift-form-grid">
+          <label>日期<input id="giftCatalogDate" type="date" required></label>
+          <label>老闆
+            <select id="giftCatalogBossSelect" required></select>
+          </label>
+          <label>送給
+            <select id="giftCatalogRecipientSelect" required></select>
+          </label>
+        </div>
+        <div class="gift-form-grid">
+          <label>收款狀態
+            <select id="giftCatalogPaymentStatus">
+              <option value="unpaid">未收款</option>
+              <option value="paid">已收款</option>
+              <option value="partial">部分收款</option>
+              <option value="refunded">已退款</option>
+            </select>
+          </label>
+          <label>狀態
+            <select id="giftCatalogStatus">
+              <option value="completed">已完成</option>
+              <option value="cancelled">已取消</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel gift-catalog-panel">
+        <div class="panel-head">
+          <h2>禮物清單</h2>
+        </div>
+        <div class="gift-catalog" id="giftItemRows"></div>
+      </section>
+    </section>
+
     <section class="view" id="ordersView">
-      <div class="grid form-list">
+      <div class="orders-layout">
         <form class="panel form" id="orderForm">
           <h2 id="orderFormTitle">新增訂單</h2>
           <input type="hidden" name="orderId">
-          <div class="split">
+          <div class="order-form-section">
             <label>日期<input name="orderDate" type="date" required></label>
             <label>單號<input name="orderNo" maxlength="30"></label>
+            <label>老闆
+              <select name="ownerUserId" id="bossSelect"></select>
+            </label>
           </div>
-          <label>老闆
-            <select name="ownerUserId" id="bossSelect"></select>
-          </label>
-          <div class="split">
+          <input type="hidden" name="serviceName">
+          <input type="hidden" name="serviceUnitPrice">
+          <input type="hidden" name="serviceUnitType">
+          <div class="order-pricing-grid">
+            <label>計價<input name="serviceUnitLabel" readonly placeholder="手動輸入"></label>
+            <label>分次<input name="serviceQuantity" type="number" step="0.01" min="0.01" value="1"></label>
             <label>金額<input name="amount" type="number" step="0.01" min="0.01" required></label>
             <label>團抽<input name="commissionAmount" type="number" step="0.01" min="0" required></label>
           </div>
-          <div class="split">
+          <div class="order-status-grid">
             <label>狀態
               <select name="status">
                 <option value="completed">已完成</option>
@@ -473,8 +505,8 @@
                 <option value="refunded">已退款</option>
               </select>
             </label>
+            <label>備註<textarea name="remark" rows="2"></textarea></label>
           </div>
-          <label>備註<textarea name="remark" rows="2"></textarea></label>
 
           <div class="member-editor">
             <div class="panel-head compact">
@@ -561,11 +593,12 @@
         <div class="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>時間</th>
-                <th>動作</th>
-                <th>目標</th>
-                <th>ID</th>
+                <tr>
+                  <th>時間</th>
+                  <th>操作者</th>
+                  <th>動作</th>
+                  <th>目標</th>
+                  <th>備註</th>
               </tr>
             </thead>
             <tbody id="auditRows"></tbody>
@@ -575,6 +608,30 @@
     </section>
   </main>
 
-  <script src="/app.js?v=20260612-share-layout"></script>
+  <div class="modal-backdrop" id="departmentModal" hidden>
+    <section class="modal-panel department-modal" role="dialog" aria-modal="true" aria-labelledby="departmentModalTitle">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow" id="departmentModalEyebrow">Department</p>
+          <h2 id="departmentModalTitle">部門成員</h2>
+        </div>
+        <button class="ghost small" id="departmentModalClose" type="button" aria-label="關閉">關閉</button>
+      </div>
+      <div id="departmentModalBody"></div>
+    </section>
+  </div>
+
+  <aside class="snackbar" id="giftConfirmSnackbar" role="status" aria-live="polite" hidden>
+    <div class="snackbar-content">
+      <strong>確認贈送</strong>
+      <span id="giftConfirmMessage"></span>
+    </div>
+    <div class="snackbar-actions">
+      <button class="ghost small" id="giftConfirmCancel" type="button">取消</button>
+      <button class="primary small" id="giftConfirmSubmit" type="button">確認贈送</button>
+    </div>
+  </aside>
+
+  <script src="/app.js?v=20260613-order-member"></script>
 </body>
 </html>

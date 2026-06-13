@@ -186,59 +186,6 @@ public sealed class PaymentService
         return ServiceResult<List<PaymentDto>>.Success(payments);
     }
 
-    public async Task<ServiceResult> UpdatePaymentAsync(int id, UpdatePaymentRequestDto request)
-    {
-        var payment = await _db.Payments.FirstOrDefaultAsync(x => x.Id == id);
-        if (payment is null)
-        {
-            return ServiceResult.Missing();
-        }
-
-        if (!DomainValues.IsPaymentStatus(request.PaymentStatus))
-        {
-            return ServiceResult.Failure("invalid_payment_status", "PaymentStatus must be pending, paid, or cancelled.");
-        }
-
-        var before = new
-        {
-            payment.ExpectedAmount,
-            payment.ActualAmount,
-            payment.PaymentStatus,
-            payment.SnapshotJson,
-            payment.PaidAt,
-            payment.Note
-        };
-
-        payment.ExpectedAmount = request.ExpectedAmount;
-        payment.ActualAmount = request.ActualAmount;
-        payment.PaymentStatus = request.PaymentStatus;
-        payment.SnapshotJson = request.SnapshotJson;
-        payment.PaidAt = request.PaidAt;
-        payment.Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
-        payment.UpdatedAt = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync();
-
-        _db.AuditLogs.Add(AuditLogWriter.Create(
-            action: "update",
-            targetType: "payments",
-            targetId: payment.Id,
-            targetUuid: payment.Uuid,
-            before: before,
-            after: new
-            {
-                payment.ExpectedAmount,
-                payment.ActualAmount,
-                payment.PaymentStatus,
-                payment.SnapshotJson,
-                payment.PaidAt,
-                payment.Note
-            }));
-        await _db.SaveChangesAsync();
-
-        return ServiceResult.Success();
-    }
-
     public async Task<ServiceResult> MarkPaidAsync(int id, MarkPaymentPaidRequestDto request)
     {
         var payment = await _db.Payments.FirstOrDefaultAsync(x => x.Id == id);

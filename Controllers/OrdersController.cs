@@ -118,6 +118,23 @@ public sealed class OrdersController : ControllerBase
         return result.Succeeded ? NoContent() : ToActionResult(result);
     }
 
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteOrder(int id)
+    {
+        var order = await _db.Orders.Include(x => x.Members).FirstOrDefaultAsync(x => x.Id == id);
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        var before = OrderMapper.ToDto(order);
+        _db.Orders.Remove(order);
+        await _db.SaveChangesAsync();
+        _db.AuditLogs.Add(AuditLogWriter.Create("delete", "orders", id, order.Uuid, before: before));
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     private ActionResult ToActionResult(ServiceResult result)
     {
         if (result.NotFound)

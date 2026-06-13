@@ -42,7 +42,11 @@ public sealed class LoginUserService
         _db.LoginUsers.Add(loginUser);
         await _db.SaveChangesAsync();
 
-        return ServiceResult<LoginUserDto>.Success(LoginUserMapper.ToDto(loginUser));
+        var dto = LoginUserMapper.ToDto(loginUser);
+        _db.AuditLogs.Add(AuditLogWriter.Create("create", "login_users", loginUser.Id, loginUser.Uuid, after: dto));
+        await _db.SaveChangesAsync();
+
+        return ServiceResult<LoginUserDto>.Success(dto);
     }
 
     public async Task<ServiceResult<LoginUserDto>> UpdateAsync(int id, UpdateLoginUserRequestDto request)
@@ -65,6 +69,8 @@ public sealed class LoginUserService
             return ToGenericResult<LoginUserDto>(validationResult);
         }
 
+        var before = LoginUserMapper.ToDto(loginUser);
+
         loginUser.DisplayName = request.DisplayName.Trim();
         loginUser.LoginAccount = request.LoginAccount.Trim();
         loginUser.SystemRole = request.SystemRole;
@@ -78,7 +84,11 @@ public sealed class LoginUserService
 
         await _db.SaveChangesAsync();
 
-        return ServiceResult<LoginUserDto>.Success(LoginUserMapper.ToDto(loginUser));
+        var dto = LoginUserMapper.ToDto(loginUser);
+        _db.AuditLogs.Add(AuditLogWriter.Create("update", "login_users", loginUser.Id, loginUser.Uuid, before, dto));
+        await _db.SaveChangesAsync();
+
+        return ServiceResult<LoginUserDto>.Success(dto);
     }
 
     public async Task<ServiceResult> SetActiveAsync(int id, bool isActive)
@@ -89,8 +99,18 @@ public sealed class LoginUserService
             return ServiceResult.Missing();
         }
 
+        var before = LoginUserMapper.ToDto(loginUser);
         loginUser.IsActive = isActive;
         loginUser.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            isActive ? "activate" : "deactivate",
+            "login_users",
+            loginUser.Id,
+            loginUser.Uuid,
+            before,
+            LoginUserMapper.ToDto(loginUser)));
         await _db.SaveChangesAsync();
 
         return ServiceResult.Success();

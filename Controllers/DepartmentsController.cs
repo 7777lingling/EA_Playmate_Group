@@ -41,6 +41,15 @@ public sealed class DepartmentsController : ControllerBase
         return Ok(departments.Select(DepartmentMapper.ToDto).ToList());
     }
 
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<DepartmentDto>> GetDepartment(int id)
+    {
+        var department = await _db.Departments.AsNoTracking()
+            .Include(x => x.Members).ThenInclude(x => x.User)
+            .FirstOrDefaultAsync(x => x.Id == id);
+        return department is null ? NotFound() : Ok(DepartmentMapper.ToDto(department));
+    }
+
     [HttpPost]
     public async Task<ActionResult<DepartmentDto>> CreateDepartment(CreateDepartmentRequestDto request)
     {
@@ -79,11 +88,79 @@ public sealed class DepartmentsController : ControllerBase
         return result.Succeeded ? NoContent() : ToActionResult(result);
     }
 
+    [HttpGet("members/{memberId:int}")]
+    public async Task<ActionResult<DepartmentMemberDto>> GetDepartmentMember(int memberId)
+    {
+        var member = await _db.DepartmentMembers.AsNoTracking()
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x => x.Id == memberId);
+
+        if (member is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(new DepartmentMemberDto
+        {
+            Id = member.Id,
+            DepartmentId = member.DepartmentId,
+            UserId = member.UserId,
+            Nickname = member.User?.Nickname ?? string.Empty,
+            PositionTitle = member.PositionTitle,
+            IsManager = member.IsManager,
+            JoinedAt = member.JoinedAt,
+            LeftAt = member.LeftAt
+        });
+    }
+
     [HttpPost("members/{memberId:int}/remove")]
     public async Task<IActionResult> RemoveDepartmentMember(int memberId)
     {
         var result = await _departmentService.RemoveMemberAsync(memberId);
         return result.Succeeded ? NoContent() : ToActionResult(result);
+    }
+
+    [HttpDelete("members/{memberId:int}")]
+    public async Task<IActionResult> DeleteDepartmentMember(int memberId)
+    {
+        var member = await _db.DepartmentMembers.FirstOrDefaultAsync(x => x.Id == memberId);
+        if (member is null)
+        {
+            return NotFound();
+        }
+
+        var before = new
+        {
+            member.Id,
+            member.DepartmentId,
+            member.UserId,
+            member.PositionTitle,
+            member.IsManager,
+            member.JoinedAt,
+            member.LeftAt
+        };
+        _db.DepartmentMembers.Remove(member);
+        await _db.SaveChangesAsync();
+        _db.AuditLogs.Add(AuditLogWriter.Create("delete", "department_members", memberId, before: before));
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteDepartment(int id)
+    {
+        var department = await _db.Departments.Include(x => x.Members).FirstOrDefaultAsync(x => x.Id == id);
+        if (department is null)
+        {
+            return NotFound();
+        }
+
+        var before = DepartmentMapper.ToDto(department);
+        _db.Departments.Remove(department);
+        await _db.SaveChangesAsync();
+        _db.AuditLogs.Add(AuditLogWriter.Create("delete", "departments", id, department.Uuid, before: before));
+        await _db.SaveChangesAsync();
+        return NoContent();
     }
 
     private ActionResult ToActionResult(ServiceResult result)

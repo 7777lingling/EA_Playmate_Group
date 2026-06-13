@@ -5,9 +5,14 @@ namespace EAPlaymateGroup.Data;
 
 public sealed class EAPlaymateGroupDbContext : DbContext
 {
-    public EAPlaymateGroupDbContext(DbContextOptions<EAPlaymateGroupDbContext> options)
+    private readonly IHttpContextAccessor _httpContextAccessor;
+
+    public EAPlaymateGroupDbContext(
+        DbContextOptions<EAPlaymateGroupDbContext> options,
+        IHttpContextAccessor httpContextAccessor)
         : base(options)
     {
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public DbSet<User> Users => Set<User>();
@@ -35,6 +40,35 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         ConfigureGiftRecord(modelBuilder);
         ConfigureDepartment(modelBuilder);
         ConfigureDepartmentMember(modelBuilder);
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampAuditActors();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        StampAuditActors();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void StampAuditActors()
+    {
+        var loginUserId = _httpContextAccessor.HttpContext?.Session.GetInt32(EAPlaymateGroup.Services.AuthService.SessionUserId);
+        if (!loginUserId.HasValue)
+        {
+            return;
+        }
+
+        foreach (var entry in ChangeTracker.Entries<AuditLog>()
+                     .Where(x => x.State == EntityState.Added && !x.Entity.LoginUserId.HasValue))
+        {
+            entry.Entity.LoginUserId = loginUserId.Value;
+        }
     }
 
     private static void ConfigureUser(ModelBuilder modelBuilder)
@@ -184,6 +218,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             .HasForeignKey(x => x.UserId)
             .HasConstraintName("FK_order_members_user")
             .OnDelete(DeleteBehavior.NoAction);
+
     }
 
     private static void ConfigurePayment(ModelBuilder modelBuilder)
@@ -234,6 +269,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
 
         entity.Property(x => x.Id).HasColumnName("id");
         entity.Property(x => x.UserId).HasColumnName("user_id");
+        entity.Property(x => x.LoginUserId).HasColumnName("login_user_id");
         entity.Property(x => x.Action).HasColumnName("action").HasMaxLength(50).IsRequired();
         entity.Property(x => x.TargetType).HasColumnName("target_type").HasMaxLength(50).IsRequired();
         entity.Property(x => x.TargetId).HasColumnName("target_id");
@@ -244,11 +280,19 @@ public sealed class EAPlaymateGroupDbContext : DbContext
 
         entity.HasIndex(x => new { x.TargetType, x.TargetId, x.CreatedAt })
             .HasDatabaseName("IX_audit_logs_target");
+        entity.HasIndex(x => new { x.LoginUserId, x.CreatedAt })
+            .HasDatabaseName("IX_audit_logs_login_user");
 
         entity.HasOne(x => x.User)
             .WithMany(x => x.AuditLogs)
             .HasForeignKey(x => x.UserId)
             .HasConstraintName("FK_audit_logs_user")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        entity.HasOne(x => x.LoginUser)
+            .WithMany(x => x.AuditLogs)
+            .HasForeignKey(x => x.LoginUserId)
+            .HasConstraintName("FK_audit_logs_login_user")
             .OnDelete(DeleteBehavior.NoAction);
     }
 

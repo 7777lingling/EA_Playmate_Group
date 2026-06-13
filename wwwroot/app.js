@@ -8,6 +8,8 @@ const state = {
   bosses: [],
   orders: [],
   payments: [],
+  auditLogs: [],
+  activeDepartmentId: null,
   view: "dashboard",
   serviceCategory: "boost",
   auth: null
@@ -19,7 +21,8 @@ const titles = {
   loginUsers: ["Login Users", "登入者"],
   organization: ["Organization", "組織"],
   orders: ["Orders", "訂單"],
-  gifts: ["Gifts", "禮物"],
+  giftRecords: ["Gift Records", "送禮紀錄"],
+  giftCatalog: ["Gift Catalog", "禮物清單"],
   payments: ["Payments", "月結"],
   audit: ["Audit", "紀錄"]
 };
@@ -69,6 +72,7 @@ const labels = {
     cancel: "取消",
     update_status: "修改狀態",
     update_customer_payment_status: "修改收款狀態",
+    delete: "刪除",
     generate_monthly: "產生月結",
     mark_paid: "標記已發薪"
   },
@@ -76,6 +80,8 @@ const labels = {
     users: "成員",
     orders: "訂單",
     payments: "發薪",
+    login_users: "登入者",
+    service_items: "服務項目",
     gift_records: "送禮紀錄",
     departments: "部門",
     department_members: "部門成員",
@@ -84,6 +90,7 @@ const labels = {
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
+  bindSidebar();
   bindNavigation();
   bindForms();
   bindOrganizationEditor();
@@ -92,6 +99,34 @@ document.addEventListener("DOMContentLoaded", async () => {
   addMemberRow();
   await initializeAuth();
 });
+
+function bindSidebar() {
+  const button = document.getElementById("sidebarToggle");
+  if (!button) {
+    return;
+  }
+
+  const saved = localStorage.getItem("sidebarCollapsed") === "true";
+  setSidebarCollapsed(saved);
+
+  button.addEventListener("click", () => {
+    setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
+  });
+}
+
+function setSidebarCollapsed(collapsed) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  localStorage.setItem("sidebarCollapsed", String(collapsed));
+
+  const button = document.getElementById("sidebarToggle");
+  if (!button) {
+    return;
+  }
+
+  button.textContent = collapsed ? "›" : "‹";
+  button.setAttribute("aria-expanded", String(!collapsed));
+  button.setAttribute("aria-label", collapsed ? "展開側欄" : "收合側欄");
+}
 
 function bindNavigation() {
   document.querySelectorAll(".nav-tabs button").forEach((button) => {
@@ -122,6 +157,7 @@ function bindForms() {
   document.getElementById("departmentForm").addEventListener("submit", submitDepartment);
   document.getElementById("cancelDepartmentEditBtn").addEventListener("click", resetDepartmentForm);
   document.getElementById("departmentMemberForm").addEventListener("submit", submitDepartmentMember);
+  document.getElementById("cancelDepartmentMemberEditBtn").addEventListener("click", resetDepartmentMemberForm);
   document.getElementById("orderForm").addEventListener("submit", submitOrder);
   document.getElementById("copyOrderBtn").addEventListener("click", copyOrderAsNew);
   document.getElementById("cancelOrderEditBtn").addEventListener("click", resetOrderForm);
@@ -129,12 +165,34 @@ function bindForms() {
   document.getElementById("cancelGiftRecordEditBtn").addEventListener("click", resetGiftRecordForm);
   document.getElementById("giftItemSelect").addEventListener("change", applySelectedGiftItem);
   document.getElementById("paymentForm").addEventListener("submit", submitPaymentGeneration);
-  document.getElementById("orderForm").addEventListener("input", updateOrderCalc);
+  document.getElementById("orderForm").addEventListener("input", handleOrderInput);
 }
 
 function bindOrganizationEditor() {
+  bindDepartmentModal();
+
   document.querySelectorAll("[data-org-tab]").forEach((button) => {
     button.addEventListener("click", () => activateOrganizationTab(button.dataset.orgTab));
+  });
+}
+
+function bindDepartmentModal() {
+  const modal = document.getElementById("departmentModal");
+  const closeButton = document.getElementById("departmentModalClose");
+  if (!modal || !closeButton) {
+    return;
+  }
+
+  closeButton.addEventListener("click", closeDepartmentModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeDepartmentModal();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modal.hidden) {
+      closeDepartmentModal();
+    }
   });
 }
 
@@ -238,6 +296,10 @@ function setDefaultDates() {
   const today = new Date().toISOString().slice(0, 10);
   document.querySelector("[name='orderDate']").value = today;
   document.querySelector("[name='giftDate']").value = today;
+  const giftCatalogDate = document.getElementById("giftCatalogDate");
+  if (giftCatalogDate && !giftCatalogDate.value) {
+    giftCatalogDate.value = today;
+  }
   document.querySelector("[name='payMonth']").value = today.slice(0, 7);
 }
 
@@ -357,7 +419,7 @@ async function refreshAll() {
     if (state.view === "dashboard") {
       await loadDashboard();
     }
-    if (state.view === "users" || state.view === "orders" || state.view === "gifts" || state.view === "organization") {
+    if (state.view === "users" || state.view === "orders" || state.view === "giftRecords" || state.view === "giftCatalog" || state.view === "organization") {
       await loadUsers();
     }
     if (state.view === "organization") {
@@ -366,10 +428,10 @@ async function refreshAll() {
     if (state.view === "loginUsers") {
       await loadLoginUsers();
     }
-    if (state.view === "services" || state.view === "gifts") {
+    if (state.view === "services" || state.view === "giftRecords" || state.view === "giftCatalog") {
       await loadServiceItems();
     }
-    if (state.view === "gifts") {
+    if (state.view === "giftRecords" || state.view === "giftCatalog") {
       await loadGiftRecords();
     }
     if (state.view === "orders" || state.view === "dashboard") {
@@ -440,8 +502,8 @@ async function loadPayments() {
 }
 
 async function loadAuditLogs() {
-  const logs = await api("/api/auditlogs?take=100");
-  renderAuditLogs(logs);
+  state.auditLogs = await api("/api/auditlogs?take=100");
+  renderAuditLogs(state.auditLogs);
 }
 
 function renderRanking(rows) {
@@ -479,6 +541,8 @@ function renderLoginUsers() {
     return;
   }
 
+  ensureLoginUserTableHeader(body);
+
   const users = state.loginUsers;
   body.innerHTML = users.length ? users.map((user) => `
     <tr>
@@ -487,16 +551,38 @@ function renderLoginUsers() {
       <td>${label("systemRole", user.systemRole)}</td>
       <td>${user.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
       <td>${pill("已設定", "good")}</td>
-      <td>
-        <button class="ghost small" data-login-user-edit="${user.id}">編輯</button>
-        ${user.isActive
-          ? `<button class="ghost small" data-login-user-deactivate="${user.id}">停用</button>`
-          : `<button class="ghost small" data-login-user-activate="${user.id}">啟用</button>`}
+      <td class="actions-col">
+        <div class="table-actions">
+          <button class="ghost small" data-login-user-edit="${user.id}">編輯</button>
+          ${user.isActive
+            ? `<button class="ghost small" data-login-user-deactivate="${user.id}">停用</button>`
+            : `<button class="ghost small" data-login-user-activate="${user.id}">啟用</button>`}
+          <button class="ghost small danger-action" data-login-user-delete="${user.id}">刪除</button>
+        </div>
       </td>
     </tr>
   `).join("") : emptyRow(6);
 
   bindLoginUserTableActions(body);
+}
+
+function ensureLoginUserTableHeader(body) {
+  const table = body.closest("table");
+  const headerRow = table?.querySelector("thead tr");
+  if (!table || !headerRow) {
+    return;
+  }
+
+  table.classList.add("login-user-table");
+
+  if (headerRow.children.length < 6) {
+    const actionHeader = document.createElement("th");
+    actionHeader.className = "actions-col";
+    actionHeader.textContent = "操作";
+    headerRow.appendChild(actionHeader);
+  } else {
+    headerRow.lastElementChild?.classList.add("actions-col");
+  }
 }
 
 function bindLoginUserTableActions(body) {
@@ -528,6 +614,16 @@ function bindLoginUserTableActions(body) {
       });
     });
   });
+
+  body.querySelectorAll("[data-login-user-delete]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await runAction(async () => {
+        await api(`/api/loginusers/${button.dataset.loginUserDelete}`, { method: "DELETE" });
+        await loadLoginUsers();
+        showAlert("登入者已刪除。", false);
+      });
+    });
+  });
 }
 
 function renderServiceItems() {
@@ -546,9 +642,21 @@ function renderServiceItems() {
       <td>${escapeHtml(servicePriceText(item))}</td>
       <td>${escapeHtml(unitTypeText(item.unitType))}</td>
       <td>${escapeHtml(item.remark || "")}</td>
-      <td>${item.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
+      <td class="service-order-action">
+        <button class="primary small" type="button" data-service-order="${item.id}">點單</button>
+      </td>
     </tr>
   `).join("") : emptyRow(6);
+
+  body.querySelectorAll("[data-service-order]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = state.serviceItems.find((serviceItem) => serviceItem.id === Number(button.dataset.serviceOrder));
+      if (item) {
+        startOrderFromService(item);
+      }
+    });
+  });
+
 }
 
 function renderGiftItems() {
@@ -559,14 +667,27 @@ function renderGiftItems() {
 
   const rows = state.serviceItems.filter((item) => item.category === "gift" && item.isActive);
   body.innerHTML = rows.length ? rows.map((item) => `
-    <tr>
-      <td>${escapeHtml(item.name)}</td>
-      <td>${escapeHtml(servicePriceText(item))}</td>
-      <td>${escapeHtml(unitTypeText(item.unitType))}</td>
-      <td>${escapeHtml(item.remark || "")}</td>
-      <td>${item.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
-    </tr>
-  `).join("") : emptyRow(5);
+    <article class="gift-catalog-card">
+      <div class="gift-catalog-main">
+        <h3>${escapeHtml(item.name)}</h3>
+        <div class="gift-catalog-meta">
+          <span>${escapeHtml(servicePriceText(item))}</span>
+          <span>${escapeHtml(unitTypeText(item.unitType))}</span>
+        </div>
+        <p>${escapeHtml(item.remark || "尚未填寫備註。")}</p>
+      </div>
+      <button class="primary small" type="button" data-gift-item-order="${item.id}">贈送</button>
+    </article>
+  `).join("") : `<p class="muted">尚未建立禮物項目。</p>`;
+
+  body.querySelectorAll("[data-gift-item-order]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = state.serviceItems.find((serviceItem) => serviceItem.id === Number(button.dataset.giftItemOrder));
+      if (item) {
+        addGiftRecordFromItem(item);
+      }
+    });
+  });
 }
 
 function renderGiftRecords() {
@@ -585,7 +706,7 @@ function renderGiftRecords() {
       <td>${paymentPill(record.customerPaymentStatus)}</td>
       <td>
         <button class="ghost small" data-gift-edit="${record.id}">編輯</button>
-        ${record.status === "cancelled" ? pill("已取消", "bad") : `<button class="ghost small" data-gift-cancel="${record.id}">取消</button>`}
+        <button class="ghost small danger-action" data-gift-delete="${record.id}">刪除</button>
       </td>
     </tr>
   `).join("") : emptyRow(7);
@@ -599,12 +720,12 @@ function renderGiftRecords() {
     });
   });
 
-  body.querySelectorAll("[data-gift-cancel]").forEach((button) => {
+  body.querySelectorAll("[data-gift-delete]").forEach((button) => {
     button.addEventListener("click", async () => {
       await runAction(async () => {
-        await api(`/api/giftrecords/${button.dataset.giftCancel}/cancel`, { method: "POST", body: "{}" });
+        await api(`/api/giftrecords/${button.dataset.giftDelete}`, { method: "DELETE" });
         await loadGiftRecords();
-        showAlert("送禮紀錄已取消。", false);
+        showAlert("送禮紀錄已刪除。", false);
       });
     });
   });
@@ -619,34 +740,49 @@ function renderDepartments() {
   renderDepartmentSummary();
 
   wrap.innerHTML = state.departments.length ? state.departments.map((department) => `
-    <article class="department-card">
+    <article class="department-card" data-department-open="${department.id}" tabindex="0" role="button">
       <div class="department-head">
         <div>
-          <h3>${escapeHtml(department.name)}</h3>
-          <p>${escapeHtml(department.englishName || "")}</p>
+          <h3 class="department-title">
+            <span>${escapeHtml(department.name)}</span>
+            ${department.englishName ? `<span class="department-title-en">${escapeHtml(department.englishName)}</span>` : ""}
+          </h3>
         </div>
         <div class="department-actions">
           ${department.isActive ? pill("啟用", "good") : pill("停用", "bad")}
+          <button class="ghost small" data-department-open-button="${department.id}" type="button">查看</button>
           <button class="ghost small" data-department-edit="${department.id}" type="button">編輯</button>
+          <button class="ghost small danger-action" data-department-delete="${department.id}" type="button">刪除</button>
         </div>
       </div>
       <div class="department-meta">
         <span>${(department.members || []).length} 位成員</span>
         <span>排序 ${department.sortOrder ?? 0}</span>
       </div>
-      <p class="department-description">${escapeHtml(department.description || "")}</p>
-      <div class="department-members">
-        ${(department.members || []).length ? department.members.map((member) => `
-          <span class="member-chip">
-            ${escapeHtml(member.nickname)}
-            ${member.positionTitle ? ` / ${escapeHtml(member.positionTitle)}` : ""}
-            ${member.isManager ? " / 主管" : ""}
-            <button type="button" data-department-member-remove="${member.id}" title="移除">×</button>
-          </span>
-        `).join("") : `<span class="muted">尚未加入成員</span>`}
-      </div>
     </article>
   `).join("") : `<p class="muted">尚未建立部門。</p>`;
+
+  wrap.querySelectorAll("[data-department-open]").forEach((card) => {
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button")) {
+        return;
+      }
+
+      openDepartmentModal(Number(card.dataset.departmentOpen));
+    });
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openDepartmentModal(Number(card.dataset.departmentOpen));
+      }
+    });
+  });
+
+  wrap.querySelectorAll("[data-department-open-button]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openDepartmentModal(Number(button.dataset.departmentOpenButton));
+    });
+  });
 
   wrap.querySelectorAll("[data-department-edit]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -657,12 +793,84 @@ function renderDepartments() {
     });
   });
 
-  wrap.querySelectorAll("[data-department-member-remove]").forEach((button) => {
+  wrap.querySelectorAll("[data-department-delete]").forEach((button) => {
     button.addEventListener("click", async () => {
       await runAction(async () => {
-        await api(`/api/departments/members/${button.dataset.departmentMemberRemove}/remove`, { method: "POST", body: "{}" });
+        await api(`/api/departments/${button.dataset.departmentDelete}`, { method: "DELETE" });
+        resetDepartmentForm();
         await loadDepartments();
-        showAlert("部門成員已移除。", false);
+        showAlert("部門已刪除。", false);
+      });
+    });
+  });
+
+}
+
+function openDepartmentModal(departmentId) {
+  state.activeDepartmentId = departmentId;
+  renderDepartmentModal();
+  const modal = document.getElementById("departmentModal");
+  if (modal) {
+    modal.hidden = false;
+  }
+}
+
+function closeDepartmentModal() {
+  state.activeDepartmentId = null;
+  const modal = document.getElementById("departmentModal");
+  if (modal) {
+    modal.hidden = true;
+  }
+}
+
+function renderDepartmentModal() {
+  const department = state.departments.find((item) => item.id === state.activeDepartmentId);
+  const title = document.getElementById("departmentModalTitle");
+  const eyebrow = document.getElementById("departmentModalEyebrow");
+  const body = document.getElementById("departmentModalBody");
+  if (!department || !title || !eyebrow || !body) {
+    return;
+  }
+
+  const members = department.members || [];
+  title.textContent = department.englishName ? `${department.name} ${department.englishName}` : department.name;
+  eyebrow.textContent = `${members.length} 位成員 · 排序 ${department.sortOrder ?? 0}`;
+  body.innerHTML = `
+    <div class="department-modal-summary">
+      ${department.isActive ? pill("啟用", "good") : pill("停用", "bad")}
+      <span>${escapeHtml(department.description || "尚未填寫職責說明。")}</span>
+    </div>
+    <div class="department-member-list">
+      ${members.length ? members.map((member) => `
+        <article class="department-member-row">
+          <div>
+            <strong>${escapeHtml(member.nickname)}</strong>
+            <span>${escapeHtml(member.positionTitle || "未設定職稱")}${member.isManager ? " · 主管" : ""}</span>
+          </div>
+          <div class="table-actions">
+            <button class="ghost small" type="button" data-department-member-edit="${member.id}">編輯</button>
+            <button class="ghost small danger-action" type="button" data-department-member-delete="${member.id}">刪除</button>
+          </div>
+        </article>
+      `).join("") : `<p class="muted">尚未加入成員。</p>`}
+    </div>
+  `;
+
+  body.querySelectorAll("[data-department-member-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const member = members.find((item) => item.id === Number(button.dataset.departmentMemberEdit));
+      if (member) startDepartmentMemberEdit(member);
+    });
+  });
+
+  body.querySelectorAll("[data-department-member-delete]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await runAction(async () => {
+        await api(`/api/departments/members/${button.dataset.departmentMemberDelete}`, { method: "DELETE" });
+        await loadDepartments();
+        state.activeDepartmentId = department.id;
+        renderDepartmentModal();
+        showAlert("部門成員已刪除。", false);
       });
     });
   });
@@ -688,7 +896,9 @@ function renderServiceCategoryTabs() {
     ["boost", "代打"],
     ["grind", "代肝"],
     ["play", "陪玩"],
-    ["deposit_bonus", "預存"]
+    ["gift", "禮物"],
+    ["deposit_bonus", "預存"],
+    ["other", "其他"]
   ];
 
   tabs.innerHTML = categories.map(([value, text]) => `
@@ -716,6 +926,7 @@ function renderUserTable(elementId, users) {
         ${user.isActive
           ? `<button class="ghost small" data-user-deactivate="${user.id}">停用</button>`
           : `<button class="ghost small" data-user-activate="${user.id}">啟用</button>`}
+        <button class="ghost small danger-action" data-user-delete="${user.id}">刪除</button>
       </td>
     </tr>
   `).join("") : emptyRow(5);
@@ -745,6 +956,15 @@ function bindUserTableActions(body) {
       await loadUsers();
     });
   });
+  body.querySelectorAll("[data-user-delete]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await runAction(async () => {
+        await api(`/api/users/${button.dataset.userDelete}`, { method: "DELETE" });
+        await loadUsers();
+        showAlert("成員已刪除。", false);
+      });
+    });
+  });
 }
 
 function renderOrders() {
@@ -758,7 +978,12 @@ function renderOrders() {
       <td>${money.format(order.shareTotalAmount)}</td>
       <td>${statusPill(order.status)}</td>
       <td>${paymentPill(order.customerPaymentStatus)}</td>
-      <td><button class="ghost small" data-order-edit="${order.id}">編輯</button></td>
+      <td>
+        <div class="table-actions">
+          <button class="ghost small" data-order-edit="${order.id}">編輯</button>
+          <button class="ghost small danger-action" data-order-delete="${order.id}">刪除</button>
+        </div>
+      </td>
     </tr>
   `).join("") : emptyRow(8);
 
@@ -767,6 +992,17 @@ function renderOrders() {
       await runAction(async () => {
         const order = await api(`/api/orders/${button.dataset.orderEdit}`);
         startOrderEdit(order);
+      });
+    });
+  });
+
+  body.querySelectorAll("[data-order-delete]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await runAction(async () => {
+        await api(`/api/orders/${button.dataset.orderDelete}`, { method: "DELETE" });
+        resetOrderForm();
+        await loadOrders();
+        showAlert("訂單已刪除。", false);
       });
     });
   });
@@ -780,9 +1016,15 @@ function renderPayments() {
       <td>${payment.payMonth}</td>
       <td>${escapeHtml(payment.nickname)}</td>
       <td>${money.format(payment.expectedAmount)}</td>
-      <td>${payment.actualAmount == null ? "" : money.format(payment.actualAmount)}</td>
+      <td>${payment.actualAmount == null ? plainText("未設定", "muted") : money.format(payment.actualAmount)}</td>
       <td>${paymentStatusPill(payment.paymentStatus)}</td>
-      <td>${payment.paymentStatus === "paid" ? "" : `<button class="ghost small" data-payment-paid="${payment.id}">標記已發</button>`}</td>
+      <td>
+        <div class="table-actions">
+          ${payment.paymentStatus === "paid"
+            ? plainText("已發薪", "good")
+            : `<button class="ghost small" data-payment-paid="${payment.id}">標記已發</button>`}
+        </div>
+      </td>
     </tr>
   `).join("") : emptyRow(7);
 
@@ -792,18 +1034,50 @@ function renderPayments() {
       await loadPayments();
     });
   });
+
 }
 
 function renderAuditLogs(rows) {
   const body = document.getElementById("auditRows");
+  ensureAuditHeader(body);
   body.innerHTML = rows.length ? rows.map((log) => `
     <tr>
       <td>${formatDateTime(log.createdAt)}</td>
+      <td>${escapeHtml(log.loginUserDisplayName || "系統")}</td>
       <td>${escapeHtml(label("auditAction", log.action))}</td>
       <td>${escapeHtml(label("targetType", log.targetType))}</td>
-      <td>${log.targetId || ""}</td>
+      <td>${escapeHtml(auditNote(log))}</td>
     </tr>
-  `).join("") : emptyRow(4);
+  `).join("") : emptyRow(5);
+}
+
+function auditNote(log) {
+  for (const json of [log.afterJson, log.beforeJson]) {
+    if (!json) {
+      continue;
+    }
+
+    try {
+      const data = JSON.parse(json);
+      const note = data?.remark ?? data?.Remark ?? data?.note ?? data?.Note;
+      if (note != null && String(note).trim()) {
+        return String(note).trim();
+      }
+    } catch {
+      // Older audit rows may contain non-JSON text.
+    }
+  }
+
+  return "";
+}
+
+function ensureAuditHeader(body) {
+  const row = body.closest("table")?.querySelector("thead tr");
+  if (row && row.children.length === 4) {
+    const th = document.createElement("th");
+    th.textContent = "操作者";
+    row.insertBefore(th, row.children[1]);
+  }
 }
 
 function renderSelects() {
@@ -833,6 +1107,9 @@ function renderSelects() {
       giftRecipientSelect.value = currentValue;
     }
   }
+
+  fillUserSelect("giftCatalogBossSelect", state.bosses);
+  fillUserSelect("giftCatalogRecipientSelect", state.players);
 
   const giftItemSelect = document.getElementById("giftItemSelect");
   if (giftItemSelect) {
@@ -866,6 +1143,7 @@ function renderSelects() {
     }
   }
 
+
   document.querySelectorAll("[data-member-select]").forEach((select) => {
     const currentValue = select.value;
     select.innerHTML = state.players.map((player) =>
@@ -877,20 +1155,27 @@ function renderSelects() {
   });
 }
 
+function fillUserSelect(elementId, users) {
+  const select = document.getElementById(elementId);
+  if (!select) {
+    return;
+  }
+
+  const currentValue = select.value;
+  select.innerHTML = users.map((user) =>
+    `<option value="${user.id}">${escapeHtml(user.nickname)}</option>`
+  ).join("");
+  if (currentValue) {
+    select.value = currentValue;
+  }
+}
+
 function addMemberRow(member = null) {
   const wrap = document.getElementById("memberRows");
   const row = document.createElement("div");
   row.className = "member-row";
   row.innerHTML = `
     <label class="member-field member-user">團員<select data-member-select></select></label>
-    <label class="member-field member-role">角色
-      <select data-member-role>
-        <option value="player">團員</option>
-        <option value="leader">帶團</option>
-        <option value="trainer">教學</option>
-        <option value="bonus">獎金</option>
-      </select>
-    </label>
     <label class="member-field member-share">分潤<input data-member-share type="number" step="0.01" min="0" placeholder="0"></label>
     <button class="icon-btn member-remove" type="button" title="移除">×</button>
   `;
@@ -903,7 +1188,6 @@ function addMemberRow(member = null) {
   renderSelects();
   if (member) {
     row.querySelector("[data-member-select]").value = member.userId;
-    row.querySelector("[data-member-role]").value = member.role || "player";
     row.querySelector("[data-member-share]").value = member.shareAmount;
   }
   updateOrderCalc();
@@ -1080,21 +1364,51 @@ async function submitDepartmentMember(event) {
   const form = event.currentTarget;
   const data = new FormData(form);
   const departmentId = data.get("departmentId");
+  const memberId = data.get("memberId");
+  const isEdit = Boolean(memberId);
 
   await runAction(async () => {
-    await api(`/api/departments/${departmentId}/members`, {
-      method: "POST",
+    await api(isEdit ? `/api/departments/members/${memberId}` : `/api/departments/${departmentId}/members`, {
+      method: isEdit ? "PUT" : "POST",
       body: JSON.stringify({
-        userId: Number(data.get("userId")),
+        ...(isEdit ? {} : { userId: Number(data.get("userId")) }),
         positionTitle: emptyToNull(data.get("positionTitle")),
-        isManager: data.get("isManager") === "on"
+        isManager: data.get("isManager") === "on",
+        ...(isEdit ? { leftAt: null } : {})
       })
     });
 
-    form.reset();
+    resetDepartmentMemberForm();
     await loadDepartments();
-    showAlert("部門成員已更新。", false);
+    showAlert(isEdit ? "部門成員已更新。" : "部門成員已加入。", false);
   });
+}
+
+function startDepartmentMemberEdit(member) {
+  closeDepartmentModal();
+  activateOrganizationTab("member");
+  const form = document.getElementById("departmentMemberForm");
+  form.elements.memberId.value = member.id;
+  form.elements.departmentId.value = member.departmentId;
+  form.elements.userId.value = member.userId;
+  form.elements.departmentId.disabled = true;
+  form.elements.userId.disabled = true;
+  form.elements.positionTitle.value = member.positionTitle || "";
+  form.elements.isManager.checked = Boolean(member.isManager);
+  document.getElementById("departmentMemberSubmitBtn").textContent = "更新";
+  document.getElementById("cancelDepartmentMemberEditBtn").hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function resetDepartmentMemberForm() {
+  const form = document.getElementById("departmentMemberForm");
+  form.reset();
+  form.elements.memberId.value = "";
+  form.elements.departmentId.disabled = false;
+  form.elements.userId.disabled = false;
+  document.getElementById("departmentMemberSubmitBtn").textContent = "加入 / 更新";
+  document.getElementById("cancelDepartmentMemberEditBtn").hidden = true;
+  renderSelects();
 }
 
 function startDepartmentEdit(department) {
@@ -1203,6 +1517,128 @@ function applySelectedGiftItem() {
   }
 }
 
+async function addGiftRecordFromItem(item) {
+  const settings = getGiftCatalogDonationSettings();
+  const bossUserId = settings.bossUserId;
+  const recipientUserId = settings.recipientUserId;
+
+  if (!settings.giftDate || !bossUserId || !recipientUserId) {
+    showAlert("請先在贈送設定選好日期、老闆和送給對象。");
+    document.querySelector(".gift-donate-settings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+
+  if (item.defaultPrice == null) {
+    const form = document.getElementById("giftRecordForm");
+    showAlert("這個禮物沒有固定金額，請到送禮紀錄手動填寫。");
+    form.elements.serviceItemId.value = item.id;
+    form.elements.amount.value = "";
+    form.elements.remark.value = item.remark || "";
+    document.querySelector('.nav-tabs button[data-view="giftRecords"]')?.click();
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+
+  const bossName = document.getElementById("giftCatalogBossSelect")?.selectedOptions[0]?.textContent?.trim() || "未指定";
+  const recipientName = document.getElementById("giftCatalogRecipientSelect")?.selectedOptions[0]?.textContent?.trim() || "未指定";
+  const confirmed = await confirmGiftDonation(
+    `「${item.name}」／${bossName} 贈送給 ${recipientName}／${money.format(item.defaultPrice)}`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  await runAction(async () => {
+    const giftDate = settings.giftDate;
+    const customerPaymentStatus = settings.customerPaymentStatus;
+    const status = settings.status;
+    const existing = state.giftRecords.find((record) =>
+      record.giftDate === giftDate &&
+      record.bossUserId === bossUserId &&
+      record.recipientUserId === recipientUserId &&
+      record.serviceItemId === item.id &&
+      record.customerPaymentStatus === customerPaymentStatus &&
+      record.status === status
+    );
+
+    if (existing) {
+      await api(`/api/giftrecords/${existing.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          giftDate: existing.giftDate,
+          bossUserId: existing.bossUserId,
+          recipientUserId: existing.recipientUserId,
+          serviceItemId: existing.serviceItemId,
+          giftName: null,
+          amount: existing.amount,
+          quantity: Number(existing.quantity || 0) + 1,
+          customerPaymentStatus: existing.customerPaymentStatus,
+          status: existing.status,
+          remark: existing.remark || item.remark || null
+        })
+      });
+    } else {
+      await api("/api/giftrecords", {
+        method: "POST",
+        body: JSON.stringify({
+          giftDate,
+          bossUserId,
+          recipientUserId,
+          serviceItemId: item.id,
+          giftName: null,
+          amount: item.defaultPrice,
+          quantity: 1,
+          customerPaymentStatus,
+          status,
+          remark: item.remark || null
+        })
+      });
+    }
+
+    await loadGiftRecords();
+    await loadDashboard();
+    showAlert(existing ? `已把「${item.name}」數量加 1。` : `已新增 1 筆「${item.name}」贈送紀錄。`, false);
+  });
+}
+
+function getGiftCatalogDonationSettings() {
+  return {
+    giftDate: document.getElementById("giftCatalogDate")?.value || "",
+    bossUserId: Number(document.getElementById("giftCatalogBossSelect")?.value || 0),
+    recipientUserId: Number(document.getElementById("giftCatalogRecipientSelect")?.value || 0),
+    customerPaymentStatus: document.getElementById("giftCatalogPaymentStatus")?.value || "unpaid",
+    status: document.getElementById("giftCatalogStatus")?.value || "completed"
+  };
+}
+
+async function startOrderFromService(item) {
+  const navButton = document.querySelector('.nav-tabs button[data-view="orders"]');
+  if (navButton) {
+    navButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  resetOrderForm();
+
+  const form = document.getElementById("orderForm");
+  const price = item.defaultPrice ?? 0;
+  const unitText = unitTypeText(item.unitType);
+  form.elements.serviceName.value = item.name;
+  form.elements.serviceUnitPrice.value = item.defaultPrice ?? "";
+  form.elements.serviceUnitType.value = item.unitType || "";
+  form.elements.serviceUnitLabel.value = item.defaultPrice == null
+    ? `${servicePriceText(item)} / ${unitText}`
+    : `${money.format(item.defaultPrice)} / ${unitText}`;
+  form.elements.serviceQuantity.value = 1;
+  form.elements.amount.value = price || "";
+  form.elements.remark.value = item.remark || "";
+
+  updateOrderCalc();
+  showAlert(`已帶入「${item.name}」到新增訂單。`, false);
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 async function submitOrder(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -1216,11 +1652,13 @@ async function submitOrder(event) {
   const isEdit = Boolean(orderId);
   const amount = Number(data.get("amount"));
   const commissionAmount = Number(data.get("commissionAmount"));
+  const serviceRemark = buildOrderServiceRemark(form);
+  const remark = [serviceRemark, emptyToNull(data.get("remark"))].filter(Boolean).join("\n");
   const memberRows = [...document.querySelectorAll(".member-row")];
   fillBlankMemberShares(memberRows, amount - commissionAmount);
   const members = memberRows.map((row) => ({
     userId: Number(row.querySelector("[data-member-select]").value),
-    role: row.querySelector("[data-member-role]").value,
+    role: "player",
     shareAmount: Number(row.querySelector("[data-member-share]").value || 0)
   }));
   const shareTotal = roundMoney(members.reduce((sum, member) => sum + member.shareAmount, 0));
@@ -1241,7 +1679,7 @@ async function submitOrder(event) {
       commissionAmount,
       status: data.get("status"),
       customerPaymentStatus: data.get("customerPaymentStatus"),
-      remark: emptyToNull(data.get("remark")),
+      remark: emptyToNull(remark),
       members
     };
 
@@ -1264,6 +1702,11 @@ function startOrderEdit(order) {
   form.elements.orderNo.value = order.orderNo || "";
   form.elements.ownerUserId.value = order.ownerUserId || "";
   form.elements.amount.value = order.amount;
+  form.elements.serviceName.value = "";
+  form.elements.serviceUnitPrice.value = "";
+  form.elements.serviceUnitType.value = "";
+  form.elements.serviceUnitLabel.value = "";
+  form.elements.serviceQuantity.value = 1;
   form.elements.commissionAmount.value = order.commissionAmount;
   form.elements.status.value = order.status || "completed";
   form.elements.customerPaymentStatus.value = order.customerPaymentStatus || "unpaid";
@@ -1295,6 +1738,11 @@ function resetOrderForm() {
   const form = document.getElementById("orderForm");
   form.reset();
   form.elements.orderId.value = "";
+  form.elements.serviceName.value = "";
+  form.elements.serviceUnitPrice.value = "";
+  form.elements.serviceUnitType.value = "";
+  form.elements.serviceUnitLabel.value = "";
+  form.elements.serviceQuantity.value = 1;
   document.getElementById("memberRows").innerHTML = "";
   setDefaultDates();
   addMemberRow();
@@ -1361,6 +1809,45 @@ async function runAction(action) {
   } catch (error) {
     showAlert(error.message);
   }
+}
+
+function handleOrderInput(event) {
+  if (event.target?.name === "serviceQuantity") {
+    updateOrderAmountFromService();
+  }
+
+  updateOrderCalc();
+}
+
+function updateOrderAmountFromService() {
+  const form = document.getElementById("orderForm");
+  const unitPrice = Number(form.elements.serviceUnitPrice.value || 0);
+  const quantity = Number(form.elements.serviceQuantity.value || 0);
+  if (unitPrice <= 0 || quantity <= 0) {
+    return;
+  }
+
+  form.elements.amount.value = roundMoney(unitPrice * quantity);
+}
+
+function buildOrderServiceRemark(form) {
+  const serviceName = String(form.elements.serviceName.value || "").trim();
+  if (!serviceName) {
+    return null;
+  }
+
+  const unitLabel = String(form.elements.serviceUnitLabel.value || "").trim();
+  const quantity = Number(form.elements.serviceQuantity.value || 0);
+  const unitType = String(form.elements.serviceUnitType.value || "").trim();
+  const quantityText = quantity > 0
+    ? `${money.format(quantity)} ${unitTypeText(unitType)}`
+    : "";
+
+  return [
+    `服務項目：${serviceName}`,
+    unitLabel ? `計價：${unitLabel}` : "",
+    quantityText ? `數量：${quantityText}` : ""
+  ].filter(Boolean).join("；");
 }
 
 function updateOrderCalc() {
@@ -1432,7 +1919,11 @@ function label(group, value) {
 }
 
 function pill(text, type = "") {
-  return `<span class="pill ${type}">${escapeHtml(text)}</span>`;
+  return plainText(text, type);
+}
+
+function plainText(text, type = "") {
+  return `<span class="plain-status ${type}">${escapeHtml(text)}</span>`;
 }
 
 function emptyRow(colspan) {
@@ -1461,6 +1952,41 @@ function showAlert(message, isError = true) {
 
 function hideAlert() {
   document.getElementById("alert").hidden = true;
+}
+
+let pendingGiftConfirmation = null;
+
+function confirmGiftDonation(message) {
+  const snackbar = document.getElementById("giftConfirmSnackbar");
+  const messageElement = document.getElementById("giftConfirmMessage");
+  const cancelButton = document.getElementById("giftConfirmCancel");
+  const submitButton = document.getElementById("giftConfirmSubmit");
+
+  if (pendingGiftConfirmation) {
+    pendingGiftConfirmation(false);
+  }
+
+  messageElement.textContent = message;
+  snackbar.hidden = false;
+
+  return new Promise((resolve) => {
+    const finish = (confirmed) => {
+      if (pendingGiftConfirmation !== finish) {
+        return;
+      }
+
+      pendingGiftConfirmation = null;
+      snackbar.hidden = true;
+      cancelButton.onclick = null;
+      submitButton.onclick = null;
+      resolve(confirmed);
+    };
+
+    pendingGiftConfirmation = finish;
+    cancelButton.onclick = () => finish(false);
+    submitButton.onclick = () => finish(true);
+    submitButton.focus();
+  });
 }
 
 function escapeHtml(value) {

@@ -93,6 +93,13 @@ public sealed class GiftRecordsController : ControllerBase
         return result.Succeeded ? NoContent() : ToActionResult(result);
     }
 
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteGiftRecord(int id)
+    {
+        var result = await _giftRecordService.DeleteAsync(id);
+        return result.Succeeded ? NoContent() : ToActionResult(result);
+    }
+
     private ActionResult ToActionResult(ServiceResult result)
     {
         if (result.NotFound)

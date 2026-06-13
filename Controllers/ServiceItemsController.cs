@@ -33,4 +33,12 @@ public sealed class ServiceItemsController : ControllerBase
 
         return Ok(items.Select(ServiceItemMapper.ToDto).ToList());
     }
+
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<ServiceItemDto>> GetServiceItem(int id)
+    {
+        var item = await _db.ServiceItems.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+        return item is null ? NotFound() : Ok(ServiceItemMapper.ToDto(item));
+    }
+
 }

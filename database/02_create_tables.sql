@@ -118,6 +118,7 @@ CREATE TABLE dbo.audit_logs (
     id BIGINT IDENTITY(1,1) NOT NULL,
 
     user_id INT NULL,
+    login_user_id INT NULL,
     action NVARCHAR(50) NOT NULL,
     target_type NVARCHAR(50) NOT NULL,
     target_id INT NULL,
@@ -153,4 +154,8 @@ GO
 
 CREATE INDEX IX_audit_logs_target
 ON dbo.audit_logs (target_type, target_id, created_at);
+GO
+
+CREATE INDEX IX_audit_logs_login_user
+ON dbo.audit_logs (login_user_id, created_at);
 GO

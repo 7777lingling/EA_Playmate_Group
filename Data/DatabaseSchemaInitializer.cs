@@ -54,6 +54,33 @@ BEGIN
     ON dbo.users(login_account)
     WHERE login_account IS NOT NULL;');
 END;
+
+IF COL_LENGTH('dbo.audit_logs', 'login_user_id') IS NULL
+BEGIN
+    ALTER TABLE dbo.audit_logs ADD login_user_id INT NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = N'FK_audit_logs_login_user'
+)
+BEGIN
+    ALTER TABLE dbo.audit_logs
+    ADD CONSTRAINT FK_audit_logs_login_user
+    FOREIGN KEY (login_user_id) REFERENCES dbo.login_users(id);
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_audit_logs_login_user'
+      AND object_id = OBJECT_ID(N'dbo.audit_logs')
+)
+BEGIN
+    CREATE INDEX IX_audit_logs_login_user
+    ON dbo.audit_logs(login_user_id, created_at);
+END;
 """);
 
         await db.Database.ExecuteSqlRawAsync("""

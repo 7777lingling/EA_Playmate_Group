@@ -17,6 +17,7 @@ builder.Services.AddDataProtection()
     .SetApplicationName("EAPlaymateGroup");
 
 builder.Services.AddControllers();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {

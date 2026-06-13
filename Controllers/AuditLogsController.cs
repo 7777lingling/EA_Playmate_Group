@@ -1,4 +1,3 @@
-using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
@@ -28,6 +27,7 @@ public sealed class AuditLogsController : ControllerBase
 
         var query = _db.AuditLogs.AsNoTracking()
             .Include(x => x.User)
+            .Include(x => x.LoginUser)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(targetType))
@@ -55,49 +55,10 @@ public sealed class AuditLogsController : ControllerBase
     {
         var log = await _db.AuditLogs.AsNoTracking()
             .Include(x => x.User)
+            .Include(x => x.LoginUser)
             .FirstOrDefaultAsync(x => x.Id == id);
 
         return log is null ? NotFound() : Ok(ToDto(log));
-    }
-
-    [HttpPost]
-    public async Task<ActionResult<AuditLogDto>> CreateAuditLog(CreateAuditLogRequestDto request)
-    {
-        if (string.IsNullOrWhiteSpace(request.Action))
-        {
-            return ApiErrors.Validation(new Dictionary<string, string[]>
-            {
-                ["action"] = ["Action is required."]
-            });
-        }
-
-        if (string.IsNullOrWhiteSpace(request.TargetType))
-        {
-            return ApiErrors.Validation(new Dictionary<string, string[]>
-            {
-                ["targetType"] = ["TargetType is required."]
-            });
-        }
-
-        var log = new AuditLog
-        {
-            UserId = request.UserId,
-            Action = request.Action.Trim(),
-            TargetType = request.TargetType.Trim(),
-            TargetId = request.TargetId,
-            TargetUuid = request.TargetUuid,
-            BeforeJson = request.BeforeJson,
-            AfterJson = request.AfterJson
-        };
-
-        _db.AuditLogs.Add(log);
-        await _db.SaveChangesAsync();
-
-        var savedLog = await _db.AuditLogs.AsNoTracking()
-            .Include(x => x.User)
-            .FirstAsync(x => x.Id == log.Id);
-
-        return CreatedAtAction(nameof(GetAuditLog), new { id = log.Id }, ToDto(savedLog));
     }
 
     private static AuditLogDto ToDto(AuditLog log)
@@ -107,6 +68,9 @@ public sealed class AuditLogsController : ControllerBase
             Id = log.Id,
             UserId = log.UserId,
             UserNickname = log.User?.Nickname,
+            LoginUserId = log.LoginUserId,
+            LoginUserDisplayName = log.LoginUser?.DisplayName,
+            LoginAccount = log.LoginUser?.LoginAccount,
             Action = log.Action,
             TargetType = log.TargetType,
             TargetId = log.TargetId,

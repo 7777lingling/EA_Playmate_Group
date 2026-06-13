@@ -7,6 +7,9 @@ public sealed class AuditLog
     public int? UserId { get; set; }
     public User? User { get; set; }
 
+    public int? LoginUserId { get; set; }
+    public LoginUser? LoginUser { get; set; }
+
     public string Action { get; set; } = string.Empty;
     public string TargetType { get; set; } = string.Empty;
     public int? TargetId { get; set; }

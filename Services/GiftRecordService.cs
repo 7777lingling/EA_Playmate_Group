@@ -121,6 +121,27 @@ public sealed class GiftRecordService
         return ServiceResult.Success();
     }
 
+    public async Task<ServiceResult> DeleteAsync(int id)
+    {
+        var record = await GetWithRelations(id).FirstOrDefaultAsync();
+        if (record is null)
+        {
+            return ServiceResult.Missing();
+        }
+
+        var before = GiftRecordMapper.ToDto(record);
+        _db.GiftRecords.Remove(record);
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            action: "delete",
+            targetType: "gift_records",
+            targetId: record.Id,
+            targetUuid: record.Uuid,
+            before: before));
+        await _db.SaveChangesAsync();
+
+        return ServiceResult.Success();
+    }
+
     private IQueryable<GiftRecord> GetWithRelations(int id)
     {
         return _db.GiftRecords

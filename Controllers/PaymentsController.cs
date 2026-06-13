@@ -70,13 +70,6 @@ public sealed class PaymentsController : ControllerBase
         return ToActionResult(result);
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> UpdatePayment(int id, UpdatePaymentRequestDto request)
-    {
-        var result = await _paymentService.UpdatePaymentAsync(id, request);
-        return result.Succeeded ? NoContent() : ToActionResult(result);
-    }
-
     [HttpPost("{id:int}/mark-paid")]
     public async Task<IActionResult> MarkPaid(int id, MarkPaymentPaidRequestDto request)
     {
