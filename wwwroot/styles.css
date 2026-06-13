@@ -1100,10 +1100,22 @@ th:last-child {
 }
 
 .department-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(52px, auto);
+  grid-template-rows: repeat(3, auto);
   align-items: center;
   flex-shrink: 0;
   gap: 8px;
+}
+
+.department-actions .pill {
+  grid-column: 1;
+  grid-row: 1 / -1;
+}
+
+.department-actions .small {
+  grid-column: 2;
+  width: 100%;
 }
 
 .department-members {
