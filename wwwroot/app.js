@@ -39,9 +39,9 @@ const money = new Intl.NumberFormat("zh-TW", {
 
 const labels = {
   systemRole: {
-    admin: "系統管理員",
-    staff: "組織管理員",
-    viewer: "一般會員"
+    admin: "管理員",
+    staff: "工作人員",
+    viewer: "檢視者"
   },
   orderStatus: {
     draft: "草稿",
@@ -77,7 +77,8 @@ const labels = {
     update_customer_payment_status: "修改收款狀態",
     delete: "刪除",
     generate_monthly: "產生月結",
-    mark_paid: "標記已發薪"
+    mark_paid: "標記已發薪",
+    change_password: "變更密碼"
   },
   targetType: {
     users: "成員",
@@ -176,6 +177,10 @@ function bindForms() {
   document.getElementById("loginForm").addEventListener("submit", submitLogin);
   document.getElementById("loginUserForm").addEventListener("submit", submitLoginUser);
   document.getElementById("cancelLoginUserEditBtn").addEventListener("click", resetLoginUserForm);
+  document.getElementById("changePasswordBtn").addEventListener("click", openChangePasswordModal);
+  document.getElementById("changePasswordClose").addEventListener("click", closeChangePasswordModal);
+  document.getElementById("changePasswordCancel").addEventListener("click", closeChangePasswordModal);
+  document.getElementById("changePasswordForm").addEventListener("submit", submitChangePassword);
   document.getElementById("logoutBtn").addEventListener("click", logout);
   document.getElementById("userForm").addEventListener("submit", submitUser);
   document.getElementById("cancelUserEditBtn").addEventListener("click", resetUserForm);
@@ -351,6 +356,7 @@ function showLogin() {
   document.body.classList.add("auth-locked");
   document.getElementById("loginView").hidden = false;
   document.getElementById("logoutBtn").hidden = true;
+  document.getElementById("changePasswordBtn").hidden = true;
   document.getElementById("currentUser").hidden = true;
 }
 
@@ -363,6 +369,7 @@ function showApp() {
     currentUser.textContent = state.auth.user.displayName;
     currentUser.hidden = false;
     document.getElementById("logoutBtn").hidden = false;
+    document.getElementById("changePasswordBtn").hidden = false;
   }
   applyNavigationPermissions();
   if (state.auth?.user?.systemRole === "viewer") {
@@ -495,6 +502,44 @@ async function logout() {
   await api("/api/auth/logout", { method: "POST", body: "{}" });
   state.auth = null;
   showLogin();
+}
+
+function openChangePasswordModal() {
+  const modal = document.getElementById("changePasswordModal");
+  document.getElementById("changePasswordForm").reset();
+  modal.hidden = false;
+  modal.querySelector("[name='currentPassword']")?.focus();
+}
+
+function closeChangePasswordModal() {
+  document.getElementById("changePasswordModal").hidden = true;
+  document.getElementById("changePasswordForm").reset();
+}
+
+async function submitChangePassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const newPassword = String(data.get("newPassword") || "");
+  const confirmPassword = String(data.get("confirmPassword") || "");
+
+  if (newPassword !== confirmPassword) {
+    showAlert("新密碼與確認密碼不一致。");
+    return;
+  }
+
+  await runAction(async () => {
+    await api("/api/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({
+        currentPassword: data.get("currentPassword"),
+        newPassword,
+        confirmPassword
+      })
+    });
+    closeChangePasswordModal();
+    showAlert("密碼已更新。", false);
+  });
 }
 
 function showLoginError(message) {
@@ -1494,10 +1539,17 @@ async function submitLoginUser(event) {
   const data = new FormData(form);
   const loginUserId = data.get("loginUserId");
   const isEdit = Boolean(loginUserId);
+  const initialPassword = String(data.get("password") || "");
+  const confirmPassword = String(data.get("confirmPassword") || "");
   const existingLoginUser = isEdit
     ? state.loginUsers.find((loginUser) => loginUser.id === Number(loginUserId))
     : null;
-  const password = emptyToNull(data.get("password"));
+
+  if (!isEdit && initialPassword !== confirmPassword) {
+    showAlert("初始密碼與確認密碼不一致。");
+    form.elements.confirmPassword.focus();
+    return;
+  }
 
   await runAction(async () => {
     const payload = {
@@ -1508,14 +1560,11 @@ async function submitLoginUser(event) {
       userId: Number(data.get("userId")) || null
     };
 
-    if (password) {
-      payload.password = password;
-    }
-
     if (isEdit) {
       payload.isActive = existingLoginUser?.isActive ?? true;
     } else {
-      payload.password = data.get("password");
+      payload.password = initialPassword;
+      payload.confirmPassword = confirmPassword;
     }
 
     await api(isEdit ? `/api/loginusers/${loginUserId}` : "/api/loginusers", {
@@ -1524,7 +1573,7 @@ async function submitLoginUser(event) {
     });
     resetLoginUserForm();
     await loadLoginUsers();
-    showAlert(isEdit ? "登入者已更新。" : "登入者已新增。", false);
+    showAlert(isEdit ? "帳號已更新。" : "帳號已新增。", false);
   });
 }
 
@@ -1533,7 +1582,6 @@ function startLoginUserEdit(loginUser) {
   form.elements.loginUserId.value = loginUser.id;
   form.elements.nickname.value = loginUser.displayName || "";
   form.elements.loginAccount.value = loginUser.loginAccount || "";
-  form.elements.password.value = "";
   form.elements.systemRole.value = loginUser.systemRole || "staff";
   if (form.elements.organizationId) {
     form.elements.organizationId.value = loginUser.organizationId || "";
@@ -1559,18 +1607,25 @@ function setLoginUserEditMode(isEdit) {
   const submitButton = document.getElementById("loginUserSubmitBtn");
   const cancelButton = document.getElementById("cancelLoginUserEditBtn");
   const passwordInput = document.getElementById("loginUserForm").elements.password;
+  const confirmPasswordInput = document.getElementById("loginUserForm").elements.confirmPassword;
+  const passwordField = document.getElementById("loginUserPasswordField");
+  const confirmPasswordField = document.getElementById("loginUserConfirmPasswordField");
 
   if (title) {
-    title.textContent = isEdit ? "編輯登入者" : "新增登入者";
+    title.textContent = isEdit ? "編輯帳號" : "新增帳號";
   }
   if (submitButton) {
-    submitButton.textContent = isEdit ? "儲存" : "新增登入者";
+    submitButton.textContent = isEdit ? "儲存" : "新增帳號";
   }
   if (cancelButton) {
     cancelButton.hidden = !isEdit;
   }
   passwordInput.required = !isEdit;
-  passwordInput.placeholder = isEdit ? "留空代表不變更密碼" : "";
+  confirmPasswordInput.required = !isEdit;
+  passwordInput.value = "";
+  confirmPasswordInput.value = "";
+  passwordField.hidden = isEdit;
+  confirmPasswordField.hidden = isEdit;
 }
 
 function startUserEdit(user) {

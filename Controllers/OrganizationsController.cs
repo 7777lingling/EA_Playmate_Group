@@ -1,3 +1,4 @@
+using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
@@ -9,6 +10,7 @@ namespace EAPlaymateGroup.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[RequirePermission("Organization.Manage")]
 public sealed class OrganizationsController : ControllerBase
 {
     private readonly EAPlaymateGroupDbContext _db;

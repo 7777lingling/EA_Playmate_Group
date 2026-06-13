@@ -1,3 +1,4 @@
+using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -6,13 +7,16 @@ namespace EAPlaymateGroup.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[PublicApi]
 public sealed class AuthController : ControllerBase
 {
     private readonly AuthService _authService;
+    private readonly LoginUserService _loginUserService;
 
-    public AuthController(AuthService authService)
+    public AuthController(AuthService authService, LoginUserService loginUserService)
     {
         _authService = authService;
+        _loginUserService = loginUserService;
     }
 
     [HttpGet("me")]
@@ -56,5 +60,33 @@ public sealed class AuthController : ControllerBase
     {
         HttpContext.Session.Clear();
         return NoContent();
+    }
+
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword(ChangeMyPasswordRequestDto request)
+    {
+        var loginUserId = HttpContext.Session.GetInt32(AuthService.SessionUserId);
+        if (!loginUserId.HasValue)
+        {
+            return Unauthorized(new { message = "請先登入。" });
+        }
+
+        var result = await _loginUserService.ChangeMyPasswordAsync(loginUserId.Value, request);
+        if (result.Succeeded)
+        {
+            return NoContent();
+        }
+
+        if (result.NotFound)
+        {
+            HttpContext.Session.Clear();
+            return Unauthorized(new { message = "登入帳號不存在或已停用。" });
+        }
+
+        return result.ValidationErrors is not null
+            ? Common.ApiErrors.Validation(result.ValidationErrors)
+            : Common.ApiErrors.BadRequest(
+                result.ErrorCode ?? "operation_failed",
+                result.ErrorMessage ?? "Operation failed.");
     }
 }

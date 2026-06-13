@@ -61,6 +61,14 @@
   font-size: 12px;
 }
 
+.password-modal {
+  width: min(520px, 100%);
+}
+
+.password-form {
+  padding: 24px;
+}
+
 * {
   box-sizing: border-box;
 }

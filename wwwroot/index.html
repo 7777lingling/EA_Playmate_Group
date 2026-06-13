@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EA Playmate Group</title>
-  <link rel="stylesheet" href="/styles.css?v=20260613-permissions">
+  <link rel="stylesheet" href="/styles.css?v=20260613-account-password-v4">
 </head>
 <body>
   <section class="login-view" id="loginView" hidden>
@@ -57,6 +57,7 @@
       <div class="top-actions">
         <span class="status-dot" id="apiStatus">API</span>
         <span class="status-dot" id="currentUser" hidden></span>
+        <button class="ghost" id="changePasswordBtn" type="button" hidden>變更密碼</button>
         <button class="ghost" id="logoutBtn" type="button" hidden>登出</button>
         <button class="ghost" id="refreshBtn" type="button">重新整理</button>
       </div>
@@ -135,9 +136,9 @@
           <label>銀行帳號<input name="bankAccount" maxlength="200"></label>
           <label>系統權限
             <select name="systemRole">
-              <option value="staff">組織管理員</option>
-              <option value="admin">系統管理員</option>
-              <option value="viewer">一般會員</option>
+              <option value="staff">工作人員</option>
+              <option value="admin">管理員</option>
+              <option value="viewer">檢視者</option>
             </select>
           </label>
           <div class="check-grid">
@@ -197,10 +198,11 @@
     <section class="view" id="loginUsersView">
       <div class="grid form-list">
         <form class="panel form" id="loginUserForm">
-          <h2>新增登入者</h2>
+          <h2>新增帳號</h2>
           <label>顯示名稱<input name="nickname" required maxlength="50"></label>
           <label>登入帳號<input name="loginAccount" required maxlength="50" autocomplete="off"></label>
-          <label>登入密碼<input name="password" type="password" required autocomplete="new-password"></label>
+          <label id="loginUserPasswordField">初始密碼<input name="password" type="password" required autocomplete="new-password"></label>
+          <label id="loginUserConfirmPasswordField">確認初始密碼<input name="confirmPassword" type="password" required autocomplete="new-password"></label>
           <label id="loginUserOrganizationField">所屬組織
             <select name="organizationId" id="loginUserOrganizationSelect"></select>
           </label>
@@ -211,17 +213,17 @@
           </label>
           <label>系統權限
             <select name="systemRole">
-              <option value="admin">系統管理員</option>
-              <option value="staff">組織管理員</option>
-              <option value="viewer">一般會員</option>
+              <option value="admin">管理員</option>
+              <option value="staff">工作人員</option>
+              <option value="viewer">檢視者</option>
             </select>
           </label>
-          <button class="primary" type="submit">新增登入者</button>
+          <button class="primary" type="submit">新增帳號</button>
         </form>
 
         <section class="panel">
           <div class="panel-head">
-            <h2>登入者清單</h2>
+            <h2>帳號清單</h2>
           </div>
           <div class="table-wrap">
             <table class="login-user-table">
@@ -648,16 +650,16 @@
           <button class="primary" id="savePermissionsBtn" type="button">儲存權限</button>
         </div>
         <p class="muted permission-note">
-          系統管理員固定擁有全部權限。月結檢視與關帳分開設定；組織管理員預設不能關帳。
+          管理員固定擁有全部權限。月結檢視與關帳分開設定；工作人員預設不能關帳。
         </p>
         <div class="table-wrap">
           <table class="permission-table">
             <thead>
               <tr>
                 <th>模組 / 動作</th>
-                <th>系統管理員</th>
-                <th>組織管理員</th>
-                <th>一般會員</th>
+                <th>管理員</th>
+                <th>工作人員</th>
+                <th>檢視者</th>
               </tr>
             </thead>
             <tbody id="permissionRows"></tbody>
@@ -680,6 +682,27 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="changePasswordModal" hidden>
+    <section class="modal-panel password-modal" role="dialog" aria-modal="true" aria-labelledby="changePasswordTitle">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Account Security</p>
+          <h2 id="changePasswordTitle">變更我的密碼</h2>
+        </div>
+        <button class="ghost small" id="changePasswordClose" type="button">關閉</button>
+      </div>
+      <form class="form password-form" id="changePasswordForm">
+        <label>目前密碼<input name="currentPassword" type="password" required autocomplete="current-password"></label>
+        <label>新密碼<input name="newPassword" type="password" required autocomplete="new-password"></label>
+        <label>確認新密碼<input name="confirmPassword" type="password" required autocomplete="new-password"></label>
+        <div class="form-actions">
+          <button class="primary" type="submit">更新密碼</button>
+          <button class="ghost" id="changePasswordCancel" type="button">取消</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <aside class="snackbar" id="giftConfirmSnackbar" role="status" aria-live="polite" hidden>
     <div class="snackbar-content">
       <strong>確認贈送</strong>
@@ -691,6 +714,6 @@
     </div>
   </aside>
 
-  <script src="/app.js?v=20260613-permissions"></script>
+  <script src="/app.js?v=20260613-account-password-v4"></script>
 </body>
 </html>

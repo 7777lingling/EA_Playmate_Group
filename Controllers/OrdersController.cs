@@ -21,6 +21,7 @@ public sealed class OrdersController : ControllerBase
     }
 
     [HttpGet]
+    [RequirePermission("Order.View")]
     public async Task<ActionResult<List<OrderListItemDto>>> GetOrders(
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
@@ -67,6 +68,7 @@ public sealed class OrdersController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [RequirePermission("Order.View")]
     public async Task<ActionResult<OrderDto>> GetOrder(int id)
     {
         var order = await _db.Orders.AsNoTracking()
@@ -79,6 +81,7 @@ public sealed class OrdersController : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission("Order.Create")]
     public async Task<ActionResult<OrderDto>> CreateOrder(CreateOrderRequestDto request)
     {
         var result = await _orderService.CreateOrderAsync(request);
@@ -91,6 +94,7 @@ public sealed class OrdersController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [RequirePermission("Order.Edit")]
     public async Task<IActionResult> UpdateOrder(int id, UpdateOrderRequestDto request)
     {
         var result = await _orderService.UpdateOrderAsync(id, request);
@@ -98,6 +102,7 @@ public sealed class OrdersController : ControllerBase
     }
 
     [HttpPost("{id:int}/cancel")]
+    [RequirePermission("Order.Cancel")]
     public async Task<IActionResult> CancelOrder(int id, UpdateOrderStatusRequestDto request)
     {
         var result = await _orderService.CancelOrderAsync(id, request);
@@ -105,6 +110,7 @@ public sealed class OrdersController : ControllerBase
     }
 
     [HttpPost("{id:int}/status")]
+    [RequirePermission("Order.Edit")]
     public async Task<IActionResult> UpdateStatus(int id, UpdateOrderStatusRequestDto request)
     {
         var result = await _orderService.UpdateStatusAsync(id, request);
@@ -112,6 +118,7 @@ public sealed class OrdersController : ControllerBase
     }
 
     [HttpPost("{id:int}/customer-payment-status")]
+    [RequirePermission("Order.Edit")]
     public async Task<IActionResult> UpdateCustomerPaymentStatus(int id, UpdateCustomerPaymentStatusRequestDto request)
     {
         var result = await _orderService.UpdateCustomerPaymentStatusAsync(id, request);
@@ -119,6 +126,7 @@ public sealed class OrdersController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [RequirePermission("Order.Cancel")]
     public async Task<IActionResult> DeleteOrder(int id)
     {
         var order = await _db.Orders.Include(x => x.Members).FirstOrDefaultAsync(x => x.Id == id);

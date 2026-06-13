@@ -21,6 +21,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet]
+    [RequirePermission("Member.View")]
     public async Task<ActionResult<List<UserDto>>> GetUsers(
         [FromQuery] bool? isPlayer,
         [FromQuery] bool? isBoss,
@@ -53,6 +54,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [RequirePermission("Member.View")]
     public async Task<ActionResult<UserDto>> GetUser(int id)
     {
         var userEntity = await _db.Users.AsNoTracking()
@@ -63,6 +65,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet("players")]
+    [RequirePermission("Member.View")]
     public async Task<ActionResult<List<UserDto>>> GetPlayers()
     {
         var userEntities = await _db.Users.AsNoTracking()
@@ -76,6 +79,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet("bosses")]
+    [RequirePermission("Member.View")]
     public async Task<ActionResult<List<UserDto>>> GetBosses()
     {
         var userEntities = await _db.Users.AsNoTracking()
@@ -89,6 +93,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission("Member.Create")]
     public async Task<ActionResult<UserDto>> CreateUser(CreateUserRequestDto request)
     {
         var result = await _userService.CreateUserAsync(request);
@@ -101,6 +106,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [RequirePermission("Member.Edit")]
     public async Task<IActionResult> UpdateUser(int id, UpdateUserRequestDto request)
     {
         var result = await _userService.UpdateUserAsync(id, request);
@@ -108,6 +114,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost("{id:int}/deactivate")]
+    [RequirePermission("Member.Edit")]
     public async Task<IActionResult> DeactivateUser(int id)
     {
         var result = await _userService.DeactivateUserAsync(id);
@@ -115,6 +122,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost("{id:int}/activate")]
+    [RequirePermission("Member.Edit")]
     public async Task<IActionResult> ActivateUser(int id)
     {
         var result = await _userService.ActivateUserAsync(id);
@@ -122,6 +130,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost("{id:int}/leave")]
+    [RequirePermission("Member.Edit")]
     public async Task<IActionResult> LeaveUser(int id, LeaveUserRequestDto request)
     {
         var result = await _userService.LeaveUserAsync(id, request);
@@ -129,6 +138,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [RequirePermission("Member.Delete")]
     public async Task<IActionResult> DeleteUser(int id)
     {
         var user = await _db.Users.FirstOrDefaultAsync(x => x.Id == id);

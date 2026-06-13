@@ -1,7 +1,11 @@
+using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Services;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,12 +68,12 @@ using (var scope = app.Services.CreateScope())
 
 app.UseCors("DefaultCors");
 app.UseSession();
+app.UseRouting();
 
 app.Use(async (context, next) =>
 {
     if (!context.Request.Path.StartsWithSegments("/api") ||
-        context.Request.Path.StartsWithSegments("/api/health") ||
-        context.Request.Path.StartsWithSegments("/api/auth"))
+        context.GetEndpoint()?.Metadata.GetMetadata<PublicApiAttribute>() is not null)
     {
         await next();
         return;
@@ -90,8 +94,7 @@ app.Use(async (context, next) =>
 app.Use(async (context, next) =>
 {
     if (!context.Request.Path.StartsWithSegments("/api") ||
-        context.Request.Path.StartsWithSegments("/api/health") ||
-        context.Request.Path.StartsWithSegments("/api/auth"))
+        context.GetEndpoint()?.Metadata.GetMetadata<PublicApiAttribute>() is not null)
     {
         await next();
         return;
@@ -104,15 +107,19 @@ app.Use(async (context, next) =>
         return;
     }
 
-    var permissionCode = ResolvePermission(context.Request);
-    if (permissionCode is null)
+    var permission = context.GetEndpoint()?.Metadata.GetMetadata<RequirePermissionAttribute>();
+    if (permission is null)
     {
-        await next();
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            message = "此 API 尚未設定權限，已拒絕存取。"
+        });
         return;
     }
 
     var permissionService = context.RequestServices.GetRequiredService<PermissionService>();
-    if (await permissionService.HasPermissionAsync(loginUserId.Value, permissionCode))
+    if (await permissionService.HasPermissionAsync(loginUserId.Value, permission.PermissionCode))
     {
         await next();
         return;
@@ -121,7 +128,7 @@ app.Use(async (context, next) =>
     context.Response.StatusCode = StatusCodes.Status403Forbidden;
     await context.Response.WriteAsJsonAsync(new
     {
-        message = $"權限不足，需要 {permissionCode}。"
+        message = $"權限不足，需要 {permission.PermissionCode}。"
     });
 });
 
@@ -134,104 +141,39 @@ app.MapGet("/api/health", () => Results.Ok(new
 {
     name = "EA Playmate Group API",
     status = "ok"
-}));
+})).WithMetadata(new PublicApiAttribute());
+
+ValidateControllerAccessMetadata(app.Services);
 
 app.Run();
 
-static string? ResolvePermission(HttpRequest request)
+static void ValidateControllerAccessMetadata(IServiceProvider services)
 {
-    var path = request.Path.Value?.ToLowerInvariant() ?? string.Empty;
-    var method = request.Method;
-
-    if (path.StartsWith("/api/permissions") ||
-        path.StartsWith("/api/loginusers"))
+    var actionProvider = services.GetRequiredService<IActionDescriptorCollectionProvider>();
+    foreach (var action in actionProvider.ActionDescriptors.Items.OfType<ControllerActionDescriptor>())
     {
-        return "Account.Manage";
-    }
+        var publicApi = action.MethodInfo.GetCustomAttribute<PublicApiAttribute>(true) ??
+                        action.ControllerTypeInfo.GetCustomAttribute<PublicApiAttribute>(true);
+        var permission = action.MethodInfo.GetCustomAttribute<RequirePermissionAttribute>(true) ??
+                         action.ControllerTypeInfo.GetCustomAttribute<RequirePermissionAttribute>(true);
+        var actionName = $"{action.ControllerName}.{action.ActionName}";
 
-    if (path.StartsWith("/api/departments"))
-    {
-        return "Organization.Manage";
-    }
-
-    if (path.StartsWith("/api/organizations"))
-    {
-        return "Organization.Manage";
-    }
-
-    if (path.StartsWith("/api/auditlogs"))
-    {
-        return "Audit.View";
-    }
-
-    if (path.StartsWith("/api/users"))
-    {
-        if (path.EndsWith("/activate") ||
-            path.EndsWith("/deactivate") ||
-            path.EndsWith("/leave"))
+        if (publicApi is not null && permission is not null)
         {
-            return "Member.Edit";
+            throw new InvalidOperationException(
+                $"{actionName} 不可同時標示 PublicApi 與 RequirePermission。");
         }
 
-        return method switch
+        if (publicApi is null && permission is null)
         {
-            "GET" => "Member.View",
-            "POST" => "Member.Create",
-            "PUT" => "Member.Edit",
-            "DELETE" => "Member.Delete",
-            _ => "Member.View"
-        };
-    }
-
-    if (path.StartsWith("/api/giftrecords") || path.StartsWith("/api/serviceitems"))
-    {
-        if (path.EndsWith("/cancel"))
-        {
-            return "Gift.Edit";
+            throw new InvalidOperationException(
+                $"{actionName} 未標示 PublicApi 或 RequirePermission。");
         }
 
-        return method switch
+        if (permission is not null && !PermissionCodes.IsValid(permission.PermissionCode))
         {
-            "GET" => "Gift.View",
-            "POST" => "Gift.Create",
-            "PUT" => "Gift.Edit",
-            "DELETE" => "Gift.Delete",
-            _ => "Gift.View"
-        };
-    }
-
-    if (path.StartsWith("/api/orders"))
-    {
-        if (path.EndsWith("/cancel"))
-        {
-            return "Order.Cancel";
+            throw new InvalidOperationException(
+                $"{actionName} 使用無效權限碼：{permission.PermissionCode}。");
         }
-
-        if (path.EndsWith("/status") ||
-            path.EndsWith("/customer-payment-status"))
-        {
-            return "Order.Edit";
-        }
-
-        return method switch
-        {
-            "GET" => "Order.View",
-            "POST" => "Order.Create",
-            "PUT" => "Order.Edit",
-            "DELETE" => "Order.Cancel",
-            _ => "Order.View"
-        };
     }
-
-    if (path.StartsWith("/api/payments"))
-    {
-        return method == "GET" ? "Settlement.View" : "Settlement.Close";
-    }
-
-    if (path.StartsWith("/api/dashboard"))
-    {
-        return "Order.View";
-    }
-
-    return null;
 }

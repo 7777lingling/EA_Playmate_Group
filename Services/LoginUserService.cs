@@ -37,6 +37,15 @@ public sealed class LoginUserService
             return ToGenericResult<LoginUserDto>(validationResult);
         }
 
+        if (request.Password != request.ConfirmPassword)
+        {
+            return ServiceResult<LoginUserDto>.Validation(
+                new Dictionary<string, string[]>
+                {
+                    ["confirmPassword"] = ["初始密碼與確認密碼不一致。"]
+                });
+        }
+
         var loginUser = new LoginUser
         {
             OrganizationId = ResolveOrganizationId(request.OrganizationId),
@@ -69,7 +78,7 @@ public sealed class LoginUserService
         var validationResult = await ValidateAsync(
             request.DisplayName,
             request.LoginAccount,
-            request.Password,
+            password: null,
             request.SystemRole,
             request.OrganizationId,
             request.UserId,
@@ -90,11 +99,6 @@ public sealed class LoginUserService
         loginUser.IsActive = request.IsActive;
         loginUser.UpdatedAt = DateTime.UtcNow;
 
-        if (!string.IsNullOrWhiteSpace(request.Password))
-        {
-            loginUser.PasswordHash = _passwordHasher.Hash(request.Password);
-        }
-
         await _db.SaveChangesAsync();
 
         var dto = LoginUserMapper.ToDto(loginUser);
@@ -102,6 +106,65 @@ public sealed class LoginUserService
         await _db.SaveChangesAsync();
 
         return ServiceResult<LoginUserDto>.Success(dto);
+    }
+
+    public async Task<ServiceResult> ChangeMyPasswordAsync(
+        int loginUserId,
+        ChangeMyPasswordRequestDto request)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+        {
+            errors["currentPassword"] = ["請輸入目前密碼。"];
+        }
+
+        if (string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            errors["newPassword"] = ["請輸入新密碼。"];
+        }
+
+        if (request.NewPassword != request.ConfirmPassword)
+        {
+            errors["confirmPassword"] = ["新密碼與確認密碼不一致。"];
+        }
+
+        if (errors.Count > 0)
+        {
+            return ServiceResult.Validation(errors);
+        }
+
+        var loginUser = await _db.LoginUsers.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.Id == loginUserId && x.IsActive);
+        if (loginUser is null)
+        {
+            return ServiceResult.Missing();
+        }
+
+        if (!_passwordHasher.Verify(request.CurrentPassword, loginUser.PasswordHash))
+        {
+            return ServiceResult.Validation(
+                new Dictionary<string, string[]> { ["currentPassword"] = ["目前密碼不正確。"] });
+        }
+
+        if (_passwordHasher.Verify(request.NewPassword, loginUser.PasswordHash))
+        {
+            return ServiceResult.Validation(
+                new Dictionary<string, string[]> { ["newPassword"] = ["新密碼不可與目前密碼相同。"] });
+        }
+
+        loginUser.PasswordHash = _passwordHasher.Hash(request.NewPassword);
+        loginUser.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            "change_password",
+            "login_users",
+            loginUser.Id,
+            loginUser.Uuid,
+            after: new { changedBySelf = true }));
+        await _db.SaveChangesAsync();
+
+        return ServiceResult.Success();
     }
 
     public async Task<ServiceResult> SetActiveAsync(int id, bool isActive)
@@ -155,7 +218,6 @@ public sealed class LoginUserService
         {
             errors["password"] = ["請輸入登入密碼。"];
         }
-
         if (!DomainValues.IsSystemRole(systemRole))
         {
             errors["systemRole"] = ["系統權限必須是 admin、staff 或 viewer。"];

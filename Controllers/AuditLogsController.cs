@@ -1,3 +1,4 @@
+using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
@@ -8,6 +9,7 @@ namespace EAPlaymateGroup.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[RequirePermission("Audit.View")]
 public sealed class AuditLogsController : ControllerBase
 {
     private readonly EAPlaymateGroupDbContext _db;

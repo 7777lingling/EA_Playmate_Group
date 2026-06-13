@@ -9,6 +9,7 @@ namespace EAPlaymateGroup.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[RequirePermission("Organization.Manage")]
 public sealed class DepartmentsController : ControllerBase
 {
     private readonly EAPlaymateGroupDbContext _db;

@@ -7,6 +7,7 @@ namespace EAPlaymateGroup.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[RequirePermission("Account.Manage")]
 public sealed class PermissionsController : ControllerBase
 {
     private readonly PermissionService _permissionService;

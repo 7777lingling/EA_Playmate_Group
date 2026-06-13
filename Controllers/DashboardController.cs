@@ -1,3 +1,4 @@
+using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using Microsoft.AspNetCore.Mvc;
@@ -7,6 +8,7 @@ namespace EAPlaymateGroup.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[RequirePermission("Order.View")]
 public sealed class DashboardController : ControllerBase
 {
     private readonly EAPlaymateGroupDbContext _db;

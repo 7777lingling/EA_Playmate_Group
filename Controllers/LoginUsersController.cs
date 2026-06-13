@@ -9,6 +9,7 @@ namespace EAPlaymateGroup.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[RequirePermission("Account.Manage")]
 public sealed class LoginUsersController : ControllerBase
 {
     private readonly EAPlaymateGroupDbContext _db;

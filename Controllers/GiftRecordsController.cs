@@ -21,6 +21,7 @@ public sealed class GiftRecordsController : ControllerBase
     }
 
     [HttpGet]
+    [RequirePermission("Gift.View")]
     public async Task<ActionResult<List<GiftRecordDto>>> GetGiftRecords(
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
@@ -56,6 +57,7 @@ public sealed class GiftRecordsController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [RequirePermission("Gift.View")]
     public async Task<ActionResult<GiftRecordDto>> GetGiftRecord(int id)
     {
         var record = await _db.GiftRecords.AsNoTracking()
@@ -68,6 +70,7 @@ public sealed class GiftRecordsController : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission("Gift.Create")]
     public async Task<ActionResult<GiftRecordDto>> CreateGiftRecord(CreateGiftRecordRequestDto request)
     {
         var result = await _giftRecordService.CreateAsync(request);
@@ -80,6 +83,7 @@ public sealed class GiftRecordsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [RequirePermission("Gift.Edit")]
     public async Task<IActionResult> UpdateGiftRecord(int id, UpdateGiftRecordRequestDto request)
     {
         var result = await _giftRecordService.UpdateAsync(id, request);
@@ -87,6 +91,7 @@ public sealed class GiftRecordsController : ControllerBase
     }
 
     [HttpPost("{id:int}/cancel")]
+    [RequirePermission("Gift.Edit")]
     public async Task<IActionResult> CancelGiftRecord(int id)
     {
         var result = await _giftRecordService.CancelAsync(id);
@@ -94,6 +99,7 @@ public sealed class GiftRecordsController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [RequirePermission("Gift.Delete")]
     public async Task<IActionResult> DeleteGiftRecord(int id)
     {
         var result = await _giftRecordService.DeleteAsync(id);

@@ -21,6 +21,7 @@ public sealed class PaymentsController : ControllerBase
     }
 
     [HttpGet]
+    [RequirePermission("Settlement.View")]
     public async Task<ActionResult<List<PaymentDto>>> GetPayments(
         [FromQuery] string? payMonth,
         [FromQuery] string? status)
@@ -49,6 +50,7 @@ public sealed class PaymentsController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [RequirePermission("Settlement.View")]
     public async Task<ActionResult<PaymentDto>> GetPayment(int id)
     {
         var payment = await _db.Payments.AsNoTracking()
@@ -59,6 +61,7 @@ public sealed class PaymentsController : ControllerBase
     }
 
     [HttpPost("generate-monthly")]
+    [RequirePermission("Settlement.Close")]
     public async Task<ActionResult<List<PaymentDto>>> GenerateMonthlyPayments(GenerateMonthlyPaymentsRequestDto request)
     {
         var result = await _paymentService.GenerateMonthlyPaymentsAsync(request);
@@ -71,6 +74,7 @@ public sealed class PaymentsController : ControllerBase
     }
 
     [HttpPost("{id:int}/mark-paid")]
+    [RequirePermission("Settlement.Close")]
     public async Task<IActionResult> MarkPaid(int id, MarkPaymentPaidRequestDto request)
     {
         var result = await _paymentService.MarkPaidAsync(id, request);

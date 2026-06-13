@@ -1,3 +1,4 @@
+using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Services;
@@ -8,6 +9,7 @@ namespace EAPlaymateGroup.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[RequirePermission("Gift.View")]
 public sealed class ServiceItemsController : ControllerBase
 {
     private readonly EAPlaymateGroupDbContext _db;
