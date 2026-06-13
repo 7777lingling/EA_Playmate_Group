@@ -1,8 +1,9 @@
 namespace EAPlaymateGroup.Models.Entities;
 
-public sealed class GiftRecord
+public sealed class GiftRecord : IOrganizationScoped
 {
     public int Id { get; set; }
+    public int OrganizationId { get; set; }
     public Guid Uuid { get; set; } = Guid.NewGuid();
 
     public DateOnly GiftDate { get; set; }

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EA Playmate Group</title>
-  <link rel="stylesheet" href="/styles.css?v=20260613-audit-actor">
+  <link rel="stylesheet" href="/styles.css?v=20260613-permissions">
 </head>
 <body>
   <section class="login-view" id="loginView" hidden>
@@ -36,7 +36,7 @@
     <nav class="nav-tabs" aria-label="主選單">
       <button class="active" data-view="dashboard" data-short="總">總覽</button>
       <button data-view="users" data-short="員">成員</button>
-      <button data-view="loginUsers" data-short="登">登入者</button>
+      <button data-view="loginUsers" data-short="帳">帳號管理</button>
       <button data-view="organization" data-short="組">組織</button>
       <button data-view="services" data-short="服">服務</button>
       <button data-view="giftRecords" data-short="禮">送禮紀錄</button>
@@ -44,6 +44,7 @@
       <button data-view="orders" data-short="訂">訂單</button>
       <button data-view="payments" data-short="月">月結</button>
       <button data-view="audit" data-short="錄">紀錄</button>
+      <button data-view="permissions" data-short="權">權限管理</button>
     </nav>
   </aside>
 
@@ -134,9 +135,9 @@
           <label>銀行帳號<input name="bankAccount" maxlength="200"></label>
           <label>系統權限
             <select name="systemRole">
-              <option value="staff">工作人員</option>
-              <option value="admin">管理員</option>
-              <option value="viewer">檢視者</option>
+              <option value="staff">組織管理員</option>
+              <option value="admin">系統管理員</option>
+              <option value="viewer">一般會員</option>
             </select>
           </label>
           <div class="check-grid">
@@ -200,11 +201,19 @@
           <label>顯示名稱<input name="nickname" required maxlength="50"></label>
           <label>登入帳號<input name="loginAccount" required maxlength="50" autocomplete="off"></label>
           <label>登入密碼<input name="password" type="password" required autocomplete="new-password"></label>
+          <label id="loginUserOrganizationField">所屬組織
+            <select name="organizationId" id="loginUserOrganizationSelect"></select>
+          </label>
+          <label>綁定成員
+            <select name="userId" id="loginUserMemberSelect">
+              <option value="">不綁定</option>
+            </select>
+          </label>
           <label>系統權限
             <select name="systemRole">
-              <option value="admin">管理員</option>
-              <option value="staff">工作人員</option>
-              <option value="viewer">檢視者</option>
+              <option value="admin">系統管理員</option>
+              <option value="staff">組織管理員</option>
+              <option value="viewer">一般會員</option>
             </select>
           </label>
           <button class="primary" type="submit">新增登入者</button>
@@ -596,12 +605,62 @@
                 <tr>
                   <th>時間</th>
                   <th>操作者</th>
+                  <th>IP</th>
                   <th>動作</th>
                   <th>目標</th>
                   <th>備註</th>
               </tr>
             </thead>
             <tbody id="auditRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="permissionsView">
+      <div class="grid form-list permission-management">
+        <form class="panel form" id="organizationManagementForm">
+          <h2 id="organizationManagementTitle">新增組織</h2>
+          <input type="hidden" name="organizationId">
+          <label>組織名稱<input name="name" required maxlength="100" placeholder="例如：Playmate Taipei"></label>
+          <label class="inline-check"><input name="isActive" type="checkbox" checked> 啟用</label>
+          <div class="form-actions">
+            <button class="primary" type="submit">儲存組織</button>
+            <button class="ghost" id="cancelOrganizationManagementBtn" type="button" hidden>取消編輯</button>
+          </div>
+        </form>
+        <section class="panel">
+          <div class="panel-head"><h2>組織清單</h2></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>名稱</th><th>狀態</th><th></th></tr></thead>
+              <tbody id="organizationManagementRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+      <section class="panel permission-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Role Based Access Control</p>
+            <h2>角色權限矩陣</h2>
+          </div>
+          <button class="primary" id="savePermissionsBtn" type="button">儲存權限</button>
+        </div>
+        <p class="muted permission-note">
+          系統管理員固定擁有全部權限。月結檢視與關帳分開設定；組織管理員預設不能關帳。
+        </p>
+        <div class="table-wrap">
+          <table class="permission-table">
+            <thead>
+              <tr>
+                <th>模組 / 動作</th>
+                <th>系統管理員</th>
+                <th>組織管理員</th>
+                <th>一般會員</th>
+              </tr>
+            </thead>
+            <tbody id="permissionRows"></tbody>
           </table>
         </div>
       </section>
@@ -632,6 +691,6 @@
     </div>
   </aside>
 
-  <script src="/app.js?v=20260613-order-member"></script>
+  <script src="/app.js?v=20260613-permissions"></script>
 </body>
 </html>

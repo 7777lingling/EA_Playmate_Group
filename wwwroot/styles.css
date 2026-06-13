@@ -31,8 +31,42 @@
   --glass-strong: rgb(255 255 255 / 72%);
 }
 
+.permission-panel .panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.permission-note {
+  margin-bottom: 18px;
+}
+
+.permission-table td:not(:first-child),
+.permission-table th:not(:first-child) {
+  width: 150px;
+  text-align: center;
+}
+
+.permission-table input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+}
+
+.permission-code {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+
 * {
   box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 body {

@@ -1,18 +1,91 @@
-# Local configuration with secrets
-appsettings.Development.json
-appsettings.Production.json
+# Local configuration and secrets
+appsettings.*.json
+!appsettings.example.json
+.env
+.env.*
+!.env.example
+secrets.json
+*.pfx
+*.p12
+*.pem
+*.key
+
+# ASP.NET Core runtime data
+DataProtectionKeys/
+logs/
+*.log
+
+# .NET build and publish output
+[Bb]in/
+[Oo]bj/
+[Aa]rtifacts/
+[Pp]ublish/
+TestResults/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+*.trx
+
+# Local temporary output
+.tmp/
+.temp/
+.verify*/
+tmp/
+temp/
+*.tmp
+*.bak
+*.cache
+
+# Installer output
+installer/Output/
+*.exe.config
+
+# Visual Studio and MSBuild user state
+.vs/
 *.user
 *.suo
+*.userosscache
+*.sln.docstates
+*.csproj.user
+*.pubxml.user
 
-# Build output
-bin/
-obj/
-artifacts/
+# Rider / JetBrains
+.idea/
+*.sln.iml
 
-# IDE/editor
-.vs/
+# VS Code local settings
 .vscode/
 
+# ReSharper
+_ReSharper*/
+*.DotSettings.user
+
+# NuGet local packages and generated files
+packages/
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts.json
+
+# Database and local storage files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.mdf
+*.ldf
+
 # OS files
+.DS_Store
 Thumbs.db
+ehthumbs.db
 Desktop.ini
+$RECYCLE.BIN/
+
+# Tool and editor swap files
+*.swp
+*.swo
+*~

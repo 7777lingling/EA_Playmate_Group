@@ -4,8 +4,75 @@ namespace EAPlaymateGroup.Data;
 
 public static class DatabaseSchemaInitializer
 {
+    public static async Task ValidateOrganizationFiltersAsync(EAPlaymateGroupDbContext db)
+    {
+        await db.LoginUsers.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.Users.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.Orders.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.OrderMembers.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.Payments.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.AuditLogs.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.ServiceItems.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.GiftRecords.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.Departments.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.DepartmentMembers.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+    }
+
     public static async Task EnsureAuthColumnsAsync(EAPlaymateGroupDbContext db)
     {
+        await db.Database.ExecuteSqlRawAsync("""
+IF OBJECT_ID(N'dbo.role_permissions', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.role_permissions
+    (
+        id INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_role_permissions PRIMARY KEY,
+        system_role NVARCHAR(20) NOT NULL,
+        permission_code NVARCHAR(80) NOT NULL,
+        is_allowed BIT NOT NULL CONSTRAINT DF_role_permissions_is_allowed DEFAULT 0,
+        updated_at DATETIME2 NOT NULL CONSTRAINT DF_role_permissions_updated_at DEFAULT SYSUTCDATETIME()
+    );
+
+    CREATE UNIQUE INDEX UQ_role_permissions_role_code
+    ON dbo.role_permissions(system_role, permission_code);
+END;
+
+WITH defaults AS
+(
+    SELECT *
+    FROM (VALUES
+        (N'staff', N'Member.View', 1),
+        (N'staff', N'Member.Create', 1),
+        (N'staff', N'Member.Edit', 1),
+        (N'staff', N'Member.Delete', 1),
+        (N'staff', N'Gift.View', 1),
+        (N'staff', N'Gift.Create', 1),
+        (N'staff', N'Gift.Edit', 1),
+        (N'staff', N'Gift.Delete', 1),
+        (N'staff', N'Order.View', 1),
+        (N'staff', N'Order.Create', 1),
+        (N'staff', N'Order.Edit', 1),
+        (N'staff', N'Order.Cancel', 1),
+        (N'staff', N'Settlement.View', 1),
+        (N'staff', N'Account.Manage', 1),
+        (N'staff', N'Organization.Manage', 1),
+        (N'staff', N'Audit.View', 1),
+        (N'viewer', N'Member.View', 1),
+        (N'viewer', N'Gift.View', 1),
+        (N'viewer', N'Order.View', 1)
+    ) AS value(system_role, permission_code, is_allowed)
+)
+INSERT INTO dbo.role_permissions(system_role, permission_code, is_allowed, updated_at)
+SELECT d.system_role, d.permission_code, d.is_allowed, SYSUTCDATETIME()
+FROM defaults d
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.role_permissions existing
+    WHERE existing.system_role = d.system_role
+      AND existing.permission_code = d.permission_code
+);
+""");
+
         await db.Database.ExecuteSqlRawAsync("""
 IF OBJECT_ID(N'dbo.login_users', N'U') IS NULL
 BEGIN
@@ -58,6 +125,11 @@ END;
 IF COL_LENGTH('dbo.audit_logs', 'login_user_id') IS NULL
 BEGIN
     ALTER TABLE dbo.audit_logs ADD login_user_id INT NULL;
+END;
+
+IF COL_LENGTH('dbo.audit_logs', 'ip_address') IS NULL
+BEGIN
+    ALTER TABLE dbo.audit_logs ADD ip_address NVARCHAR(64) NULL;
 END;
 
 IF NOT EXISTS (
@@ -409,6 +481,215 @@ WHERE NOT EXISTS
     FROM dbo.departments existing
     WHERE existing.name = s.name
 );
+""");
+
+        await db.Database.ExecuteSqlRawAsync("""
+IF OBJECT_ID(N'dbo.organizations', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.organizations
+    (
+        id INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_organizations PRIMARY KEY,
+        name NVARCHAR(100) NOT NULL,
+        is_active BIT NOT NULL CONSTRAINT DF_organizations_is_active DEFAULT 1,
+        created_at DATETIME2 NOT NULL CONSTRAINT DF_organizations_created_at DEFAULT SYSUTCDATETIME()
+    );
+    CREATE UNIQUE INDEX UQ_organizations_name ON dbo.organizations(name);
+END;
+
+IF NOT EXISTS (SELECT 1 FROM dbo.organizations)
+BEGIN
+    INSERT INTO dbo.organizations(name, is_active, created_at)
+    VALUES (N'Playmate Taipei', 1, SYSUTCDATETIME());
+END;
+
+DECLARE @default_organization_id INT = (SELECT TOP (1) id FROM dbo.organizations ORDER BY id);
+
+IF COL_LENGTH('dbo.login_users', 'organization_id') IS NULL
+    ALTER TABLE dbo.login_users ADD organization_id INT NULL;
+IF COL_LENGTH('dbo.login_users', 'user_id') IS NULL
+    ALTER TABLE dbo.login_users ADD user_id INT NULL;
+IF COL_LENGTH('dbo.users', 'organization_id') IS NULL
+    ALTER TABLE dbo.users ADD organization_id INT NULL;
+IF COL_LENGTH('dbo.orders', 'organization_id') IS NULL
+    ALTER TABLE dbo.orders ADD organization_id INT NULL;
+IF COL_LENGTH('dbo.order_members', 'organization_id') IS NULL
+    ALTER TABLE dbo.order_members ADD organization_id INT NULL;
+IF COL_LENGTH('dbo.payments', 'organization_id') IS NULL
+    ALTER TABLE dbo.payments ADD organization_id INT NULL;
+IF COL_LENGTH('dbo.audit_logs', 'organization_id') IS NULL
+    ALTER TABLE dbo.audit_logs ADD organization_id INT NULL;
+IF COL_LENGTH('dbo.service_items', 'organization_id') IS NULL
+    ALTER TABLE dbo.service_items ADD organization_id INT NULL;
+IF COL_LENGTH('dbo.gift_records', 'organization_id') IS NULL
+    ALTER TABLE dbo.gift_records ADD organization_id INT NULL;
+IF COL_LENGTH('dbo.departments', 'organization_id') IS NULL
+    ALTER TABLE dbo.departments ADD organization_id INT NULL;
+IF COL_LENGTH('dbo.department_members', 'organization_id') IS NULL
+    ALTER TABLE dbo.department_members ADD organization_id INT NULL;
+""");
+
+        await db.Database.ExecuteSqlRawAsync("""
+DECLARE @default_organization_id INT = (SELECT TOP (1) id FROM dbo.organizations ORDER BY id);
+UPDATE dbo.login_users SET organization_id = @default_organization_id WHERE organization_id IS NULL;
+UPDATE lu
+SET user_id = u.id
+FROM dbo.login_users lu
+INNER JOIN dbo.users u ON u.login_account = lu.login_account
+WHERE lu.user_id IS NULL;
+UPDATE dbo.users SET organization_id = @default_organization_id WHERE organization_id IS NULL;
+UPDATE dbo.orders SET organization_id = @default_organization_id WHERE organization_id IS NULL;
+UPDATE om
+SET organization_id = o.organization_id
+FROM dbo.order_members om
+INNER JOIN dbo.orders o ON o.id = om.order_id
+WHERE om.organization_id IS NULL;
+UPDATE dbo.payments SET organization_id = @default_organization_id WHERE organization_id IS NULL;
+UPDATE dbo.audit_logs SET organization_id = @default_organization_id WHERE organization_id IS NULL;
+UPDATE dbo.service_items SET organization_id = @default_organization_id WHERE organization_id IS NULL;
+UPDATE dbo.gift_records SET organization_id = @default_organization_id WHERE organization_id IS NULL;
+UPDATE dbo.departments SET organization_id = @default_organization_id WHERE organization_id IS NULL;
+UPDATE dm
+SET organization_id = d.organization_id
+FROM dbo.department_members dm
+INNER JOIN dbo.departments d ON d.id = dm.department_id
+WHERE dm.organization_id IS NULL;
+
+ALTER TABLE dbo.login_users ALTER COLUMN organization_id INT NOT NULL;
+ALTER TABLE dbo.users ALTER COLUMN organization_id INT NOT NULL;
+ALTER TABLE dbo.orders ALTER COLUMN organization_id INT NOT NULL;
+ALTER TABLE dbo.order_members ALTER COLUMN organization_id INT NOT NULL;
+ALTER TABLE dbo.payments ALTER COLUMN organization_id INT NOT NULL;
+ALTER TABLE dbo.audit_logs ALTER COLUMN organization_id INT NOT NULL;
+ALTER TABLE dbo.service_items ALTER COLUMN organization_id INT NOT NULL;
+ALTER TABLE dbo.gift_records ALTER COLUMN organization_id INT NOT NULL;
+ALTER TABLE dbo.departments ALTER COLUMN organization_id INT NOT NULL;
+ALTER TABLE dbo.department_members ALTER COLUMN organization_id INT NOT NULL;
+""");
+
+        await db.Database.ExecuteSqlRawAsync("""
+IF EXISTS
+(
+    SELECT 1
+    FROM sys.tables t
+    INNER JOIN sys.columns c ON c.object_id = t.object_id
+    WHERE t.name IN
+    (
+        N'login_users', N'users', N'orders', N'order_members', N'payments',
+        N'audit_logs', N'service_items', N'gift_records', N'departments',
+        N'department_members'
+    )
+      AND c.name = N'organization_id'
+      AND c.is_nullable = 1
+)
+    THROW 51000, 'Organization schema validation failed: organization_id must be NOT NULL.', 1;
+
+IF EXISTS
+(
+    SELECT 1 FROM dbo.login_users WHERE organization_id <= 0
+    UNION ALL SELECT 1 FROM dbo.users WHERE organization_id <= 0
+    UNION ALL SELECT 1 FROM dbo.orders WHERE organization_id <= 0
+    UNION ALL SELECT 1 FROM dbo.order_members WHERE organization_id <= 0
+    UNION ALL SELECT 1 FROM dbo.payments WHERE organization_id <= 0
+    UNION ALL SELECT 1 FROM dbo.audit_logs WHERE organization_id <= 0
+    UNION ALL SELECT 1 FROM dbo.service_items WHERE organization_id <= 0
+    UNION ALL SELECT 1 FROM dbo.gift_records WHERE organization_id <= 0
+    UNION ALL SELECT 1 FROM dbo.departments WHERE organization_id <= 0
+    UNION ALL SELECT 1 FROM dbo.department_members WHERE organization_id <= 0
+)
+    THROW 51001, 'Organization data validation failed: organization_id is missing or invalid.', 1;
+
+IF EXISTS
+(
+    SELECT 1 FROM dbo.login_users x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
+    UNION ALL SELECT 1 FROM dbo.users x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
+    UNION ALL SELECT 1 FROM dbo.orders x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
+    UNION ALL SELECT 1 FROM dbo.order_members x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
+    UNION ALL SELECT 1 FROM dbo.payments x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
+    UNION ALL SELECT 1 FROM dbo.audit_logs x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
+    UNION ALL SELECT 1 FROM dbo.service_items x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
+    UNION ALL SELECT 1 FROM dbo.gift_records x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
+    UNION ALL SELECT 1 FROM dbo.departments x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
+    UNION ALL SELECT 1 FROM dbo.department_members x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
+)
+    THROW 51007, 'Organization data validation failed: organization_id references a missing organization.', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.login_users lu
+    INNER JOIN dbo.users u ON u.id = lu.user_id
+    WHERE lu.organization_id <> u.organization_id
+)
+    THROW 51002, 'Organization data validation failed: login user and member organizations differ.', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.order_members om
+    INNER JOIN dbo.orders o ON o.id = om.order_id
+    INNER JOIN dbo.users u ON u.id = om.user_id
+    WHERE om.organization_id <> o.organization_id
+       OR om.organization_id <> u.organization_id
+)
+    THROW 51003, 'Organization data validation failed: order member organization mismatch.', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.department_members dm
+    INNER JOIN dbo.departments d ON d.id = dm.department_id
+    INNER JOIN dbo.users u ON u.id = dm.user_id
+    WHERE dm.organization_id <> d.organization_id
+       OR dm.organization_id <> u.organization_id
+)
+    THROW 51004, 'Organization data validation failed: department member organization mismatch.', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.payments p
+    INNER JOIN dbo.users u ON u.id = p.user_id
+    WHERE p.organization_id <> u.organization_id
+)
+    THROW 51005, 'Organization data validation failed: payment and member organizations differ.', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.gift_records g
+    INNER JOIN dbo.users boss ON boss.id = g.boss_user_id
+    INNER JOIN dbo.users recipient ON recipient.id = g.recipient_user_id
+    WHERE g.organization_id <> boss.organization_id
+       OR g.organization_id <> recipient.organization_id
+)
+    THROW 51006, 'Organization data validation failed: gift record organization mismatch.', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.orders o
+    INNER JOIN dbo.users owner_user ON owner_user.id = o.owner_user_id
+    WHERE o.organization_id <> owner_user.organization_id
+)
+    THROW 51008, 'Organization data validation failed: order owner organization mismatch.', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.gift_records g
+    INNER JOIN dbo.service_items s ON s.id = g.service_item_id
+    WHERE g.organization_id <> s.organization_id
+)
+    THROW 51009, 'Organization data validation failed: gift item organization mismatch.', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.audit_logs a
+    INNER JOIN dbo.login_users lu ON lu.id = a.login_user_id
+    WHERE a.organization_id <> lu.organization_id
+)
+    THROW 51010, 'Organization data validation failed: audit actor organization mismatch.', 1;
 """);
     }
 }

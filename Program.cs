@@ -8,7 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
-builder.WebHost.UseUrls("http://localhost:5177");
+builder.WebHost.UseUrls(builder.Configuration["urls"] ?? "http://localhost:5177");
 
 var dataProtectionKeysPath = Path.Combine(builder.Environment.ContentRootPath, "DataProtectionKeys");
 Directory.CreateDirectory(dataProtectionKeysPath);
@@ -43,6 +43,7 @@ builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<GiftRecordService>();
 builder.Services.AddScoped<DepartmentService>();
+builder.Services.AddScoped<PermissionService>();
 
 builder.Services.AddCors(options =>
 {
@@ -58,6 +59,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<EAPlaymateGroupDbContext>();
     await DatabaseSchemaInitializer.EnsureAuthColumnsAsync(db);
+    await DatabaseSchemaInitializer.ValidateOrganizationFiltersAsync(db);
 }
 
 app.UseCors("DefaultCors");
@@ -85,6 +87,44 @@ app.Use(async (context, next) =>
     await context.Response.WriteAsJsonAsync(new { message = "請先登入。" });
 });
 
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Path.StartsWithSegments("/api") ||
+        context.Request.Path.StartsWithSegments("/api/health") ||
+        context.Request.Path.StartsWithSegments("/api/auth"))
+    {
+        await next();
+        return;
+    }
+
+    var loginUserId = context.Session.GetInt32(AuthService.SessionUserId);
+    if (!loginUserId.HasValue)
+    {
+        await next();
+        return;
+    }
+
+    var permissionCode = ResolvePermission(context.Request);
+    if (permissionCode is null)
+    {
+        await next();
+        return;
+    }
+
+    var permissionService = context.RequestServices.GetRequiredService<PermissionService>();
+    if (await permissionService.HasPermissionAsync(loginUserId.Value, permissionCode))
+    {
+        await next();
+        return;
+    }
+
+    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+    await context.Response.WriteAsJsonAsync(new
+    {
+        message = $"權限不足，需要 {permissionCode}。"
+    });
+});
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
@@ -97,3 +137,101 @@ app.MapGet("/api/health", () => Results.Ok(new
 }));
 
 app.Run();
+
+static string? ResolvePermission(HttpRequest request)
+{
+    var path = request.Path.Value?.ToLowerInvariant() ?? string.Empty;
+    var method = request.Method;
+
+    if (path.StartsWith("/api/permissions") ||
+        path.StartsWith("/api/loginusers"))
+    {
+        return "Account.Manage";
+    }
+
+    if (path.StartsWith("/api/departments"))
+    {
+        return "Organization.Manage";
+    }
+
+    if (path.StartsWith("/api/organizations"))
+    {
+        return "Organization.Manage";
+    }
+
+    if (path.StartsWith("/api/auditlogs"))
+    {
+        return "Audit.View";
+    }
+
+    if (path.StartsWith("/api/users"))
+    {
+        if (path.EndsWith("/activate") ||
+            path.EndsWith("/deactivate") ||
+            path.EndsWith("/leave"))
+        {
+            return "Member.Edit";
+        }
+
+        return method switch
+        {
+            "GET" => "Member.View",
+            "POST" => "Member.Create",
+            "PUT" => "Member.Edit",
+            "DELETE" => "Member.Delete",
+            _ => "Member.View"
+        };
+    }
+
+    if (path.StartsWith("/api/giftrecords") || path.StartsWith("/api/serviceitems"))
+    {
+        if (path.EndsWith("/cancel"))
+        {
+            return "Gift.Edit";
+        }
+
+        return method switch
+        {
+            "GET" => "Gift.View",
+            "POST" => "Gift.Create",
+            "PUT" => "Gift.Edit",
+            "DELETE" => "Gift.Delete",
+            _ => "Gift.View"
+        };
+    }
+
+    if (path.StartsWith("/api/orders"))
+    {
+        if (path.EndsWith("/cancel"))
+        {
+            return "Order.Cancel";
+        }
+
+        if (path.EndsWith("/status") ||
+            path.EndsWith("/customer-payment-status"))
+        {
+            return "Order.Edit";
+        }
+
+        return method switch
+        {
+            "GET" => "Order.View",
+            "POST" => "Order.Create",
+            "PUT" => "Order.Edit",
+            "DELETE" => "Order.Cancel",
+            _ => "Order.View"
+        };
+    }
+
+    if (path.StartsWith("/api/payments"))
+    {
+        return method == "GET" ? "Settlement.View" : "Settlement.Close";
+    }
+
+    if (path.StartsWith("/api/dashboard"))
+    {
+        return "Order.View";
+    }
+
+    return null;
+}

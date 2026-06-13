@@ -1,8 +1,9 @@
 namespace EAPlaymateGroup.Models.Entities;
 
-public sealed class AuditLog
+public sealed class AuditLog : IOrganizationScoped
 {
     public long Id { get; set; }
+    public int OrganizationId { get; set; }
 
     public int? UserId { get; set; }
     public User? User { get; set; }
@@ -17,6 +18,7 @@ public sealed class AuditLog
 
     public string? BeforeJson { get; set; }
     public string? AfterJson { get; set; }
+    public string? IpAddress { get; set; }
 
     public DateTime CreatedAt { get; set; }
 }

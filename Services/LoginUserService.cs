@@ -10,11 +10,16 @@ public sealed class LoginUserService
 {
     private readonly EAPlaymateGroupDbContext _db;
     private readonly PasswordHasher _passwordHasher;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public LoginUserService(EAPlaymateGroupDbContext db, PasswordHasher passwordHasher)
+    public LoginUserService(
+        EAPlaymateGroupDbContext db,
+        PasswordHasher passwordHasher,
+        IHttpContextAccessor httpContextAccessor)
     {
         _db = db;
         _passwordHasher = passwordHasher;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<ServiceResult<LoginUserDto>> CreateAsync(CreateLoginUserRequestDto request)
@@ -24,6 +29,8 @@ public sealed class LoginUserService
             request.LoginAccount,
             request.Password,
             request.SystemRole,
+            request.OrganizationId,
+            request.UserId,
             requirePassword: true);
         if (!validationResult.Succeeded)
         {
@@ -32,6 +39,8 @@ public sealed class LoginUserService
 
         var loginUser = new LoginUser
         {
+            OrganizationId = ResolveOrganizationId(request.OrganizationId),
+            UserId = request.UserId,
             DisplayName = request.DisplayName.Trim(),
             LoginAccount = request.LoginAccount.Trim(),
             PasswordHash = _passwordHasher.Hash(request.Password),
@@ -62,6 +71,8 @@ public sealed class LoginUserService
             request.LoginAccount,
             request.Password,
             request.SystemRole,
+            request.OrganizationId,
+            request.UserId,
             requirePassword: false,
             excludeLoginUserId: id);
         if (!validationResult.Succeeded)
@@ -72,6 +83,8 @@ public sealed class LoginUserService
         var before = LoginUserMapper.ToDto(loginUser);
 
         loginUser.DisplayName = request.DisplayName.Trim();
+        loginUser.OrganizationId = ResolveOrganizationId(request.OrganizationId);
+        loginUser.UserId = request.UserId;
         loginUser.LoginAccount = request.LoginAccount.Trim();
         loginUser.SystemRole = request.SystemRole;
         loginUser.IsActive = request.IsActive;
@@ -121,6 +134,8 @@ public sealed class LoginUserService
         string loginAccount,
         string? password,
         string systemRole,
+        int? organizationId,
+        int? userId,
         bool requirePassword,
         int? excludeLoginUserId = null)
     {
@@ -146,12 +161,32 @@ public sealed class LoginUserService
             errors["systemRole"] = ["系統權限必須是 admin、staff 或 viewer。"];
         }
 
+        var resolvedOrganizationId = ResolveOrganizationId(organizationId);
+        if (resolvedOrganizationId <= 0 ||
+            !await _db.Organizations.AnyAsync(x => x.Id == resolvedOrganizationId && x.IsActive))
+        {
+            errors["organizationId"] = ["請選擇有效的組織。"];
+        }
+
+        if (systemRole == "viewer" && !userId.HasValue)
+        {
+            errors["userId"] = ["一般會員必須綁定成員資料。"];
+        }
+        else if (userId.HasValue && !await _db.Users.AnyAsync(x =>
+                     x.Id == userId.Value &&
+                     x.OrganizationId == resolvedOrganizationId &&
+                     x.IsActive))
+        {
+            errors["userId"] = ["綁定的成員不屬於此組織或已停用。"];
+        }
+
         if (!string.IsNullOrWhiteSpace(loginAccount))
         {
             var normalizedLoginAccount = loginAccount.Trim();
+            var excludedLoginUserId = excludeLoginUserId ?? 0;
             var exists = await _db.LoginUsers.AnyAsync(x =>
                 x.LoginAccount == normalizedLoginAccount &&
-                (!excludeLoginUserId.HasValue || x.Id != excludeLoginUserId.Value));
+                (!excludeLoginUserId.HasValue || x.Id != excludedLoginUserId));
             if (exists)
             {
                 errors["loginAccount"] = ["此登入帳號已存在，請換一個。"];
@@ -159,6 +194,17 @@ public sealed class LoginUserService
         }
 
         return errors.Count > 0 ? ServiceResult.Validation(errors) : ServiceResult.Success();
+    }
+
+    private int ResolveOrganizationId(int? requestedOrganizationId)
+    {
+        var role = _httpContextAccessor.HttpContext?.Session.GetString(AuthService.SessionSystemRole);
+        if (role == "admin" && requestedOrganizationId.HasValue)
+        {
+            return requestedOrganizationId.Value;
+        }
+
+        return _httpContextAccessor.HttpContext?.Session.GetInt32(AuthService.SessionOrganizationId) ?? 0;
     }
 
     private static ServiceResult<T> ToGenericResult<T>(ServiceResult result)

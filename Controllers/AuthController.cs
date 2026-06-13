@@ -36,6 +36,12 @@ public sealed class AuthController : ControllerBase
         }
 
         HttpContext.Session.SetInt32(AuthService.SessionUserId, user.Id);
+        HttpContext.Session.SetInt32(AuthService.SessionOrganizationId, user.OrganizationId);
+        HttpContext.Session.SetString(AuthService.SessionSystemRole, user.SystemRole);
+        if (user.UserId.HasValue)
+        {
+            HttpContext.Session.SetInt32(AuthService.SessionMemberUserId, user.UserId.Value);
+        }
 
         return Ok(new AuthMeDto
         {

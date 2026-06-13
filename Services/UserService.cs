@@ -201,9 +201,10 @@ public sealed class UserService
         if (!string.IsNullOrWhiteSpace(nickname))
         {
             var normalizedNickname = nickname.Trim();
+            var excludedUserId = excludeUserId ?? 0;
             var nicknameExists = await _db.Users.AnyAsync(x =>
                 x.Nickname == normalizedNickname &&
-                (!excludeUserId.HasValue || x.Id != excludeUserId.Value));
+                (!excludeUserId.HasValue || x.Id != excludedUserId));
             if (nicknameExists)
             {
                 errors["nickname"] = ["此暱稱已存在，請換一個。"];
@@ -213,9 +214,10 @@ public sealed class UserService
         if (!string.IsNullOrWhiteSpace(discordId))
         {
             var normalizedDiscordId = discordId.Trim();
+            var excludedUserId = excludeUserId ?? 0;
             var discordIdExists = await _db.Users.AnyAsync(x =>
                 x.DiscordId == normalizedDiscordId &&
-                (!excludeUserId.HasValue || x.Id != excludeUserId.Value));
+                (!excludeUserId.HasValue || x.Id != excludedUserId));
             if (discordIdExists)
             {
                 errors["discordId"] = ["此 Discord ID 已存在，請換一個。"];

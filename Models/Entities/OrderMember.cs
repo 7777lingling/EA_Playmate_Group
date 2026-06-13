@@ -1,8 +1,9 @@
 namespace EAPlaymateGroup.Models.Entities;
 
-public sealed class OrderMember
+public sealed class OrderMember : IOrganizationScoped
 {
     public int Id { get; set; }
+    public int OrganizationId { get; set; }
 
     public int OrderId { get; set; }
     public Order Order { get; set; } = null!;

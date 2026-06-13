@@ -10,6 +10,8 @@ public static class LoginUserMapper
         return new LoginUserDto
         {
             Id = user.Id,
+            OrganizationId = user.OrganizationId,
+            UserId = user.UserId,
             Uuid = user.Uuid,
             DisplayName = user.DisplayName,
             LoginAccount = user.LoginAccount,

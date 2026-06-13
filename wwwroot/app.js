@@ -9,6 +9,8 @@ const state = {
   orders: [],
   payments: [],
   auditLogs: [],
+  permissionMatrix: null,
+  organizations: [],
   activeDepartmentId: null,
   view: "dashboard",
   serviceCategory: "boost",
@@ -18,13 +20,14 @@ const state = {
 const titles = {
   dashboard: ["Dashboard", "總覽"],
   users: ["Users", "成員"],
-  loginUsers: ["Login Users", "登入者"],
+  loginUsers: ["Accounts", "帳號管理"],
   organization: ["Organization", "組織"],
   orders: ["Orders", "訂單"],
   giftRecords: ["Gift Records", "送禮紀錄"],
   giftCatalog: ["Gift Catalog", "禮物清單"],
   payments: ["Payments", "月結"],
-  audit: ["Audit", "紀錄"]
+  audit: ["Audit", "紀錄"],
+  permissions: ["Permissions", "權限管理"]
 };
 
 titles.services = ["Services", "服務"];
@@ -36,9 +39,9 @@ const money = new Intl.NumberFormat("zh-TW", {
 
 const labels = {
   systemRole: {
-    admin: "管理員",
-    staff: "工作人員",
-    viewer: "檢視者"
+    admin: "系統管理員",
+    staff: "組織管理員",
+    viewer: "一般會員"
   },
   orderStatus: {
     draft: "草稿",
@@ -85,8 +88,30 @@ const labels = {
     gift_records: "送禮紀錄",
     departments: "部門",
     department_members: "部門成員",
-    audit_logs: "操作紀錄"
+    audit_logs: "操作紀錄",
+    role_permissions: "角色權限"
   }
+};
+
+const permissionLabels = {
+  "Member.View": "成員 / 查看",
+  "Member.Create": "成員 / 新增",
+  "Member.Edit": "成員 / 修改",
+  "Member.Delete": "成員 / 刪除",
+  "Gift.View": "送禮與禮物 / 查看",
+  "Gift.Create": "送禮與禮物 / 新增",
+  "Gift.Edit": "送禮與禮物 / 修改",
+  "Gift.Delete": "送禮與禮物 / 刪除",
+  "Order.View": "訂單 / 查看",
+  "Order.Create": "訂單 / 新增",
+  "Order.Edit": "訂單 / 修改",
+  "Order.Cancel": "訂單 / 取消",
+  "Settlement.View": "月結 / 查看",
+  "Settlement.Close": "月結 / 關帳與重算",
+  "Settlement.Export": "月結 / 匯出",
+  "Account.Manage": "帳號與權限 / 管理",
+  "Organization.Manage": "組織 / 管理",
+  "Audit.View": "操作紀錄 / 查看"
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -165,6 +190,9 @@ function bindForms() {
   document.getElementById("cancelGiftRecordEditBtn").addEventListener("click", resetGiftRecordForm);
   document.getElementById("giftItemSelect").addEventListener("change", applySelectedGiftItem);
   document.getElementById("paymentForm").addEventListener("submit", submitPaymentGeneration);
+  document.getElementById("savePermissionsBtn").addEventListener("click", savePermissions);
+  document.getElementById("organizationManagementForm").addEventListener("submit", submitOrganization);
+  document.getElementById("cancelOrganizationManagementBtn").addEventListener("click", resetOrganizationManagementForm);
   document.getElementById("orderForm").addEventListener("input", handleOrderInput);
 }
 
@@ -336,6 +364,73 @@ function showApp() {
     currentUser.hidden = false;
     document.getElementById("logoutBtn").hidden = false;
   }
+  applyNavigationPermissions();
+  if (state.auth?.user?.systemRole === "viewer") {
+    const userNav = document.querySelector('.nav-tabs button[data-view="users"]');
+    const orderNav = document.querySelector('.nav-tabs button[data-view="orders"]');
+    const giftNav = document.querySelector('.nav-tabs button[data-view="giftRecords"]');
+    if (userNav) userNav.textContent = "我的資料";
+    if (orderNav) orderNav.textContent = "我的訂單";
+    if (giftNav) giftNav.textContent = "我的送禮紀錄";
+  }
+}
+
+function currentPermissions() {
+  return new Set(state.auth?.user?.permissions || []);
+}
+
+function hasPermission(code) {
+  return state.auth?.authRequired === false ||
+    state.auth?.user?.systemRole === "admin" ||
+    currentPermissions().has(code);
+}
+
+function applyNavigationPermissions() {
+  const viewPermissions = {
+    dashboard: "Order.View",
+    users: "Member.View",
+    loginUsers: "Account.Manage",
+    organization: "Organization.Manage",
+    services: "Gift.View",
+    giftRecords: "Gift.View",
+    giftCatalog: "Gift.View",
+    orders: "Order.View",
+    payments: "Settlement.View",
+    audit: "Audit.View",
+    permissions: null
+  };
+
+  document.querySelectorAll(".nav-tabs button").forEach((button) => {
+    const permission = viewPermissions[button.dataset.view];
+    button.hidden = button.dataset.view === "permissions"
+      ? state.auth?.user?.systemRole !== "admin"
+      : permission
+        ? !hasPermission(permission)
+        : false;
+    if (state.auth?.user?.systemRole === "viewer" &&
+        ["services", "giftCatalog", "payments"].includes(button.dataset.view)) {
+      button.hidden = true;
+    }
+  });
+}
+
+function applyActionPermissions() {
+  const setHidden = (selector, hidden) => {
+    document.querySelectorAll(selector).forEach((element) => {
+      element.hidden = hidden;
+    });
+  };
+
+  setHidden("#userForm", !(hasPermission("Member.Create") || hasPermission("Member.Edit")));
+  setHidden("[data-user-edit], [data-user-activate], [data-user-deactivate]", !hasPermission("Member.Edit"));
+  setHidden("[data-user-delete]", !hasPermission("Member.Delete"));
+  setHidden("#giftRecordForm", !(hasPermission("Gift.Create") || hasPermission("Gift.Edit")));
+  setHidden("[data-gift-edit]", !hasPermission("Gift.Edit"));
+  setHidden("[data-gift-delete]", !hasPermission("Gift.Delete"));
+  setHidden("#orderForm", !(hasPermission("Order.Create") || hasPermission("Order.Edit")));
+  setHidden("[data-order-edit]", !hasPermission("Order.Edit"));
+  setHidden("[data-order-delete]", !hasPermission("Order.Cancel"));
+  setHidden("#paymentForm, [data-payment-paid]", !hasPermission("Settlement.Close"));
 }
 
 async function api(path, options = {}) {
@@ -419,13 +514,16 @@ async function refreshAll() {
     if (state.view === "dashboard") {
       await loadDashboard();
     }
-    if (state.view === "users" || state.view === "orders" || state.view === "giftRecords" || state.view === "giftCatalog" || state.view === "organization") {
+    if (state.view === "users" || state.view === "loginUsers" || state.view === "orders" || state.view === "giftRecords" || state.view === "giftCatalog" || state.view === "organization") {
       await loadUsers();
     }
     if (state.view === "organization") {
       await loadDepartments();
     }
     if (state.view === "loginUsers") {
+      if (state.auth?.user?.systemRole === "admin") {
+        await loadOrganizations();
+      }
       await loadLoginUsers();
     }
     if (state.view === "services" || state.view === "giftRecords" || state.view === "giftCatalog") {
@@ -443,6 +541,11 @@ async function refreshAll() {
     if (state.view === "audit") {
       await loadAuditLogs();
     }
+    if (state.view === "permissions") {
+      await loadOrganizations();
+      await loadPermissions();
+    }
+    applyActionPermissions();
   } catch (error) {
     showAlert(error.message);
     document.getElementById("apiStatus").classList.remove("online");
@@ -504,6 +607,164 @@ async function loadPayments() {
 async function loadAuditLogs() {
   state.auditLogs = await api("/api/auditlogs?take=100");
   renderAuditLogs(state.auditLogs);
+}
+
+async function loadPermissions() {
+  state.permissionMatrix = await api("/api/permissions");
+  state.auth.user.permissions = state.permissionMatrix.roles
+    .find((role) => role.systemRole === state.auth.user.systemRole)?.permissions || [];
+  renderPermissions();
+  applyNavigationPermissions();
+}
+
+async function loadOrganizations() {
+  state.organizations = await api("/api/organizations");
+  renderOrganizationManagement();
+  renderOrganizationSelect();
+}
+
+function renderOrganizationSelect() {
+  const field = document.getElementById("loginUserOrganizationField");
+  const select = document.getElementById("loginUserOrganizationSelect");
+  if (!field || !select) {
+    return;
+  }
+
+  field.hidden = state.auth?.user?.systemRole !== "admin";
+  select.innerHTML = state.organizations
+    .filter((organization) => organization.isActive)
+    .map((organization) => `<option value="${organization.id}">${escapeHtml(organization.name)}</option>`)
+    .join("");
+  renderLoginUserMemberSelect();
+  select.onchange = renderLoginUserMemberSelect;
+}
+
+function renderLoginUserMemberSelect() {
+  const organizationSelect = document.getElementById("loginUserOrganizationSelect");
+  const memberSelect = document.getElementById("loginUserMemberSelect");
+  if (!memberSelect) {
+    return;
+  }
+
+  const selected = memberSelect.value;
+  const organizationId = Number(organizationSelect?.value) || state.auth?.user?.organizationId;
+  const users = state.users.filter((user) =>
+    user.isActive && (!organizationId || user.organizationId === organizationId));
+  memberSelect.innerHTML = `
+    <option value="">不綁定</option>
+    ${users.map((user) => `<option value="${user.id}">${escapeHtml(user.nickname)}</option>`).join("")}
+  `;
+  memberSelect.value = selected;
+}
+
+function renderOrganizationManagement() {
+  const body = document.getElementById("organizationManagementRows");
+  if (!body) {
+    return;
+  }
+
+  body.innerHTML = state.organizations.length
+    ? state.organizations.map((organization) => `
+      <tr>
+        <td>${escapeHtml(organization.name)}</td>
+        <td>${organization.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
+        <td><button class="ghost small" data-organization-edit="${organization.id}">編輯</button></td>
+      </tr>
+    `).join("")
+    : emptyRow(3);
+
+  body.querySelectorAll("[data-organization-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const organization = state.organizations.find((item) => item.id === Number(button.dataset.organizationEdit));
+      if (!organization) {
+        return;
+      }
+
+      const form = document.getElementById("organizationManagementForm");
+      form.elements.organizationId.value = organization.id;
+      form.elements.name.value = organization.name;
+      form.elements.isActive.checked = organization.isActive;
+      document.getElementById("organizationManagementTitle").textContent = "編輯組織";
+      document.getElementById("cancelOrganizationManagementBtn").hidden = false;
+    });
+  });
+}
+
+async function submitOrganization(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const id = data.get("organizationId");
+  await runAction(async () => {
+    await api(id ? `/api/organizations/${id}` : "/api/organizations", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify({
+        name: data.get("name"),
+        isActive: data.get("isActive") === "on"
+      })
+    });
+    resetOrganizationManagementForm();
+    await loadOrganizations();
+    showAlert("組織設定已儲存。", false);
+  });
+}
+
+function resetOrganizationManagementForm() {
+  const form = document.getElementById("organizationManagementForm");
+  form.reset();
+  form.elements.organizationId.value = "";
+  form.elements.isActive.checked = true;
+  document.getElementById("organizationManagementTitle").textContent = "新增組織";
+  document.getElementById("cancelOrganizationManagementBtn").hidden = true;
+}
+
+function renderPermissions() {
+  const body = document.getElementById("permissionRows");
+  const matrix = state.permissionMatrix;
+  if (!body || !matrix) {
+    return;
+  }
+
+  const byRole = Object.fromEntries(matrix.roles.map((role) => [
+    role.systemRole,
+    new Set(role.permissions)
+  ]));
+  body.innerHTML = matrix.permissionCodes.map((code) => `
+    <tr>
+      <td>
+        <strong>${escapeHtml(permissionLabels[code] || code)}</strong>
+        <span class="permission-code">${escapeHtml(code)}</span>
+      </td>
+      ${["admin", "staff", "viewer"].map((role) => `
+        <td>
+          <input
+            type="checkbox"
+            data-role-permission="${role}"
+            value="${escapeHtml(code)}"
+            ${byRole[role]?.has(code) ? "checked" : ""}
+            ${role === "admin" ? "disabled" : ""}>
+        </td>
+      `).join("")}
+    </tr>
+  `).join("");
+}
+
+async function savePermissions() {
+  try {
+    for (const role of ["staff", "viewer"]) {
+      const permissions = [...document.querySelectorAll(`[data-role-permission="${role}"]:checked`)]
+        .map((input) => input.value);
+      await api(`/api/permissions/${role}`, {
+        method: "PUT",
+        body: JSON.stringify({ permissions })
+      });
+    }
+
+    await loadPermissions();
+    showAlert("權限設定已儲存。");
+  } catch (error) {
+    showAlert(error.message);
+  }
 }
 
 function renderRanking(rows) {
@@ -1044,11 +1305,12 @@ function renderAuditLogs(rows) {
     <tr>
       <td>${formatDateTime(log.createdAt)}</td>
       <td>${escapeHtml(log.loginUserDisplayName || "系統")}</td>
+      <td>${escapeHtml(log.ipAddress || "-")}</td>
       <td>${escapeHtml(label("auditAction", log.action))}</td>
       <td>${escapeHtml(label("targetType", log.targetType))}</td>
       <td>${escapeHtml(auditNote(log))}</td>
     </tr>
-  `).join("") : emptyRow(5);
+  `).join("") : emptyRow(6);
 }
 
 function auditNote(log) {
@@ -1241,7 +1503,9 @@ async function submitLoginUser(event) {
     const payload = {
       displayName: data.get("nickname"),
       loginAccount: data.get("loginAccount"),
-      systemRole: data.get("systemRole")
+      systemRole: data.get("systemRole"),
+      organizationId: Number(data.get("organizationId")) || existingLoginUser?.organizationId || state.auth?.user?.organizationId,
+      userId: Number(data.get("userId")) || null
     };
 
     if (password) {
@@ -1271,6 +1535,13 @@ function startLoginUserEdit(loginUser) {
   form.elements.loginAccount.value = loginUser.loginAccount || "";
   form.elements.password.value = "";
   form.elements.systemRole.value = loginUser.systemRole || "staff";
+  if (form.elements.organizationId) {
+    form.elements.organizationId.value = loginUser.organizationId || "";
+    renderLoginUserMemberSelect();
+  }
+  if (form.elements.userId) {
+    form.elements.userId.value = loginUser.userId || "";
+  }
   setLoginUserEditMode(true);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }

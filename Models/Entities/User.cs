@@ -1,8 +1,9 @@
 namespace EAPlaymateGroup.Models.Entities;
 
-public sealed class User
+public sealed class User : IOrganizationScoped
 {
     public int Id { get; set; }
+    public int OrganizationId { get; set; }
     public Guid Uuid { get; set; }
 
     public string Nickname { get; set; } = string.Empty;

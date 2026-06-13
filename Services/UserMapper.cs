@@ -10,6 +10,7 @@ public static class UserMapper
         return new UserDto
         {
             Id = user.Id,
+            OrganizationId = user.OrganizationId,
             Uuid = user.Uuid,
             Nickname = user.Nickname,
             DiscordId = user.DiscordId,

@@ -1,8 +1,9 @@
 namespace EAPlaymateGroup.Models.Entities;
 
-public sealed class ServiceItem
+public sealed class ServiceItem : IOrganizationScoped
 {
     public int Id { get; set; }
+    public int OrganizationId { get; set; }
     public Guid Uuid { get; set; } = Guid.NewGuid();
     public string SeedKey { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;

@@ -3,6 +3,7 @@ namespace EAPlaymateGroup.Models.DTO;
 public sealed class UserDto
 {
     public int Id { get; set; }
+    public int OrganizationId { get; set; }
     public Guid Uuid { get; set; }
     public string Nickname { get; set; } = string.Empty;
     public string? DiscordId { get; set; }

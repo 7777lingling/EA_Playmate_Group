@@ -1,8 +1,9 @@
 namespace EAPlaymateGroup.Models.Entities;
 
-public sealed class DepartmentMember
+public sealed class DepartmentMember : IOrganizationScoped
 {
     public int Id { get; set; }
+    public int OrganizationId { get; set; }
     public int DepartmentId { get; set; }
     public int UserId { get; set; }
     public string? PositionTitle { get; set; }
