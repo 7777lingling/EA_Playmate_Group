@@ -53,8 +53,11 @@ function Invoke-MirrorCopy {
         /XD DataProtectionKeys logs `
         /XF appsettings.Development.json appsettings.Production.json app_offline.htm
 
-    if ($LASTEXITCODE -ge 8) {
-        throw "Robocopy failed with exit code $LASTEXITCODE."
+    $robocopyExitCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+
+    if ($robocopyExitCode -ge 8) {
+        throw "Robocopy failed with exit code $robocopyExitCode."
     }
 }
 

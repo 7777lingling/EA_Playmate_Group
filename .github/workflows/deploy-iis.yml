@@ -1,7 +1,8 @@
-name: Deploy IIS
+name: CI/CD
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - main
@@ -9,9 +10,12 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
-  group: production-iis
-  cancel-in-progress: false
+  group: cicd-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -51,6 +55,7 @@ jobs:
           retention-days: 7
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on:
       - self-hosted
