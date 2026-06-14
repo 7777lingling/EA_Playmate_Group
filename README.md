@@ -1,5 +1,8 @@
 # EA Playmate Group Database
 
+IIS 與 GitHub Actions CI/CD 設定請參考
+[IIS_DEPLOYMENT.md](IIS_DEPLOYMENT.md)。
+
 這個資料夾先放 SQL Server 版資料庫規劃。
 
 ## 執行順序

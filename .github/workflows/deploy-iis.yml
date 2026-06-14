@@ -1,0 +1,78 @@
+name: Deploy IIS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-iis
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Publish
+        run: dotnet publish EAPlaymateGroup.csproj --configuration Release --output artifacts/publish
+
+      - name: Verify production secrets are excluded
+        shell: pwsh
+        run: |
+          $forbidden = @(
+            "artifacts/publish/appsettings.Development.json",
+            "artifacts/publish/appsettings.Production.json"
+          )
+          foreach ($path in $forbidden) {
+            if (Test-Path -LiteralPath $path) {
+              throw "Publish output must not contain $path"
+            }
+          }
+
+      - name: Upload publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ea-playmate-group-iis-${{ github.sha }}
+          path: artifacts/publish
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    needs: build
+    runs-on:
+      - self-hosted
+      - Windows
+      - X64
+      - iis-production
+    environment: production
+
+    steps:
+      - name: Checkout deployment script
+        uses: actions/checkout@v4
+
+      - name: Download publish artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ea-playmate-group-iis-${{ github.sha }}
+          path: artifacts/deploy
+
+      - name: Deploy to IIS
+        shell: powershell
+        run: |
+          .\Scripts\Deploy-Iis.ps1 `
+            -SiteName "${{ vars.IIS_SITE_NAME }}" `
+            -PackagePath ".\artifacts\deploy" `
+            -HealthUrl "${{ vars.IIS_HEALTH_URL }}"
