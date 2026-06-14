@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EA Playmate Group</title>
-  <link rel="stylesheet" href="/styles.css?v=20260614-gift-picker-v1">
+  <link rel="stylesheet" href="/styles.css?v=20260614-price-gallery-v2">
 </head>
 <body>
   <section class="login-view" id="loginView" hidden>
@@ -33,7 +33,7 @@
       </div>
       <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="收合側欄" aria-expanded="true">‹</button>
     </div>
-    <nav class="nav-tabs" aria-label="主選單">
+    <nav class="nav-tabs" id="primaryNavigation" aria-label="主選單">
       <button class="active" data-view="dashboard" data-short="總">總覽</button>
       <button data-view="users" data-short="員">成員</button>
       <button data-view="loginUsers" data-short="帳">帳號管理</button>
@@ -46,19 +46,28 @@
       <button data-view="permissions" data-short="權">權限管理</button>
     </nav>
   </aside>
+  <button class="mobile-nav-backdrop" id="mobileNavBackdrop" type="button" aria-label="關閉主選單" hidden></button>
 
   <main class="main">
     <header class="topbar">
-      <div>
+      <button class="mobile-nav-toggle" id="mobileNavToggle" type="button" aria-label="開啟主選單" aria-expanded="false" aria-controls="primaryNavigation">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="topbar-title">
         <p class="eyebrow" id="viewEyebrow">Dashboard</p>
         <h1 id="viewTitle">總覽</h1>
       </div>
       <div class="top-actions">
         <span class="status-dot" id="apiStatus">API</span>
         <span class="status-dot" id="currentUser" hidden></span>
-        <button class="ghost" id="changePasswordBtn" type="button" hidden>變更密碼</button>
-        <button class="ghost" id="logoutBtn" type="button" hidden>登出</button>
         <button class="ghost" id="refreshBtn" type="button">重新整理</button>
+        <button class="ghost mobile-more-toggle" id="mobileMoreToggle" type="button" aria-label="更多帳號操作" aria-expanded="false">更多</button>
+        <div class="account-actions" id="accountActions">
+          <button class="ghost" id="changePasswordBtn" type="button" hidden>變更密碼</button>
+          <button class="ghost" id="logoutBtn" type="button" hidden>登出</button>
+        </div>
       </div>
     </header>
 
@@ -735,6 +744,6 @@
     </section>
   </div>
 
-  <script src="/app.js?v=20260614-gift-picker-v1"></script>
+  <script src="/app.js?v=20260614-price-gallery-v2"></script>
 </body>
 </html>

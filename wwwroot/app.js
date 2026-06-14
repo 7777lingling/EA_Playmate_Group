@@ -117,6 +117,7 @@ const permissionLabels = {
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindSidebar();
+  bindMobileChrome();
   bindNavigation();
   bindForms();
   bindOrganizationEditor();
@@ -125,6 +126,59 @@ document.addEventListener("DOMContentLoaded", async () => {
   addMemberRow();
   await initializeAuth();
 });
+
+function bindMobileChrome() {
+  const navToggle = document.getElementById("mobileNavToggle");
+  const navBackdrop = document.getElementById("mobileNavBackdrop");
+  const moreToggle = document.getElementById("mobileMoreToggle");
+  const accountActions = document.getElementById("accountActions");
+  const mobileQuery = window.matchMedia("(max-width: 720px)");
+
+  const setMobileNavOpen = (open) => {
+    document.body.classList.toggle("mobile-nav-open", open);
+    navToggle.setAttribute("aria-expanded", String(open));
+    navToggle.setAttribute("aria-label", open ? "關閉主選單" : "開啟主選單");
+    navBackdrop.hidden = !open;
+  };
+
+  const setAccountActionsOpen = (open) => {
+    document.body.classList.toggle("mobile-account-open", open);
+    moreToggle.setAttribute("aria-expanded", String(open));
+  };
+
+  navToggle.addEventListener("click", () => {
+    setAccountActionsOpen(false);
+    setMobileNavOpen(!document.body.classList.contains("mobile-nav-open"));
+  });
+  navBackdrop.addEventListener("click", () => setMobileNavOpen(false));
+  moreToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setAccountActionsOpen(!document.body.classList.contains("mobile-account-open"));
+  });
+  accountActions.addEventListener("click", () => setAccountActionsOpen(false));
+
+  document.querySelectorAll(".nav-tabs button").forEach((button) => {
+    button.addEventListener("click", () => setMobileNavOpen(false));
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".top-actions")) {
+      setAccountActionsOpen(false);
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setMobileNavOpen(false);
+      setAccountActionsOpen(false);
+    }
+  });
+  mobileQuery.addEventListener("change", (event) => {
+    if (!event.matches) {
+      setMobileNavOpen(false);
+      setAccountActionsOpen(false);
+    }
+  });
+}
 
 function bindSidebar() {
   const button = document.getElementById("sidebarToggle");
@@ -728,28 +782,90 @@ function bindPriceGallery() {
     const display = document.createElement("section");
     display.className = "price-display";
     display.innerHTML = `
+      <button class="price-nav price-nav-prev" type="button" aria-label="上一張價目表">‹</button>
       <img alt="">
+      <button class="price-nav price-nav-next" type="button" aria-label="下一張價目表">›</button>
+      <p class="price-edge-hint" aria-live="polite"></p>
     `;
 
     gallery.parentNode?.insertBefore(board, gallery);
     board.append(gallery, display);
 
     const displayImg = display.querySelector("img");
-    const setActive = (link) => {
+    const edgeHint = display.querySelector(".price-edge-hint");
+    let activeIndex = 0;
+    let hintTimer;
+    let touchStartX = null;
+
+    const showEdgeHint = (message) => {
+      clearTimeout(hintTimer);
+      edgeHint.textContent = message;
+      edgeHint.classList.add("show");
+      hintTimer = setTimeout(() => edgeHint.classList.remove("show"), 1800);
+    };
+
+    const setActive = (index, direction = 0) => {
+      const link = links[index];
+      activeIndex = index;
       links.forEach((item) => item.classList.toggle("active", item === link));
       const image = link.querySelector("img");
       displayImg.src = link.getAttribute("href");
       displayImg.alt = image?.alt || "";
+      displayImg.classList.remove("slide-from-left", "slide-from-right");
+      void displayImg.offsetWidth;
+      if (direction !== 0) {
+        displayImg.classList.add(direction > 0 ? "slide-from-right" : "slide-from-left");
+      }
+      link.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     };
 
-    links.forEach((link) => {
+    const move = (direction) => {
+      const nextIndex = activeIndex + direction;
+      if (nextIndex < 0) {
+        showEdgeHint("已經是第一張圖片");
+        return;
+      }
+      if (nextIndex >= links.length) {
+        showEdgeHint("已經是最後一張圖片");
+        return;
+      }
+      setActive(nextIndex, direction);
+    };
+
+    links.forEach((link, index) => {
       link.addEventListener("click", (event) => {
         event.preventDefault();
-        setActive(link);
+        setActive(index, index > activeIndex ? 1 : -1);
       });
     });
 
-    setActive(links[0]);
+    display.querySelector(".price-nav-prev").addEventListener("click", () => move(-1));
+    display.querySelector(".price-nav-next").addEventListener("click", () => move(1));
+    display.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        move(-1);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        move(1);
+      }
+    });
+    display.addEventListener("touchstart", (event) => {
+      touchStartX = event.changedTouches[0]?.clientX ?? null;
+    }, { passive: true });
+    display.addEventListener("touchend", (event) => {
+      if (touchStartX === null) {
+        return;
+      }
+      const distance = (event.changedTouches[0]?.clientX ?? touchStartX) - touchStartX;
+      touchStartX = null;
+      if (Math.abs(distance) >= 48) {
+        move(distance < 0 ? 1 : -1);
+      }
+    }, { passive: true });
+
+    display.tabIndex = 0;
+    setActive(0);
   });
 }
 
