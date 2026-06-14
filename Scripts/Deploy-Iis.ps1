@@ -102,6 +102,7 @@ try {
         -Value "<html><body><h1>系統更新中，請稍後再試。</h1></body></html>" `
         -Encoding UTF8
     Stop-WebAppPool -Name $appPoolName -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 3
 
     Write-Host "Deploying '$package' to '$deployPath'..."
     Invoke-MirrorCopy -Source $package -Destination $deployPath
@@ -138,6 +139,7 @@ finally {
         Write-Warning "Deployment failed. Restoring '$backupPath'..."
         Set-Content -LiteralPath $offlinePath -Value "Rollback in progress." -Encoding UTF8
         Stop-WebAppPool -Name $appPoolName -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 3
         Invoke-MirrorCopy -Source $backupPath -Destination $deployPath
     }
 
