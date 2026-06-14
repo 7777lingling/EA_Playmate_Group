@@ -57,7 +57,10 @@ jobs:
       - Windows
       - X64
       - iis-production
-    environment: production
+    environment: webCI/CD_Variables
+    env:
+      IIS_SITE_NAME: ${{ vars.IIS_SITE_NAME || 'EAPlaymateGroup' }}
+      IIS_HEALTH_URL: ${{ vars.IIS_HEALTH_URL || 'http://localhost:8081/api/health' }}
 
     steps:
       - name: Checkout deployment script
@@ -72,13 +75,19 @@ jobs:
       - name: Debug Variables
         shell: powershell
         run: |
-          Write-Host "SiteName=[${{ vars.IIS_SITE_NAME }}]"
-          Write-Host "HealthUrl=[${{ vars.IIS_HEALTH_URL }}]"
+          Write-Host "SiteName=[$env:IIS_SITE_NAME]"
+          Write-Host "HealthUrl=[$env:IIS_HEALTH_URL]"
+          if ([string]::IsNullOrWhiteSpace($env:IIS_SITE_NAME)) {
+            throw "IIS_SITE_NAME is empty."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:IIS_HEALTH_URL)) {
+            throw "IIS_HEALTH_URL is empty."
+          }
 
       - name: Deploy to IIS
         shell: powershell
         run: |
           .\Scripts\Deploy-Iis.ps1 `
-            -SiteName "${{ vars.IIS_SITE_NAME }}" `
+            -SiteName "$env:IIS_SITE_NAME" `
             -PackagePath ".\artifacts\deploy" `
-            -HealthUrl "${{ vars.IIS_HEALTH_URL }}"
+            -HealthUrl "$env:IIS_HEALTH_URL"
