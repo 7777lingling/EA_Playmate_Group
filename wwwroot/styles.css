@@ -2523,12 +2523,14 @@ tbody tr:hover td {
   .main,
   body.sidebar-collapsed .main {
     margin-left: 0;
-    padding: 14px 14px calc(32px + env(safe-area-inset-bottom));
+    padding: calc(100px + env(safe-area-inset-top)) 14px calc(32px + env(safe-area-inset-bottom));
   }
 
   .topbar {
-    position: sticky;
-    top: 8px;
+    position: fixed;
+    top: max(8px, env(safe-area-inset-top));
+    right: 14px;
+    left: 14px;
     z-index: 30;
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr) auto;
@@ -2673,6 +2675,10 @@ tbody tr:hover td {
     grid-template-columns: 1fr;
   }
 
+  .org-editor {
+    order: -1;
+  }
+
   .panel,
   .stat,
   .org-summary article {
@@ -2799,6 +2805,8 @@ tbody tr:hover td {
   }
 
   .topbar {
+    right: 10px;
+    left: 10px;
     grid-template-columns: 44px minmax(0, 1fr) auto;
     gap: 8px;
     padding-inline: 10px;
