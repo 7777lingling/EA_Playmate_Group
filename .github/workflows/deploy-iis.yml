@@ -69,6 +69,12 @@ jobs:
           name: ea-playmate-group-iis-${{ github.sha }}
           path: artifacts/deploy
 
+      - name: Debug Variables
+        shell: powershell
+        run: |
+          Write-Host "SiteName=[${{ vars.IIS_SITE_NAME }}]"
+          Write-Host "HealthUrl=[${{ vars.IIS_HEALTH_URL }}]"
+
       - name: Deploy to IIS
         shell: powershell
         run: |
