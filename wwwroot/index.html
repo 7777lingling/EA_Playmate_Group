@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EA Playmate Group</title>
-  <link rel="stylesheet" href="/styles.css?v=20260613-account-password-v4">
+  <link rel="stylesheet" href="/styles.css?v=20260614-gift-picker-v1">
 </head>
 <body>
   <section class="login-view" id="loginView" hidden>
@@ -40,7 +40,6 @@
       <button data-view="organization" data-short="組">組織</button>
       <button data-view="services" data-short="服">服務</button>
       <button data-view="giftRecords" data-short="禮">送禮紀錄</button>
-      <button data-view="giftCatalog" data-short="清">禮物清單</button>
       <button data-view="orders" data-short="訂">訂單</button>
       <button data-view="payments" data-short="月">月結</button>
       <button data-view="audit" data-short="錄">紀錄</button>
@@ -207,9 +206,10 @@
             <select name="organizationId" id="loginUserOrganizationSelect"></select>
           </label>
           <label>綁定成員
-            <select name="userId" id="loginUserMemberSelect">
-              <option value="">不綁定</option>
-            </select>
+            <span class="member-picker-field" data-member-picker data-source="login-user-members" data-title="選擇綁定成員" data-empty-label="不綁定">
+              <input name="userId" id="loginUserMemberSelect" type="hidden">
+              <button class="member-picker-trigger" type="button" data-member-picker-trigger>不綁定</button>
+            </span>
           </label>
           <label>系統權限
             <select name="systemRole">
@@ -223,7 +223,10 @@
 
         <section class="panel">
           <div class="panel-head">
-            <h2>帳號清單</h2>
+            <div>
+              <h2>帳號清單</h2>
+              <p class="panel-hint">點擊登入帳號或顯示名稱，可查看資料並進行編輯。</p>
+            </div>
           </div>
           <div class="table-wrap">
             <table class="login-user-table">
@@ -304,7 +307,10 @@
               <select name="departmentId" id="departmentSelect" required></select>
             </label>
             <label>成員
-              <select name="userId" id="departmentUserSelect" required></select>
+              <span class="member-picker-field" data-member-picker data-source="active-users" data-title="選擇部門成員" data-required="true">
+                <input name="userId" id="departmentUserSelect" type="hidden">
+                <button class="member-picker-trigger" type="button" data-member-picker-trigger>請選擇成員</button>
+              </span>
             </label>
             <label>職稱<input name="positionTitle" maxlength="80" placeholder="例如：主管、客服、設計"></label>
             <label class="inline-check"><input name="isManager" type="checkbox"> 主管</label>
@@ -334,6 +340,10 @@
         <a class="price-shot" href="/價目表/代肝.jpg" data-price-preview>
           <img src="/價目表/代肝.jpg" alt="代肝價目表">
           <span>代肝</span>
+        </a>
+        <a class="price-shot" href="/價目表/禮物.png" data-price-preview>
+          <img src="/價目表/禮物.png" alt="禮物價目表">
+          <span>禮物</span>
         </a>
       </section>
 
@@ -384,19 +394,31 @@
           </div>
           <div class="gift-form-grid">
             <label>老闆
-              <select name="bossUserId" id="giftBossSelect" required></select>
+              <span class="member-picker-field" data-member-picker data-source="bosses" data-title="選擇送禮老闆"
+                data-search-fields="nickname,discordName,discordId" data-display-mode="nickname-discord-id"
+                data-search-placeholder="搜尋暱稱、Discord 名稱或 ID" data-required="true">
+                <input name="bossUserId" id="giftBossSelect" type="hidden">
+                <button class="member-picker-trigger" type="button" data-member-picker-trigger>請選擇老闆</button>
+              </span>
             </label>
             <label>送給
-              <select name="recipientUserId" id="giftRecipientSelect" required></select>
+              <span class="member-picker-field" data-member-picker data-source="players" data-title="選擇收禮成員" data-required="true">
+                <input name="recipientUserId" id="giftRecipientSelect" type="hidden">
+                <button class="member-picker-trigger" type="button" data-member-picker-trigger>請選擇成員</button>
+              </span>
             </label>
             <label>禮物 / 打賞
-              <select name="serviceItemId" id="giftItemSelect">
-                <option value="">自訂打賞</option>
-              </select>
+              <span class="gift-picker-field" data-gift-picker>
+                <input name="serviceItemId" id="giftItemSelect" type="hidden">
+                <button class="member-picker-trigger" id="giftPickerTrigger" type="button">自訂打賞</button>
+              </span>
             </label>
           </div>
           <div class="gift-pricing-grid">
-            <label>自訂名稱<input name="giftName" maxlength="100" placeholder="例如：現金打賞、生日禮物"></label>
+            <label>自訂名稱
+              <input name="giftName" maxlength="100" placeholder="例如：現金打賞、生日禮物">
+              <small class="field-hint" id="giftNameHint">只有選擇「自訂打賞」時可以填寫自訂名稱。</small>
+            </label>
             <label>金額<input name="amount" type="number" step="0.01" min="0.01" required></label>
             <label>數量<input name="quantity" type="number" step="0.01" min="0.01" value="1" required></label>
           </div>
@@ -421,6 +443,7 @@
                   <th>禮物 / 打賞</th>
                   <th>金額</th>
                   <th>收款</th>
+                  <th>備註</th>
                   <th></th>
                 </tr>
               </thead>
@@ -429,53 +452,6 @@
           </div>
         </section>
       </div>
-    </section>
-
-    <section class="view" id="giftCatalogView">
-      <section class="price-gallery" aria-label="禮物價目表圖片">
-        <a class="price-shot" href="/價目表/禮物.png" data-price-preview>
-          <img src="/價目表/禮物.png" alt="禮物價目表">
-          <span>禮物</span>
-        </a>
-      </section>
-
-      <section class="panel gift-donate-settings">
-        <div class="panel-head">
-          <h2>贈送設定</h2>
-        </div>
-        <div class="gift-form-grid">
-          <label>日期<input id="giftCatalogDate" type="date" required></label>
-          <label>老闆
-            <select id="giftCatalogBossSelect" required></select>
-          </label>
-          <label>送給
-            <select id="giftCatalogRecipientSelect" required></select>
-          </label>
-        </div>
-        <div class="gift-form-grid">
-          <label>收款狀態
-            <select id="giftCatalogPaymentStatus">
-              <option value="unpaid">未收款</option>
-              <option value="paid">已收款</option>
-              <option value="partial">部分收款</option>
-              <option value="refunded">已退款</option>
-            </select>
-          </label>
-          <label>狀態
-            <select id="giftCatalogStatus">
-              <option value="completed">已完成</option>
-              <option value="cancelled">已取消</option>
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <section class="panel gift-catalog-panel">
-        <div class="panel-head">
-          <h2>禮物清單</h2>
-        </div>
-        <div class="gift-catalog" id="giftItemRows"></div>
-      </section>
     </section>
 
     <section class="view" id="ordersView">
@@ -487,7 +463,10 @@
             <label>日期<input name="orderDate" type="date" required></label>
             <label>單號<input name="orderNo" maxlength="30"></label>
             <label>老闆
-              <select name="ownerUserId" id="bossSelect"></select>
+              <span class="member-picker-field" data-member-picker data-source="bosses" data-title="選擇訂單老闆" data-empty-label="未指定">
+                <input name="ownerUserId" id="bossSelect" type="hidden">
+                <button class="member-picker-trigger" type="button" data-member-picker-trigger>未指定</button>
+              </span>
             </label>
           </div>
           <input type="hidden" name="serviceName">
@@ -550,7 +529,7 @@
                   <th>日期</th>
                   <th>單號</th>
                   <th>金額</th>
-                  <th>分潤</th>
+                  <th>團抽</th>
                   <th>狀態</th>
                   <th>收款</th>
                   <th></th>
@@ -703,17 +682,59 @@
     </section>
   </div>
 
-  <aside class="snackbar" id="giftConfirmSnackbar" role="status" aria-live="polite" hidden>
-    <div class="snackbar-content">
-      <strong>確認贈送</strong>
-      <span id="giftConfirmMessage"></span>
-    </div>
-    <div class="snackbar-actions">
-      <button class="ghost small" id="giftConfirmCancel" type="button">取消</button>
-      <button class="primary small" id="giftConfirmSubmit" type="button">確認贈送</button>
-    </div>
-  </aside>
+  <div class="modal-backdrop" id="memberPickerModal" hidden>
+    <section class="modal-panel member-picker-modal" role="dialog" aria-modal="true" aria-labelledby="memberPickerTitle">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Member Selector</p>
+          <h2 id="memberPickerTitle">選擇成員</h2>
+        </div>
+        <button class="ghost small" id="memberPickerClose" type="button">關閉</button>
+      </div>
+      <div class="member-picker-body">
+        <input id="memberPickerSearch" type="search" placeholder="搜尋暱稱、Discord 名稱或 ID" autocomplete="off">
+        <div class="member-picker-list" id="memberPickerList"></div>
+        <div class="form-actions">
+          <button class="ghost" id="memberPickerClear" type="button">清除選擇</button>
+          <button class="ghost" id="memberPickerCancel" type="button">取消</button>
+        </div>
+      </div>
+    </section>
+  </div>
 
-  <script src="/app.js?v=20260613-account-password-v4"></script>
+  <div class="modal-backdrop" id="recordModal" hidden>
+    <section class="modal-panel record-modal" role="dialog" aria-modal="true" aria-labelledby="recordModalTitle">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow" id="recordModalEyebrow">Details</p>
+          <h2 id="recordModalTitle">資料詳情</h2>
+        </div>
+        <button class="ghost small" id="recordModalClose" type="button">關閉</button>
+      </div>
+      <div id="recordModalBody"></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="giftPickerModal" hidden>
+    <section class="modal-panel gift-picker-modal" role="dialog" aria-modal="true" aria-labelledby="giftPickerTitle">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Gift Selector</p>
+          <h2 id="giftPickerTitle">選擇禮物 / 打賞</h2>
+        </div>
+        <button class="ghost small" id="giftPickerClose" type="button">關閉</button>
+      </div>
+      <div class="member-picker-body">
+        <input id="giftPickerSearch" type="search" placeholder="搜尋禮物名稱或備註" autocomplete="off">
+        <div class="gift-picker-list" id="giftPickerList"></div>
+        <div class="form-actions">
+          <button class="ghost" id="giftPickerCustom" type="button">自訂打賞</button>
+          <button class="ghost" id="giftPickerCancel" type="button">取消</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/app.js?v=20260614-gift-picker-v1"></script>
 </body>
 </html>

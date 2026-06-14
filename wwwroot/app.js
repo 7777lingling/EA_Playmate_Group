@@ -12,6 +12,7 @@ const state = {
   permissionMatrix: null,
   organizations: [],
   activeDepartmentId: null,
+  activeMemberPicker: null,
   view: "dashboard",
   serviceCategory: "boost",
   auth: null
@@ -24,7 +25,6 @@ const titles = {
   organization: ["Organization", "組織"],
   orders: ["Orders", "訂單"],
   giftRecords: ["Gift Records", "送禮紀錄"],
-  giftCatalog: ["Gift Catalog", "禮物清單"],
   payments: ["Payments", "月結"],
   audit: ["Audit", "紀錄"],
   permissions: ["Permissions", "權限管理"]
@@ -193,12 +193,14 @@ function bindForms() {
   document.getElementById("cancelOrderEditBtn").addEventListener("click", resetOrderForm);
   document.getElementById("giftRecordForm").addEventListener("submit", submitGiftRecord);
   document.getElementById("cancelGiftRecordEditBtn").addEventListener("click", resetGiftRecordForm);
-  document.getElementById("giftItemSelect").addEventListener("change", applySelectedGiftItem);
+  bindGiftPicker();
   document.getElementById("paymentForm").addEventListener("submit", submitPaymentGeneration);
   document.getElementById("savePermissionsBtn").addEventListener("click", savePermissions);
   document.getElementById("organizationManagementForm").addEventListener("submit", submitOrganization);
   document.getElementById("cancelOrganizationManagementBtn").addEventListener("click", resetOrganizationManagementForm);
   document.getElementById("orderForm").addEventListener("input", handleOrderInput);
+  bindMemberPicker();
+  bindRecordModal();
 }
 
 function bindOrganizationEditor() {
@@ -226,6 +228,481 @@ function bindDepartmentModal() {
     if (event.key === "Escape" && !modal.hidden) {
       closeDepartmentModal();
     }
+  });
+}
+
+function bindMemberPicker() {
+  const modal = document.getElementById("memberPickerModal");
+  const search = document.getElementById("memberPickerSearch");
+
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-member-picker-trigger]");
+    if (trigger) {
+      openMemberPicker(trigger.closest("[data-member-picker]"));
+    }
+  });
+
+  document.getElementById("memberPickerClose").addEventListener("click", closeMemberPicker);
+  document.getElementById("memberPickerCancel").addEventListener("click", closeMemberPicker);
+  document.getElementById("memberPickerClear").addEventListener("click", () => {
+    if (state.activeMemberPicker) {
+      setMemberPickerValue(state.activeMemberPicker, "");
+    }
+    closeMemberPicker();
+  });
+  search.addEventListener("input", renderMemberPickerOptions);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeMemberPicker();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modal.hidden) {
+      closeMemberPicker();
+    }
+  });
+}
+
+function bindGiftPicker() {
+  const modal = document.getElementById("giftPickerModal");
+  document.getElementById("giftPickerTrigger").addEventListener("click", openGiftPicker);
+  document.getElementById("giftPickerClose").addEventListener("click", closeGiftPicker);
+  document.getElementById("giftPickerCancel").addEventListener("click", closeGiftPicker);
+  document.getElementById("giftPickerCustom").addEventListener("click", () => {
+    setGiftPickerValue("");
+    closeGiftPicker();
+  });
+  document.getElementById("giftPickerSearch").addEventListener("input", renderGiftPickerOptions);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeGiftPicker();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modal.hidden) {
+      closeGiftPicker();
+    }
+  });
+}
+
+function openGiftPicker() {
+  const search = document.getElementById("giftPickerSearch");
+  search.value = "";
+  document.getElementById("giftPickerModal").hidden = false;
+  renderGiftPickerOptions();
+  search.focus();
+}
+
+function closeGiftPicker() {
+  document.getElementById("giftPickerModal").hidden = true;
+}
+
+function renderGiftPickerOptions() {
+  const list = document.getElementById("giftPickerList");
+  const query = document.getElementById("giftPickerSearch").value.trim().toLowerCase();
+  const selectedId = Number(document.getElementById("giftItemSelect").value || 0);
+  const items = state.serviceItems.filter((item) =>
+    item.category === "gift" &&
+    item.isActive &&
+    (!query || [item.name, item.remark].filter(Boolean).join(" ").toLowerCase().includes(query)));
+
+  list.innerHTML = items.length
+    ? items.map((item) => `
+      <button class="gift-picker-option ${item.id === selectedId ? "selected" : ""}" type="button" data-gift-picker-value="${item.id}">
+        <span>
+          <strong>${escapeHtml(item.name)}</strong>
+          <small>${escapeHtml(item.remark || "尚未填寫備註")}</small>
+        </span>
+        <span>${escapeHtml(servicePriceText(item))}</span>
+      </button>
+    `).join("")
+    : `<p class="member-picker-empty">找不到符合條件的禮物。</p>`;
+
+  list.querySelectorAll("[data-gift-picker-value]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setGiftPickerValue(button.dataset.giftPickerValue);
+      closeGiftPicker();
+    });
+  });
+}
+
+function setGiftPickerValue(value) {
+  const form = document.getElementById("giftRecordForm");
+  const input = document.getElementById("giftItemSelect");
+  const trigger = document.getElementById("giftPickerTrigger");
+  const giftNameHint = document.getElementById("giftNameHint");
+  input.value = value == null ? "" : String(value);
+  const item = state.serviceItems.find((serviceItem) => serviceItem.id === Number(input.value));
+
+  trigger.textContent = item?.name || "自訂打賞";
+  trigger.classList.toggle("has-value", Boolean(item));
+  form.elements.giftName.disabled = Boolean(item);
+  giftNameHint.textContent = item
+    ? "已選擇固定禮物，名稱不可修改。"
+    : "只有選擇「自訂打賞」時可以填寫自訂名稱。";
+  if (item) {
+    form.elements.giftName.value = "";
+    form.elements.amount.value = item.defaultPrice ?? "";
+    form.elements.remark.value = item.remark || "";
+  } else {
+    form.elements.giftName.value = "";
+    form.elements.amount.value = "";
+    form.elements.remark.value = "";
+  }
+}
+
+function bindRecordModal() {
+  const modal = document.getElementById("recordModal");
+  document.getElementById("recordModalClose").addEventListener("click", closeRecordModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeRecordModal();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modal.hidden) {
+      closeRecordModal();
+    }
+  });
+}
+
+function openMemberPicker(field) {
+  if (!field || field.querySelector("[data-member-picker-trigger]")?.disabled) {
+    return;
+  }
+
+  state.activeMemberPicker = field;
+  document.getElementById("memberPickerTitle").textContent = field.dataset.title || "選擇成員";
+  const search = document.getElementById("memberPickerSearch");
+  search.value = "";
+  search.placeholder = field.dataset.searchPlaceholder || "搜尋暱稱、Discord 名稱或 ID";
+  document.getElementById("memberPickerClear").hidden = field.dataset.required === "true";
+  document.getElementById("memberPickerModal").hidden = false;
+  renderMemberPickerOptions();
+  search.focus();
+}
+
+function closeMemberPicker() {
+  document.getElementById("memberPickerModal").hidden = true;
+  state.activeMemberPicker = null;
+}
+
+function memberPickerUsers(field) {
+  const source = field?.dataset.source;
+  if (source === "bosses") {
+    return state.bosses;
+  }
+  if (source === "players") {
+    return state.players;
+  }
+  if (source === "active-users") {
+    return state.users.filter((user) => user.isActive);
+  }
+  if (source === "login-user-members") {
+    const organizationSelectId = field.dataset.organizationSelectId || "loginUserOrganizationSelect";
+    const organizationId = Number(document.getElementById(organizationSelectId)?.value) ||
+      state.auth?.user?.organizationId;
+    return state.users.filter((user) =>
+      user.isActive && (!organizationId || user.organizationId === organizationId));
+  }
+  return state.users.filter((user) => user.isActive);
+}
+
+function renderMemberPickerOptions() {
+  const field = state.activeMemberPicker;
+  const list = document.getElementById("memberPickerList");
+  if (!field || !list) {
+    return;
+  }
+
+  const query = document.getElementById("memberPickerSearch").value.trim().toLowerCase();
+  const selectedId = Number(field.querySelector("input[type='hidden']")?.value || 0);
+  const searchFields = (field.dataset.searchFields || "nickname,discordName,discordId")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const displayMode = field.dataset.displayMode || "nickname-discord-id";
+  const users = memberPickerUsers(field).filter((user) => {
+    const searchable = searchFields
+      .map((fieldName) => user[fieldName])
+      .filter((value) => value != null)
+      .join(" ")
+      .toLowerCase();
+    return !query || searchable.includes(query);
+  });
+
+  list.innerHTML = users.length
+    ? users.map((user) => `
+      <button class="member-picker-option ${user.id === selectedId ? "selected" : ""}" type="button" data-member-picker-value="${user.id}">
+        <span>
+          <strong>${escapeHtml(user.nickname)}</strong>
+          <small>${displayMode === "nickname-discord-id"
+            ? `Discord：${escapeHtml(user.discordName || "未設定")} · ID：${escapeHtml(user.discordId || "未設定")}`
+            : escapeHtml(user.discordName || user.discordId || "未設定")}</small>
+        </span>
+        <span class="member-picker-badges">
+          ${user.isBoss ? `<em>老闆</em>` : ""}
+          ${user.isPlayer ? `<em>團員</em>` : ""}
+        </span>
+      </button>
+    `).join("")
+    : `<p class="member-picker-empty">找不到符合條件的成員。</p>`;
+
+  list.querySelectorAll("[data-member-picker-value]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setMemberPickerValue(field, button.dataset.memberPickerValue);
+      closeMemberPicker();
+    });
+  });
+}
+
+function setMemberPickerValue(fieldOrInput, value) {
+  const field = fieldOrInput?.matches?.("[data-member-picker]")
+    ? fieldOrInput
+    : fieldOrInput?.closest?.("[data-member-picker]");
+  const input = field?.querySelector("input[type='hidden']");
+  if (!field || !input) {
+    return;
+  }
+
+  input.value = value == null ? "" : String(value);
+  refreshMemberPickerField(field);
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function refreshMemberPickerField(field) {
+  if (!field) {
+    return;
+  }
+  const input = field.querySelector("input[type='hidden']");
+  const trigger = field.querySelector("[data-member-picker-trigger]");
+  const selectedId = Number(input?.value || 0);
+  const selected = state.users.find((user) => user.id === selectedId);
+  trigger.textContent = selected?.nickname || field.dataset.emptyLabel || "請選擇成員";
+  trigger.classList.toggle("has-value", Boolean(selected));
+}
+
+function refreshMemberPickerFields(root = document) {
+  root.querySelectorAll("[data-member-picker]").forEach(refreshMemberPickerField);
+}
+
+function validateRequiredMemberPickers(form) {
+  const missing = [...form.querySelectorAll('[data-member-picker][data-required="true"]')]
+    .find((field) => !field.querySelector("input[type='hidden']")?.value);
+  if (!missing) {
+    return true;
+  }
+
+  showAlert(`請先${missing.dataset.title || "選擇成員"}。`);
+  missing.querySelector("[data-member-picker-trigger]")?.focus();
+  return false;
+}
+
+function memberPickerLabel(inputId, fallback = "未指定") {
+  const id = Number(document.getElementById(inputId)?.value || 0);
+  return state.users.find((user) => user.id === id)?.nickname || fallback;
+}
+
+function closeRecordModal() {
+  document.getElementById("recordModal").hidden = true;
+}
+
+function openRecordModal({ title, eyebrow, content }) {
+  document.getElementById("recordModalTitle").textContent = title;
+  document.getElementById("recordModalEyebrow").textContent = eyebrow;
+  document.getElementById("recordModalBody").innerHTML = content;
+  document.getElementById("recordModal").hidden = false;
+}
+
+function recordDetail(labelText, value) {
+  return `
+    <div class="record-detail">
+      <span>${escapeHtml(labelText)}</span>
+      <strong>${escapeHtml(value == null || value === "" ? "-" : String(value))}</strong>
+    </div>
+  `;
+}
+
+function openUserRecordModal(user) {
+  openRecordModal({
+    title: user.nickname,
+    eyebrow: user.isBoss && user.isPlayer ? "團員 / 老闆" : user.isBoss ? "老闆資料" : "團員資料",
+    content: `
+      <div class="record-modal-content">
+        <div class="record-detail-grid">
+          ${recordDetail("Discord 名稱", user.discordName)}
+          ${recordDetail("Discord ID", user.discordId)}
+          ${recordDetail("銀行帳號", user.bankAccount)}
+          ${recordDetail("系統權限", label("systemRole", user.systemRole))}
+          ${recordDetail("身分類型", [user.isPlayer ? "團員" : "", user.isBoss ? "老闆" : ""].filter(Boolean).join(" / "))}
+          ${recordDetail("狀態", user.isActive ? "啟用" : "停用")}
+        </div>
+        <div class="form-actions">
+          ${hasPermission("Member.Edit")
+            ? `<button class="primary" id="recordModalEditUser" type="button">編輯資料</button>`
+            : ""}
+        </div>
+      </div>
+    `
+  });
+
+  document.getElementById("recordModalEditUser")?.addEventListener("click", () => {
+    renderUserRecordEdit(user);
+  });
+}
+
+function renderUserRecordEdit(user) {
+  document.getElementById("recordModalEyebrow").textContent = "Edit Member";
+  document.getElementById("recordModalBody").innerHTML = `
+    <form class="form record-edit-form" id="recordUserForm">
+      <label>暱稱<input name="nickname" required maxlength="50" value="${escapeHtml(user.nickname || "")}"></label>
+      <label>Discord ID<input name="discordId" maxlength="50" value="${escapeHtml(user.discordId || "")}"></label>
+      <label>Discord 名稱<input name="discordName" maxlength="100" value="${escapeHtml(user.discordName || "")}"></label>
+      <label>銀行帳號<input name="bankAccount" maxlength="200" value="${escapeHtml(user.bankAccount || "")}"></label>
+      <label>系統權限
+        <select name="systemRole">
+          ${["staff", "admin", "viewer"].map((role) =>
+            `<option value="${role}" ${user.systemRole === role ? "selected" : ""}>${label("systemRole", role)}</option>`
+          ).join("")}
+        </select>
+      </label>
+      <div class="check-grid">
+        <label><input type="checkbox" name="isPlayer" ${user.isPlayer ? "checked" : ""}> 團員</label>
+        <label><input type="checkbox" name="isBoss" ${user.isBoss ? "checked" : ""}> 老闆</label>
+      </div>
+      <div class="form-actions">
+        <button class="primary" type="submit">儲存</button>
+        <button class="ghost" id="recordUserBack" type="button">返回資料</button>
+      </div>
+    </form>
+  `;
+
+  document.getElementById("recordUserBack").addEventListener("click", () => openUserRecordModal(user));
+  document.getElementById("recordUserForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    await runAction(async () => {
+      await api(`/api/users/${user.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          nickname: data.get("nickname"),
+          discordId: emptyToNull(data.get("discordId")),
+          discordName: emptyToNull(data.get("discordName")),
+          bankAccount: emptyToNull(data.get("bankAccount")),
+          systemRole: data.get("systemRole"),
+          isPlayer: data.get("isPlayer") === "on",
+          isBoss: data.get("isBoss") === "on",
+          isActive: user.isActive,
+          leftAt: user.leftAt ?? null
+        })
+      });
+      await loadUsers();
+      const updated = state.users.find((item) => item.id === user.id);
+      if (updated) {
+        openUserRecordModal(updated);
+      } else {
+        closeRecordModal();
+      }
+      showAlert("成員資料已更新。", false);
+    });
+  });
+}
+
+function openLoginUserRecordModal(loginUser) {
+  const organization = state.organizations.find((item) => item.id === loginUser.organizationId);
+  const member = state.users.find((item) => item.id === loginUser.userId);
+  openRecordModal({
+    title: loginUser.displayName,
+    eyebrow: "帳號資料",
+    content: `
+      <div class="record-modal-content">
+        <div class="record-detail-grid">
+          ${recordDetail("登入帳號", loginUser.loginAccount)}
+          ${recordDetail("顯示名稱", loginUser.displayName)}
+          ${recordDetail("所屬組織", organization?.name)}
+          ${recordDetail("綁定成員", member?.nickname || "不綁定")}
+          ${recordDetail("系統權限", label("systemRole", loginUser.systemRole))}
+          ${recordDetail("狀態", loginUser.isActive ? "啟用" : "停用")}
+        </div>
+        <div class="form-actions">
+          <button class="primary" id="recordModalEditLoginUser" type="button">編輯帳號</button>
+        </div>
+      </div>
+    `
+  });
+
+  document.getElementById("recordModalEditLoginUser").addEventListener("click", () => {
+    renderLoginUserRecordEdit(loginUser);
+  });
+}
+
+function renderLoginUserRecordEdit(loginUser) {
+  const organizationOptions = state.organizations
+    .filter((organization) => organization.isActive || organization.id === loginUser.organizationId)
+    .map((organization) =>
+      `<option value="${organization.id}" ${organization.id === loginUser.organizationId ? "selected" : ""}>${escapeHtml(organization.name)}</option>`
+    ).join("");
+  document.getElementById("recordModalEyebrow").textContent = "Edit Account";
+  document.getElementById("recordModalBody").innerHTML = `
+    <form class="form record-edit-form" id="recordLoginUserForm">
+      <label>顯示名稱<input name="displayName" required maxlength="50" value="${escapeHtml(loginUser.displayName || "")}"></label>
+      <label>登入帳號<input name="loginAccount" required maxlength="50" value="${escapeHtml(loginUser.loginAccount || "")}"></label>
+      <label>所屬組織
+        <select name="organizationId" id="recordLoginOrganizationSelect">${organizationOptions}</select>
+      </label>
+      <label>綁定成員
+        <span class="member-picker-field" data-member-picker data-source="login-user-members"
+          data-organization-select-id="recordLoginOrganizationSelect"
+          data-title="選擇綁定成員" data-empty-label="不綁定">
+          <input name="userId" type="hidden" value="${loginUser.userId || ""}">
+          <button class="member-picker-trigger" type="button" data-member-picker-trigger>不綁定</button>
+        </span>
+      </label>
+      <label>系統權限
+        <select name="systemRole">
+          ${["admin", "staff", "viewer"].map((role) =>
+            `<option value="${role}" ${loginUser.systemRole === role ? "selected" : ""}>${label("systemRole", role)}</option>`
+          ).join("")}
+        </select>
+      </label>
+      <p class="muted">管理員不可在此修改密碼，密碼只能由登入者本人變更。</p>
+      <div class="form-actions">
+        <button class="primary" type="submit">儲存</button>
+        <button class="ghost" id="recordLoginUserBack" type="button">返回資料</button>
+      </div>
+    </form>
+  `;
+
+  const form = document.getElementById("recordLoginUserForm");
+  refreshMemberPickerFields(form);
+  form.elements.organizationId.addEventListener("change", () => {
+    setMemberPickerValue(form.elements.userId, "");
+  });
+  document.getElementById("recordLoginUserBack").addEventListener("click", () => openLoginUserRecordModal(loginUser));
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    await runAction(async () => {
+      await api(`/api/loginusers/${loginUser.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          displayName: data.get("displayName"),
+          loginAccount: data.get("loginAccount"),
+          organizationId: Number(data.get("organizationId")) || loginUser.organizationId,
+          userId: Number(data.get("userId")) || null,
+          systemRole: data.get("systemRole"),
+          isActive: loginUser.isActive
+        })
+      });
+      await loadLoginUsers();
+      const updated = state.loginUsers.find((item) => item.id === loginUser.id);
+      if (updated) {
+        openLoginUserRecordModal(updated);
+      } else {
+        closeRecordModal();
+      }
+      showAlert("帳號資料已更新。", false);
+    });
   });
 }
 
@@ -329,10 +806,6 @@ function setDefaultDates() {
   const today = new Date().toISOString().slice(0, 10);
   document.querySelector("[name='orderDate']").value = today;
   document.querySelector("[name='giftDate']").value = today;
-  const giftCatalogDate = document.getElementById("giftCatalogDate");
-  if (giftCatalogDate && !giftCatalogDate.value) {
-    giftCatalogDate.value = today;
-  }
   document.querySelector("[name='payMonth']").value = today.slice(0, 7);
 }
 
@@ -400,7 +873,6 @@ function applyNavigationPermissions() {
     organization: "Organization.Manage",
     services: "Gift.View",
     giftRecords: "Gift.View",
-    giftCatalog: "Gift.View",
     orders: "Order.View",
     payments: "Settlement.View",
     audit: "Audit.View",
@@ -415,7 +887,7 @@ function applyNavigationPermissions() {
         ? !hasPermission(permission)
         : false;
     if (state.auth?.user?.systemRole === "viewer" &&
-        ["services", "giftCatalog", "payments"].includes(button.dataset.view)) {
+        ["services", "payments"].includes(button.dataset.view)) {
       button.hidden = true;
     }
   });
@@ -559,7 +1031,7 @@ async function refreshAll() {
     if (state.view === "dashboard") {
       await loadDashboard();
     }
-    if (state.view === "users" || state.view === "loginUsers" || state.view === "orders" || state.view === "giftRecords" || state.view === "giftCatalog" || state.view === "organization") {
+    if (state.view === "users" || state.view === "loginUsers" || state.view === "orders" || state.view === "giftRecords" || state.view === "organization") {
       await loadUsers();
     }
     if (state.view === "organization") {
@@ -571,10 +1043,10 @@ async function refreshAll() {
       }
       await loadLoginUsers();
     }
-    if (state.view === "services" || state.view === "giftRecords" || state.view === "giftCatalog") {
+    if (state.view === "services" || state.view === "giftRecords") {
       await loadServiceItems();
     }
-    if (state.view === "giftRecords" || state.view === "giftCatalog") {
+    if (state.view === "giftRecords") {
       await loadGiftRecords();
     }
     if (state.view === "orders" || state.view === "dashboard") {
@@ -623,7 +1095,6 @@ async function loadLoginUsers() {
 async function loadServiceItems() {
   state.serviceItems = await api("/api/serviceitems");
   renderServiceItems();
-  renderGiftItems();
   renderSelects();
 }
 
@@ -686,20 +1157,17 @@ function renderOrganizationSelect() {
 
 function renderLoginUserMemberSelect() {
   const organizationSelect = document.getElementById("loginUserOrganizationSelect");
-  const memberSelect = document.getElementById("loginUserMemberSelect");
-  if (!memberSelect) {
+  const memberInput = document.getElementById("loginUserMemberSelect");
+  if (!memberInput) {
     return;
   }
 
-  const selected = memberSelect.value;
   const organizationId = Number(organizationSelect?.value) || state.auth?.user?.organizationId;
-  const users = state.users.filter((user) =>
-    user.isActive && (!organizationId || user.organizationId === organizationId));
-  memberSelect.innerHTML = `
-    <option value="">不綁定</option>
-    ${users.map((user) => `<option value="${user.id}">${escapeHtml(user.nickname)}</option>`).join("")}
-  `;
-  memberSelect.value = selected;
+  const selected = state.users.find((user) => user.id === Number(memberInput.value));
+  if (selected && organizationId && selected.organizationId !== organizationId) {
+    memberInput.value = "";
+  }
+  refreshMemberPickerField(memberInput.closest("[data-member-picker]"));
 }
 
 function renderOrganizationManagement() {
@@ -852,14 +1320,13 @@ function renderLoginUsers() {
   const users = state.loginUsers;
   body.innerHTML = users.length ? users.map((user) => `
     <tr>
-      <td>${escapeHtml(user.loginAccount || "")}</td>
-      <td>${escapeHtml(user.displayName)}</td>
+      <td><button class="record-name-link" type="button" data-login-user-open="${user.id}">${escapeHtml(user.loginAccount || "")}</button></td>
+      <td><button class="record-name-link" type="button" data-login-user-open="${user.id}">${escapeHtml(user.displayName)}</button></td>
       <td>${label("systemRole", user.systemRole)}</td>
       <td>${user.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
       <td>${pill("已設定", "good")}</td>
       <td class="actions-col">
         <div class="table-actions">
-          <button class="ghost small" data-login-user-edit="${user.id}">編輯</button>
           ${user.isActive
             ? `<button class="ghost small" data-login-user-deactivate="${user.id}">停用</button>`
             : `<button class="ghost small" data-login-user-activate="${user.id}">啟用</button>`}
@@ -892,11 +1359,11 @@ function ensureLoginUserTableHeader(body) {
 }
 
 function bindLoginUserTableActions(body) {
-  body.querySelectorAll("[data-login-user-edit]").forEach((button) => {
+  body.querySelectorAll("[data-login-user-open]").forEach((button) => {
     button.addEventListener("click", () => {
-      const loginUser = state.loginUsers.find((item) => item.id === Number(button.dataset.loginUserEdit));
+      const loginUser = state.loginUsers.find((item) => item.id === Number(button.dataset.loginUserOpen));
       if (loginUser) {
-        startLoginUserEdit(loginUser);
+        openLoginUserRecordModal(loginUser);
       }
     });
   });
@@ -965,37 +1432,6 @@ function renderServiceItems() {
 
 }
 
-function renderGiftItems() {
-  const body = document.getElementById("giftItemRows");
-  if (!body) {
-    return;
-  }
-
-  const rows = state.serviceItems.filter((item) => item.category === "gift" && item.isActive);
-  body.innerHTML = rows.length ? rows.map((item) => `
-    <article class="gift-catalog-card">
-      <div class="gift-catalog-main">
-        <h3>${escapeHtml(item.name)}</h3>
-        <div class="gift-catalog-meta">
-          <span>${escapeHtml(servicePriceText(item))}</span>
-          <span>${escapeHtml(unitTypeText(item.unitType))}</span>
-        </div>
-        <p>${escapeHtml(item.remark || "尚未填寫備註。")}</p>
-      </div>
-      <button class="primary small" type="button" data-gift-item-order="${item.id}">贈送</button>
-    </article>
-  `).join("") : `<p class="muted">尚未建立禮物項目。</p>`;
-
-  body.querySelectorAll("[data-gift-item-order]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const item = state.serviceItems.find((serviceItem) => serviceItem.id === Number(button.dataset.giftItemOrder));
-      if (item) {
-        addGiftRecordFromItem(item);
-      }
-    });
-  });
-}
-
 function renderGiftRecords() {
   const body = document.getElementById("giftRecordRows");
   if (!body) {
@@ -1010,12 +1446,13 @@ function renderGiftRecords() {
       <td>${escapeHtml(record.giftName)}${record.quantity && record.quantity !== 1 ? ` × ${money.format(record.quantity)}` : ""}</td>
       <td>${money.format(record.amount)}</td>
       <td>${paymentPill(record.customerPaymentStatus)}</td>
+      <td>${escapeHtml(record.remark || "—")}</td>
       <td>
         <button class="ghost small" data-gift-edit="${record.id}">編輯</button>
         <button class="ghost small danger-action" data-gift-delete="${record.id}">刪除</button>
       </td>
     </tr>
-  `).join("") : emptyRow(7);
+  `).join("") : emptyRow(8);
 
   body.querySelectorAll("[data-gift-edit]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1224,11 +1661,10 @@ function renderUserTable(elementId, users) {
   body.innerHTML = users.length ? users.map((user) => `
     <tr>
       <td>${escapeHtml(user.discordName || "")}</td>
-      <td>${escapeHtml(user.nickname)}</td>
+      <td><button class="record-name-link" type="button" data-user-open="${user.id}">${escapeHtml(user.nickname)}</button></td>
       <td>${label("systemRole", user.systemRole)}</td>
       <td>${user.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
       <td>
-        <button class="ghost small" data-user-edit="${user.id}">編輯</button>
         ${user.isActive
           ? `<button class="ghost small" data-user-deactivate="${user.id}">停用</button>`
           : `<button class="ghost small" data-user-activate="${user.id}">啟用</button>`}
@@ -1241,11 +1677,11 @@ function renderUserTable(elementId, users) {
 }
 
 function bindUserTableActions(body) {
-  body.querySelectorAll("[data-user-edit]").forEach((button) => {
+  body.querySelectorAll("[data-user-open]").forEach((button) => {
     button.addEventListener("click", () => {
-      const user = state.users.find((item) => item.id === Number(button.dataset.userEdit));
+      const user = state.users.find((item) => item.id === Number(button.dataset.userOpen));
       if (user) {
-        startUserEdit(user);
+        openUserRecordModal(user);
       }
     });
   });
@@ -1281,7 +1717,7 @@ function renderOrders() {
       <td>${order.orderDate}</td>
       <td>${escapeHtml(order.orderNo || "")}</td>
       <td>${money.format(order.amount)}</td>
-      <td>${money.format(order.shareTotalAmount)}</td>
+      <td>${money.format(order.commissionAmount)}</td>
       <td>${statusPill(order.status)}</td>
       <td>${paymentPill(order.customerPaymentStatus)}</td>
       <td>
@@ -1388,46 +1824,6 @@ function ensureAuditHeader(body) {
 }
 
 function renderSelects() {
-  const bossSelect = document.getElementById("bossSelect");
-  bossSelect.innerHTML = `<option value="">未指定</option>${state.bosses.map((boss) =>
-    `<option value="${boss.id}">${escapeHtml(boss.nickname)}</option>`
-  ).join("")}`;
-
-  const giftBossSelect = document.getElementById("giftBossSelect");
-  if (giftBossSelect) {
-    const currentValue = giftBossSelect.value;
-    giftBossSelect.innerHTML = state.bosses.map((boss) =>
-      `<option value="${boss.id}">${escapeHtml(boss.nickname)}</option>`
-    ).join("");
-    if (currentValue) {
-      giftBossSelect.value = currentValue;
-    }
-  }
-
-  const giftRecipientSelect = document.getElementById("giftRecipientSelect");
-  if (giftRecipientSelect) {
-    const currentValue = giftRecipientSelect.value;
-    giftRecipientSelect.innerHTML = state.players.map((player) =>
-      `<option value="${player.id}">${escapeHtml(player.nickname)}</option>`
-    ).join("");
-    if (currentValue) {
-      giftRecipientSelect.value = currentValue;
-    }
-  }
-
-  fillUserSelect("giftCatalogBossSelect", state.bosses);
-  fillUserSelect("giftCatalogRecipientSelect", state.players);
-
-  const giftItemSelect = document.getElementById("giftItemSelect");
-  if (giftItemSelect) {
-    const currentValue = giftItemSelect.value;
-    const giftItems = state.serviceItems.filter((item) => item.category === "gift" && item.isActive);
-    giftItemSelect.innerHTML = `<option value="">自訂打賞</option>${giftItems.map((item) =>
-      `<option value="${item.id}">${escapeHtml(item.name)}${item.defaultPrice == null ? "" : ` - ${money.format(item.defaultPrice)}`}</option>`
-    ).join("")}`;
-    giftItemSelect.value = currentValue;
-  }
-
   const departmentSelect = document.getElementById("departmentSelect");
   if (departmentSelect) {
     const currentValue = departmentSelect.value;
@@ -1439,42 +1835,7 @@ function renderSelects() {
     }
   }
 
-  const departmentUserSelect = document.getElementById("departmentUserSelect");
-  if (departmentUserSelect) {
-    const currentValue = departmentUserSelect.value;
-    departmentUserSelect.innerHTML = state.users.filter((user) => user.isActive).map((user) =>
-      `<option value="${user.id}">${escapeHtml(user.nickname)}</option>`
-    ).join("");
-    if (currentValue) {
-      departmentUserSelect.value = currentValue;
-    }
-  }
-
-
-  document.querySelectorAll("[data-member-select]").forEach((select) => {
-    const currentValue = select.value;
-    select.innerHTML = state.players.map((player) =>
-      `<option value="${player.id}">${escapeHtml(player.nickname)}</option>`
-    ).join("");
-    if (currentValue) {
-      select.value = currentValue;
-    }
-  });
-}
-
-function fillUserSelect(elementId, users) {
-  const select = document.getElementById(elementId);
-  if (!select) {
-    return;
-  }
-
-  const currentValue = select.value;
-  select.innerHTML = users.map((user) =>
-    `<option value="${user.id}">${escapeHtml(user.nickname)}</option>`
-  ).join("");
-  if (currentValue) {
-    select.value = currentValue;
-  }
+  refreshMemberPickerFields();
 }
 
 function addMemberRow(member = null) {
@@ -1482,20 +1843,26 @@ function addMemberRow(member = null) {
   const row = document.createElement("div");
   row.className = "member-row";
   row.innerHTML = `
-    <label class="member-field member-user">團員<select data-member-select></select></label>
+    <label class="member-field member-user">團員
+      <span class="member-picker-field" data-member-picker data-source="players" data-title="選擇分潤團員" data-required="true">
+        <input data-member-select type="hidden">
+        <button class="member-picker-trigger" type="button" data-member-picker-trigger>請選擇團員</button>
+      </span>
+    </label>
     <label class="member-field member-share">分潤<input data-member-share type="number" step="0.01" min="0" placeholder="0"></label>
     <button class="icon-btn member-remove" type="button" title="移除">×</button>
   `;
-  row.querySelector("button").addEventListener("click", () => {
+  row.querySelector(".member-remove").addEventListener("click", () => {
     row.remove();
     updateOrderCalc();
   });
   row.addEventListener("input", updateOrderCalc);
   wrap.appendChild(row);
-  renderSelects();
   if (member) {
-    row.querySelector("[data-member-select]").value = member.userId;
+    setMemberPickerValue(row.querySelector("[data-member-select]"), member.userId);
     row.querySelector("[data-member-share]").value = member.shareAmount;
+  } else {
+    refreshMemberPickerFields(row);
   }
   updateOrderCalc();
 }
@@ -1589,6 +1956,7 @@ function startLoginUserEdit(loginUser) {
   }
   if (form.elements.userId) {
     form.elements.userId.value = loginUser.userId || "";
+    refreshMemberPickerFields(form);
   }
   setLoginUserEditMode(true);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1600,6 +1968,7 @@ function resetLoginUserForm() {
   form.elements.loginUserId.value = "";
   form.elements.systemRole.value = "admin";
   setLoginUserEditMode(false);
+  refreshMemberPickerFields(form);
 }
 
 function setLoginUserEditMode(isEdit) {
@@ -1688,6 +2057,9 @@ async function submitDepartment(event) {
 async function submitDepartmentMember(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  if (!validateRequiredMemberPickers(form)) {
+    return;
+  }
   const data = new FormData(form);
   const departmentId = data.get("departmentId");
   const memberId = data.get("memberId");
@@ -1717,8 +2089,9 @@ function startDepartmentMemberEdit(member) {
   form.elements.memberId.value = member.id;
   form.elements.departmentId.value = member.departmentId;
   form.elements.userId.value = member.userId;
+  refreshMemberPickerFields(form);
   form.elements.departmentId.disabled = true;
-  form.elements.userId.disabled = true;
+  form.querySelector("[data-member-picker-trigger]").disabled = true;
   form.elements.positionTitle.value = member.positionTitle || "";
   form.elements.isManager.checked = Boolean(member.isManager);
   document.getElementById("departmentMemberSubmitBtn").textContent = "更新";
@@ -1731,7 +2104,7 @@ function resetDepartmentMemberForm() {
   form.reset();
   form.elements.memberId.value = "";
   form.elements.departmentId.disabled = false;
-  form.elements.userId.disabled = false;
+  form.querySelector("[data-member-picker-trigger]").disabled = false;
   document.getElementById("departmentMemberSubmitBtn").textContent = "加入 / 更新";
   document.getElementById("cancelDepartmentMemberEditBtn").hidden = true;
   renderSelects();
@@ -1766,6 +2139,9 @@ function resetDepartmentForm() {
 async function submitGiftRecord(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  if (!validateRequiredMemberPickers(form)) {
+    return;
+  }
   const data = new FormData(form);
   const giftRecordId = data.get("giftRecordId");
   const isEdit = Boolean(giftRecordId);
@@ -1802,7 +2178,8 @@ function startGiftRecordEdit(record) {
   form.elements.giftDate.value = record.giftDate;
   form.elements.bossUserId.value = record.bossUserId;
   form.elements.recipientUserId.value = record.recipientUserId;
-  form.elements.serviceItemId.value = record.serviceItemId || "";
+  refreshMemberPickerFields(form);
+  setGiftPickerValue(record.serviceItemId || "");
   form.elements.giftName.value = record.serviceItemId ? "" : record.giftName;
   form.elements.amount.value = record.amount;
   form.elements.quantity.value = record.quantity || 1;
@@ -1822,120 +2199,13 @@ function resetGiftRecordForm() {
   form.elements.quantity.value = 1;
   form.elements.customerPaymentStatus.value = "unpaid";
   form.elements.status.value = "completed";
+  form.elements.giftName.disabled = false;
+  setGiftPickerValue("");
   document.getElementById("giftRecordFormTitle").textContent = "新增送禮紀錄";
   document.getElementById("giftRecordSubmitBtn").textContent = "新增紀錄";
   document.getElementById("cancelGiftRecordEditBtn").hidden = true;
   setDefaultDates();
   renderSelects();
-}
-
-function applySelectedGiftItem() {
-  const form = document.getElementById("giftRecordForm");
-  const itemId = Number(form.elements.serviceItemId.value);
-  const item = state.serviceItems.find((serviceItem) => serviceItem.id === itemId);
-  if (!item) {
-    return;
-  }
-
-  form.elements.giftName.value = "";
-  if (item.defaultPrice != null) {
-    form.elements.amount.value = item.defaultPrice;
-  }
-}
-
-async function addGiftRecordFromItem(item) {
-  const settings = getGiftCatalogDonationSettings();
-  const bossUserId = settings.bossUserId;
-  const recipientUserId = settings.recipientUserId;
-
-  if (!settings.giftDate || !bossUserId || !recipientUserId) {
-    showAlert("請先在贈送設定選好日期、老闆和送給對象。");
-    document.querySelector(".gift-donate-settings")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    return;
-  }
-
-  if (item.defaultPrice == null) {
-    const form = document.getElementById("giftRecordForm");
-    showAlert("這個禮物沒有固定金額，請到送禮紀錄手動填寫。");
-    form.elements.serviceItemId.value = item.id;
-    form.elements.amount.value = "";
-    form.elements.remark.value = item.remark || "";
-    document.querySelector('.nav-tabs button[data-view="giftRecords"]')?.click();
-    form.scrollIntoView({ behavior: "smooth", block: "start" });
-    return;
-  }
-
-  const bossName = document.getElementById("giftCatalogBossSelect")?.selectedOptions[0]?.textContent?.trim() || "未指定";
-  const recipientName = document.getElementById("giftCatalogRecipientSelect")?.selectedOptions[0]?.textContent?.trim() || "未指定";
-  const confirmed = await confirmGiftDonation(
-    `「${item.name}」／${bossName} 贈送給 ${recipientName}／${money.format(item.defaultPrice)}`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  await runAction(async () => {
-    const giftDate = settings.giftDate;
-    const customerPaymentStatus = settings.customerPaymentStatus;
-    const status = settings.status;
-    const existing = state.giftRecords.find((record) =>
-      record.giftDate === giftDate &&
-      record.bossUserId === bossUserId &&
-      record.recipientUserId === recipientUserId &&
-      record.serviceItemId === item.id &&
-      record.customerPaymentStatus === customerPaymentStatus &&
-      record.status === status
-    );
-
-    if (existing) {
-      await api(`/api/giftrecords/${existing.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          giftDate: existing.giftDate,
-          bossUserId: existing.bossUserId,
-          recipientUserId: existing.recipientUserId,
-          serviceItemId: existing.serviceItemId,
-          giftName: null,
-          amount: existing.amount,
-          quantity: Number(existing.quantity || 0) + 1,
-          customerPaymentStatus: existing.customerPaymentStatus,
-          status: existing.status,
-          remark: existing.remark || item.remark || null
-        })
-      });
-    } else {
-      await api("/api/giftrecords", {
-        method: "POST",
-        body: JSON.stringify({
-          giftDate,
-          bossUserId,
-          recipientUserId,
-          serviceItemId: item.id,
-          giftName: null,
-          amount: item.defaultPrice,
-          quantity: 1,
-          customerPaymentStatus,
-          status,
-          remark: item.remark || null
-        })
-      });
-    }
-
-    await loadGiftRecords();
-    await loadDashboard();
-    showAlert(existing ? `已把「${item.name}」數量加 1。` : `已新增 1 筆「${item.name}」贈送紀錄。`, false);
-  });
-}
-
-function getGiftCatalogDonationSettings() {
-  return {
-    giftDate: document.getElementById("giftCatalogDate")?.value || "",
-    bossUserId: Number(document.getElementById("giftCatalogBossSelect")?.value || 0),
-    recipientUserId: Number(document.getElementById("giftCatalogRecipientSelect")?.value || 0),
-    customerPaymentStatus: document.getElementById("giftCatalogPaymentStatus")?.value || "unpaid",
-    status: document.getElementById("giftCatalogStatus")?.value || "completed"
-  };
 }
 
 async function startOrderFromService(item) {
@@ -1968,6 +2238,9 @@ async function startOrderFromService(item) {
 async function submitOrder(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  if (!validateRequiredMemberPickers(form)) {
+    return;
+  }
   const data = new FormData(form);
   let orderId = data.get("orderId");
   const editControlsVisible = !document.getElementById("copyOrderBtn").hidden;
@@ -2027,6 +2300,7 @@ function startOrderEdit(order) {
   form.elements.orderDate.value = order.orderDate;
   form.elements.orderNo.value = order.orderNo || "";
   form.elements.ownerUserId.value = order.ownerUserId || "";
+  refreshMemberPickerFields(form);
   form.elements.amount.value = order.amount;
   form.elements.serviceName.value = "";
   form.elements.serviceUnitPrice.value = "";
@@ -2069,6 +2343,7 @@ function resetOrderForm() {
   form.elements.serviceUnitType.value = "";
   form.elements.serviceUnitLabel.value = "";
   form.elements.serviceQuantity.value = 1;
+  refreshMemberPickerFields(form);
   document.getElementById("memberRows").innerHTML = "";
   setDefaultDates();
   addMemberRow();
@@ -2278,41 +2553,6 @@ function showAlert(message, isError = true) {
 
 function hideAlert() {
   document.getElementById("alert").hidden = true;
-}
-
-let pendingGiftConfirmation = null;
-
-function confirmGiftDonation(message) {
-  const snackbar = document.getElementById("giftConfirmSnackbar");
-  const messageElement = document.getElementById("giftConfirmMessage");
-  const cancelButton = document.getElementById("giftConfirmCancel");
-  const submitButton = document.getElementById("giftConfirmSubmit");
-
-  if (pendingGiftConfirmation) {
-    pendingGiftConfirmation(false);
-  }
-
-  messageElement.textContent = message;
-  snackbar.hidden = false;
-
-  return new Promise((resolve) => {
-    const finish = (confirmed) => {
-      if (pendingGiftConfirmation !== finish) {
-        return;
-      }
-
-      pendingGiftConfirmation = null;
-      snackbar.hidden = true;
-      cancelButton.onclick = null;
-      submitButton.onclick = null;
-      resolve(confirmed);
-    };
-
-    pendingGiftConfirmation = finish;
-    cancelButton.onclick = () => finish(false);
-    submitButton.onclick = () => finish(true);
-    submitButton.focus();
-  });
 }
 
 function escapeHtml(value) {
