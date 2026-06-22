@@ -89,6 +89,16 @@ public sealed class LoginUserService
             return ToGenericResult<LoginUserDto>(validationResult);
         }
 
+        if (loginUser.DiscordLinkedAt.HasValue &&
+            loginUser.UserId != request.UserId)
+        {
+            return ServiceResult<LoginUserDto>.Validation(
+                new Dictionary<string, string[]>
+                {
+                    ["userId"] = ["此帳號已綁定 Discord，請由本人解除綁定後再更換對應成員。"]
+                });
+        }
+
         var before = LoginUserMapper.ToDto(loginUser);
 
         loginUser.DisplayName = request.DisplayName.Trim();

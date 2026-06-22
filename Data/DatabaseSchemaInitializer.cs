@@ -110,6 +110,34 @@ BEGIN
     ALTER TABLE dbo.login_users ADD discord_name NVARCHAR(100) NULL;
 END;
 
+IF COL_LENGTH('dbo.users', 'discord_user_id') IS NULL
+BEGIN
+    ALTER TABLE dbo.users ADD discord_user_id NVARCHAR(50) NULL;
+END;
+
+IF COL_LENGTH('dbo.login_users', 'discord_linked_at') IS NULL
+BEGIN
+    ALTER TABLE dbo.login_users ADD discord_linked_at DATETIME2 NULL;
+    EXEC(N'UPDATE dbo.login_users
+    SET discord_linked_at = SYSUTCDATETIME()
+    WHERE discord_id IS NOT NULL
+      AND discord_id NOT LIKE ''%[^0-9]%''
+      AND LEN(discord_id) BETWEEN 17 AND 20;');
+END;
+
+IF COL_LENGTH('dbo.login_users', 'discord_user_id') IS NULL
+BEGIN
+    ALTER TABLE dbo.login_users ADD discord_user_id NVARCHAR(50) NULL;
+    EXEC(N'UPDATE dbo.login_users
+    SET discord_user_id = discord_id,
+        discord_id = discord_name,
+        discord_name = NULL
+    WHERE discord_linked_at IS NOT NULL
+      AND discord_id IS NOT NULL
+      AND discord_id NOT LIKE ''%[^0-9]%''
+      AND LEN(discord_id) BETWEEN 17 AND 20;');
+END;
+
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
@@ -120,6 +148,30 @@ BEGIN
     EXEC(N'CREATE UNIQUE INDEX UQ_login_users_discord_id
     ON dbo.login_users(discord_id)
     WHERE discord_id IS NOT NULL;');
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'UQ_login_users_discord_user_id'
+      AND object_id = OBJECT_ID(N'dbo.login_users')
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX UQ_login_users_discord_user_id
+    ON dbo.login_users(discord_user_id)
+    WHERE discord_user_id IS NOT NULL;');
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'UQ_users_discord_user_id'
+      AND object_id = OBJECT_ID(N'dbo.users')
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX UQ_users_discord_user_id
+    ON dbo.users(discord_user_id)
+    WHERE discord_user_id IS NOT NULL;');
 END;
 
 IF COL_LENGTH('dbo.users', 'password_hash') IS NULL
@@ -558,6 +610,14 @@ SET user_id = u.id
 FROM dbo.login_users lu
 INNER JOIN dbo.users u ON u.login_account = lu.login_account
 WHERE lu.user_id IS NULL;
+UPDATE u
+SET discord_user_id = lu.discord_user_id,
+    discord_id = lu.discord_id,
+    discord_name = lu.discord_name
+FROM dbo.users u
+INNER JOIN dbo.login_users lu ON lu.user_id = u.id
+WHERE lu.discord_linked_at IS NOT NULL
+  AND lu.discord_user_id IS NOT NULL;
 UPDATE lu
 SET discord_id = u.discord_id,
     discord_name = u.discord_name

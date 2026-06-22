@@ -10,6 +10,8 @@ public sealed class LoginUserDto
     public string LoginAccount { get; set; } = string.Empty;
     public string? DiscordId { get; set; }
     public string? DiscordName { get; set; }
+    public string? DiscordUserId { get; set; }
+    public DateTime? DiscordLinkedAt { get; set; }
     public string SystemRole { get; set; } = "staff";
     public bool IsActive { get; set; }
     public bool HasPassword { get; set; }

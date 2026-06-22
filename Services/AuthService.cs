@@ -76,26 +76,47 @@ public sealed class AuthService
 
     public async Task<LoginUserDto?> LoginWithDiscordAsync(DiscordUserProfile profile)
     {
-        var discordId = profile.Id.Trim();
-        if (string.IsNullOrWhiteSpace(discordId))
+        var discordUserId = profile.Id.Trim();
+        if (string.IsNullOrWhiteSpace(discordUserId))
         {
             return null;
         }
 
         var loginUser = await _db.LoginUsers.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(x => x.DiscordId == discordId && x.IsActive);
+            .FirstOrDefaultAsync(x =>
+                x.DiscordUserId == discordUserId &&
+                x.DiscordLinkedAt != null &&
+                x.IsActive);
         if (loginUser is null)
         {
             return null;
         }
 
+        var discordId = profile.Username.Trim();
         var discordName = string.IsNullOrWhiteSpace(profile.GlobalName)
-            ? profile.Username
-            : profile.GlobalName;
-        if (!string.IsNullOrWhiteSpace(discordName) && loginUser.DiscordName != discordName)
+            ? discordId
+            : profile.GlobalName.Trim();
+        if (loginUser.DiscordUserId != discordUserId ||
+            loginUser.DiscordId != discordId ||
+            loginUser.DiscordName != discordName)
         {
+            loginUser.DiscordUserId = discordUserId;
+            loginUser.DiscordId = discordId;
             loginUser.DiscordName = discordName;
             loginUser.UpdatedAt = DateTime.UtcNow;
+        }
+
+        if (loginUser.UserId.HasValue)
+        {
+            var member = await _db.Users.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x => x.Id == loginUser.UserId.Value && x.IsActive);
+            if (member is not null)
+            {
+                member.DiscordUserId = discordUserId;
+                member.DiscordId = discordId;
+                member.DiscordName = discordName;
+                member.UpdatedAt = DateTime.UtcNow;
+            }
         }
 
         loginUser.LastLoginAt = DateTime.UtcNow;
@@ -104,55 +125,80 @@ public sealed class AuthService
         return await ToDtoWithPermissionsAsync(loginUser);
     }
 
-    public async Task<bool> LinkDiscordAsync(int loginUserId, DiscordUserProfile profile)
+    public async Task<string> LinkDiscordAsync(int loginUserId, DiscordUserProfile profile)
     {
-        var discordId = profile.Id.Trim();
-        if (string.IsNullOrWhiteSpace(discordId))
+        var discordUserId = profile.Id.Trim();
+        var discordId = profile.Username.Trim();
+        var discordName = string.IsNullOrWhiteSpace(profile.GlobalName)
+            ? discordId
+            : profile.GlobalName.Trim();
+        if (string.IsNullOrWhiteSpace(discordUserId) || string.IsNullOrWhiteSpace(discordId))
         {
-            return false;
+            return "failed";
         }
 
         var alreadyLinked = await _db.LoginUsers.IgnoreQueryFilters()
-            .AnyAsync(x => x.DiscordId == discordId && x.Id != loginUserId);
+            .AnyAsync(x => x.DiscordUserId == discordUserId && x.Id != loginUserId);
         if (alreadyLinked)
         {
-            return false;
+            return "conflict";
         }
 
         var loginUser = await _db.LoginUsers.IgnoreQueryFilters()
             .FirstOrDefaultAsync(x => x.Id == loginUserId && x.IsActive);
         if (loginUser is null)
         {
-            return false;
+            return "failed";
         }
 
         Models.Entities.User? member = null;
+        if (!loginUser.UserId.HasValue)
+        {
+            member = await _db.Users.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x =>
+                    x.OrganizationId == loginUser.OrganizationId &&
+                    x.IsActive &&
+                    (x.DiscordUserId == discordUserId ||
+                     x.DiscordId == discordId ||
+                     x.LoginAccount == loginUser.LoginAccount));
+            if (member is not null)
+            {
+                loginUser.UserId = member.Id;
+            }
+        }
+
         if (loginUser.UserId.HasValue)
         {
             var memberAlreadyLinked = await _db.Users.IgnoreQueryFilters()
-                .AnyAsync(x => x.DiscordId == discordId && x.Id != loginUser.UserId.Value);
+                .AnyAsync(x => x.DiscordUserId == discordUserId && x.Id != loginUser.UserId.Value);
             if (memberAlreadyLinked)
             {
-                return false;
+                return "conflict";
             }
 
-            member = await _db.Users.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(x => x.Id == loginUser.UserId.Value);
+            member ??= await _db.Users.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x => x.Id == loginUser.UserId.Value && x.IsActive);
         }
 
+        if (member is null)
+        {
+            return "member_required";
+        }
+
+        loginUser.DiscordUserId = discordUserId;
         loginUser.DiscordId = discordId;
-        loginUser.DiscordName = string.IsNullOrWhiteSpace(profile.GlobalName)
-            ? profile.Username
-            : profile.GlobalName;
+        loginUser.DiscordName = discordName;
         loginUser.UpdatedAt = DateTime.UtcNow;
+        loginUser.DiscordLinkedAt = DateTime.UtcNow;
         if (member is not null)
         {
+            member.DiscordUserId = loginUser.DiscordUserId;
             member.DiscordId = loginUser.DiscordId;
             member.DiscordName = loginUser.DiscordName;
             member.UpdatedAt = DateTime.UtcNow;
         }
         await _db.SaveChangesAsync();
-        return true;
+        return "success";
     }
 
     public async Task<bool> UnlinkDiscordAsync(int loginUserId)
@@ -164,8 +210,10 @@ public sealed class AuthService
             return false;
         }
 
+        loginUser.DiscordUserId = null;
         loginUser.DiscordId = null;
         loginUser.DiscordName = null;
+        loginUser.DiscordLinkedAt = null;
         loginUser.UpdatedAt = DateTime.UtcNow;
         if (loginUser.UserId.HasValue)
         {
@@ -173,6 +221,7 @@ public sealed class AuthService
                 .FirstOrDefaultAsync(x => x.Id == loginUser.UserId.Value);
             if (member is not null)
             {
+                member.DiscordUserId = null;
                 member.DiscordId = null;
                 member.DiscordName = null;
                 member.UpdatedAt = DateTime.UtcNow;

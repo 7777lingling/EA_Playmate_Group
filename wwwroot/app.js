@@ -612,8 +612,8 @@ function renderUserRecordEdit(user) {
   document.getElementById("recordModalBody").innerHTML = `
     <form class="form record-edit-form" id="recordUserForm">
       <label>暱稱<input name="nickname" required maxlength="50" value="${escapeHtml(user.nickname || "")}"></label>
-      <label>Discord ID<input name="discordId" maxlength="50" value="${escapeHtml(user.discordId || "")}"></label>
-      <label>Discord 名稱<input name="discordName" maxlength="100" value="${escapeHtml(user.discordName || "")}"></label>
+      <label>Discord ID<input value="${escapeHtml(user.discordId || "尚未綁定")}" disabled></label>
+      <label>Discord 名稱<input value="${escapeHtml(user.discordName || "尚未綁定")}" disabled></label>
       <label>銀行帳號<input name="bankAccount" maxlength="200" value="${escapeHtml(user.bankAccount || "")}"></label>
       <label>系統權限
         <select name="systemRole">
@@ -642,8 +642,6 @@ function renderUserRecordEdit(user) {
         method: "PUT",
         body: JSON.stringify({
           nickname: data.get("nickname"),
-          discordId: emptyToNull(data.get("discordId")),
-          discordName: emptyToNull(data.get("discordName")),
           bankAccount: emptyToNull(data.get("bankAccount")),
           systemRole: data.get("systemRole"),
           isPlayer: data.get("isPlayer") === "on",
@@ -964,6 +962,7 @@ function takeDiscordLinkResult() {
   const messages = {
     success: { message: "Discord 帳號綁定成功。", isError: false },
     conflict: { message: "此 Discord 已綁定其他帳號。", isError: true },
+    member_required: { message: "此登入帳號尚未對應成員，請先在帳號管理指定現有成員。", isError: true },
     denied: { message: "Discord 授權已取消。", isError: true },
     session: { message: "登入狀態已失效，請重新登入後再綁定。", isError: true },
     state: { message: "Discord 綁定驗證失敗，請重新操作。", isError: true },
@@ -1014,8 +1013,8 @@ function showApp() {
     document.getElementById("changePasswordBtn").hidden = false;
     const discordLinkBtn = document.getElementById("discordLinkBtn");
     discordLinkBtn.hidden = false;
-    discordLinkBtn.textContent = state.auth.user.discordId
-      ? `解除 Discord 綁定（${state.auth.user.discordName || "已綁定"}）`
+    discordLinkBtn.textContent = state.auth.user.discordLinkedAt
+      ? `解除 Discord 綁定（${state.auth.user.discordName || state.auth.user.discordId || "已綁定"}）`
       : "綁定 Discord";
   }
   applyNavigationPermissions();
@@ -1149,7 +1148,7 @@ function startDiscordLogin() {
 }
 
 async function toggleDiscordLink() {
-  if (!state.auth?.user?.discordId) {
+  if (!state.auth?.user?.discordLinkedAt) {
     window.location.href = "/api/auth/discord/link";
     return;
   }
@@ -1858,9 +1857,9 @@ function renderUserTable(elementId, users) {
   const body = document.getElementById(elementId);
   body.innerHTML = users.length ? users.map((user) => `
     <tr>
-      <td>${escapeHtml(user.discordName || "")}</td>
       <td><button class="record-name-link" type="button" data-user-open="${user.id}">${escapeHtml(user.nickname)}</button></td>
-      <td>${label("systemRole", user.systemRole)}</td>
+      <td>${escapeHtml(user.discordId || "")}</td>
+      <td>${escapeHtml(user.discordName || "")}</td>
       <td>${user.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
       <td>
         ${user.isActive
@@ -2074,8 +2073,6 @@ async function submitUser(event) {
   const existingUser = isEdit ? state.users.find((user) => user.id === Number(userId)) : null;
   const payload = {
     nickname: data.get("nickname"),
-    discordId: emptyToNull(data.get("discordId")),
-    discordName: emptyToNull(data.get("discordName")),
     bankAccount: emptyToNull(data.get("bankAccount")),
     systemRole: data.get("systemRole"),
     isPlayer: data.get("isPlayer") === "on",
@@ -2199,8 +2196,6 @@ function startUserEdit(user) {
   const form = document.getElementById("userForm");
   form.elements.userId.value = user.id;
   form.elements.nickname.value = user.nickname || "";
-  form.elements.discordId.value = user.discordId || "";
-  form.elements.discordName.value = user.discordName || "";
   form.elements.bankAccount.value = user.bankAccount || "";
   form.elements.systemRole.value = user.systemRole || "staff";
   form.elements.isPlayer.checked = Boolean(user.isPlayer);

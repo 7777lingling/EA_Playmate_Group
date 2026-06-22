@@ -128,8 +128,8 @@ public sealed class AuthController : ControllerBase
                     return Redirect("/?discordLink=session");
                 }
 
-                var linked = await _authService.LinkDiscordAsync(loginUserId.Value, profile);
-                return Redirect(linked ? "/?discordLink=success" : "/?discordLink=conflict");
+                var linkResult = await _authService.LinkDiscordAsync(loginUserId.Value, profile);
+                return Redirect($"/?discordLink={linkResult}");
             }
 
             var user = await _authService.LoginWithDiscordAsync(profile);

@@ -19,8 +19,7 @@ public sealed class UserService
     {
         var validationResult = await ValidateUserAsync(
             request.Nickname,
-            request.SystemRole,
-            request.DiscordId);
+            request.SystemRole);
         if (!validationResult.Succeeded)
         {
             return ToGenericResult<UserDto>(validationResult);
@@ -29,8 +28,6 @@ public sealed class UserService
         var user = new User
         {
             Nickname = request.Nickname.Trim(),
-            DiscordId = string.IsNullOrWhiteSpace(request.DiscordId) ? null : request.DiscordId.Trim(),
-            DiscordName = string.IsNullOrWhiteSpace(request.DiscordName) ? null : request.DiscordName.Trim(),
             BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount.Trim(),
             SystemRole = request.SystemRole,
             IsPlayer = request.IsPlayer,
@@ -64,7 +61,6 @@ public sealed class UserService
         var validationResult = await ValidateUserAsync(
             request.Nickname,
             request.SystemRole,
-            request.DiscordId,
             id);
         if (!validationResult.Succeeded)
         {
@@ -74,8 +70,6 @@ public sealed class UserService
         var before = UserMapper.ToDto(user);
 
         user.Nickname = request.Nickname.Trim();
-        user.DiscordId = string.IsNullOrWhiteSpace(request.DiscordId) ? null : request.DiscordId.Trim();
-        user.DiscordName = string.IsNullOrWhiteSpace(request.DiscordName) ? null : request.DiscordName.Trim();
         user.BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount.Trim();
         user.SystemRole = request.SystemRole;
         user.IsPlayer = request.IsPlayer;
@@ -184,7 +178,6 @@ public sealed class UserService
     private async Task<ServiceResult> ValidateUserAsync(
         string nickname,
         string systemRole,
-        string? discordId,
         int? excludeUserId = null)
     {
         var errors = new Dictionary<string, string[]>();
@@ -208,19 +201,6 @@ public sealed class UserService
             if (nicknameExists)
             {
                 errors["nickname"] = ["此暱稱已存在，請換一個。"];
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(discordId))
-        {
-            var normalizedDiscordId = discordId.Trim();
-            var excludedUserId = excludeUserId ?? 0;
-            var discordIdExists = await _db.Users.AnyAsync(x =>
-                x.DiscordId == normalizedDiscordId &&
-                (!excludeUserId.HasValue || x.Id != excludedUserId));
-            if (discordIdExists)
-            {
-                errors["discordId"] = ["此 Discord ID 已存在，請換一個。"];
             }
         }
 

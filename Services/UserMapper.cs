@@ -15,6 +15,7 @@ public static class UserMapper
             Nickname = user.Nickname,
             DiscordId = user.DiscordId,
             DiscordName = user.DiscordName,
+            DiscordUserId = user.DiscordUserId,
             BankAccount = user.BankAccount,
             SystemRole = user.SystemRole,
             IsPlayer = user.IsPlayer,

@@ -9,6 +9,7 @@ public sealed class User : IOrganizationScoped
     public string Nickname { get; set; } = string.Empty;
     public string? DiscordId { get; set; }
     public string? DiscordName { get; set; }
+    public string? DiscordUserId { get; set; }
     public string? BankAccount { get; set; }
     public string? LoginAccount { get; set; }
     public string? PasswordHash { get; set; }

@@ -140,9 +140,7 @@
         <form class="panel form" id="userForm">
           <h2 id="userFormTitle">新增成員</h2>
           <input type="hidden" name="userId">
-          <label>暱稱<input name="nickname" required maxlength="50"></label>
-          <label>Discord ID<input name="discordId" maxlength="50"></label>
-          <label>Discord 名稱<input name="discordName" maxlength="100"></label>
+          <label>ID<input name="nickname" required maxlength="50"></label>
           <label>銀行帳號<input name="bankAccount" maxlength="200"></label>
           <label>系統權限
             <select name="systemRole">
@@ -170,9 +168,9 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Discord 名稱</th>
                     <th>暱稱</th>
-                    <th>權限</th>
+                    <th>Discord ID</th>
+                    <th>Discord 名稱</th>
                     <th>狀態</th>
                     <th></th>
                   </tr>
@@ -190,9 +188,9 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Discord 名稱</th>
                     <th>暱稱</th>
-                    <th>權限</th>
+                    <th>Discord ID</th>
+                    <th>Discord 名稱</th>
                     <th>狀態</th>
                     <th></th>
                   </tr>
@@ -746,6 +744,6 @@
     </section>
   </div>
 
-  <script src="/app.js?v=20260622-discord-linking"></script>
+  <script src="/app.js?v=20260622-discord-linking-v4"></script>
 </body>
 </html>

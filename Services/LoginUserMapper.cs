@@ -17,6 +17,8 @@ public static class LoginUserMapper
             LoginAccount = user.LoginAccount,
             DiscordId = user.DiscordId,
             DiscordName = user.DiscordName,
+            DiscordUserId = user.DiscordUserId,
+            DiscordLinkedAt = user.DiscordLinkedAt,
             SystemRole = user.SystemRole,
             IsActive = user.IsActive,
             HasPassword = !string.IsNullOrWhiteSpace(user.PasswordHash),

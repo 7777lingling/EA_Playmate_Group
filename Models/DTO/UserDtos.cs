@@ -8,6 +8,7 @@ public sealed class UserDto
     public string Nickname { get; set; } = string.Empty;
     public string? DiscordId { get; set; }
     public string? DiscordName { get; set; }
+    public string? DiscordUserId { get; set; }
     public string? BankAccount { get; set; }
     public string SystemRole { get; set; } = "staff";
     public bool IsPlayer { get; set; }
@@ -21,8 +22,6 @@ public sealed class UserDto
 public sealed class CreateUserRequestDto
 {
     public string Nickname { get; set; } = string.Empty;
-    public string? DiscordId { get; set; }
-    public string? DiscordName { get; set; }
     public string? BankAccount { get; set; }
     public string SystemRole { get; set; } = "staff";
     public bool IsPlayer { get; set; } = true;
@@ -32,8 +31,6 @@ public sealed class CreateUserRequestDto
 public sealed class UpdateUserRequestDto
 {
     public string Nickname { get; set; } = string.Empty;
-    public string? DiscordId { get; set; }
-    public string? DiscordName { get; set; }
     public string? BankAccount { get; set; }
     public string SystemRole { get; set; } = "staff";
     public bool IsPlayer { get; set; }
