@@ -100,6 +100,28 @@ BEGIN
     ALTER TABLE dbo.users ADD login_account NVARCHAR(50) NULL;
 END;
 
+IF COL_LENGTH('dbo.login_users', 'discord_id') IS NULL
+BEGIN
+    ALTER TABLE dbo.login_users ADD discord_id NVARCHAR(50) NULL;
+END;
+
+IF COL_LENGTH('dbo.login_users', 'discord_name') IS NULL
+BEGIN
+    ALTER TABLE dbo.login_users ADD discord_name NVARCHAR(100) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'UQ_login_users_discord_id'
+      AND object_id = OBJECT_ID(N'dbo.login_users')
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX UQ_login_users_discord_id
+    ON dbo.login_users(discord_id)
+    WHERE discord_id IS NOT NULL;');
+END;
+
 IF COL_LENGTH('dbo.users', 'password_hash') IS NULL
 BEGIN
     ALTER TABLE dbo.users ADD password_hash NVARCHAR(500) NULL;
@@ -536,6 +558,19 @@ SET user_id = u.id
 FROM dbo.login_users lu
 INNER JOIN dbo.users u ON u.login_account = lu.login_account
 WHERE lu.user_id IS NULL;
+UPDATE lu
+SET discord_id = u.discord_id,
+    discord_name = u.discord_name
+FROM dbo.login_users lu
+INNER JOIN dbo.users u ON u.id = lu.user_id
+WHERE lu.discord_id IS NULL
+  AND u.discord_id IS NOT NULL
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.login_users existing
+      WHERE existing.discord_id = u.discord_id
+  );
 UPDATE dbo.users SET organization_id = @default_organization_id WHERE organization_id IS NULL;
 UPDATE dbo.orders SET organization_id = @default_organization_id WHERE organization_id IS NULL;
 UPDATE om

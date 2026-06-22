@@ -8,6 +8,8 @@ public sealed class LoginUserDto
     public Guid Uuid { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string LoginAccount { get; set; } = string.Empty;
+    public string? DiscordId { get; set; }
+    public string? DiscordName { get; set; }
     public string SystemRole { get; set; } = "staff";
     public bool IsActive { get; set; }
     public bool HasPassword { get; set; }

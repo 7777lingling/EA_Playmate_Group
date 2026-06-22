@@ -26,6 +26,7 @@ builder.Services.AddDataProtection()
 
 builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient<DiscordAuthService>();
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {

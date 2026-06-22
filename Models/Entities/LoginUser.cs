@@ -9,6 +9,8 @@ public sealed class LoginUser : IOrganizationScoped
     public string DisplayName { get; set; } = string.Empty;
     public string LoginAccount { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
+    public string? DiscordId { get; set; }
+    public string? DiscordName { get; set; }
     public string SystemRole { get; set; } = "staff";
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }

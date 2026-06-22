@@ -229,9 +229,11 @@ function bindNavigation() {
 function bindForms() {
   ensureLoginUserEditControls();
   document.getElementById("loginForm").addEventListener("submit", submitLogin);
+  document.getElementById("discordLoginBtn").addEventListener("click", startDiscordLogin);
   document.getElementById("loginUserForm").addEventListener("submit", submitLoginUser);
   document.getElementById("cancelLoginUserEditBtn").addEventListener("click", resetLoginUserForm);
   document.getElementById("changePasswordBtn").addEventListener("click", openChangePasswordModal);
+  document.getElementById("discordLinkBtn").addEventListener("click", toggleDiscordLink);
   document.getElementById("changePasswordClose").addEventListener("click", closeChangePasswordModal);
   document.getElementById("changePasswordCancel").addEventListener("click", closeChangePasswordModal);
   document.getElementById("changePasswordForm").addEventListener("submit", submitChangePassword);
@@ -926,19 +928,69 @@ function setDefaultDates() {
 }
 
 async function initializeAuth() {
+  const discordLoginError = takeDiscordLoginError();
+  const discordLinkResult = takeDiscordLinkResult();
   try {
     state.auth = await api("/api/auth/me", { skipAuthRedirect: true });
     if (state.auth.authRequired && !state.auth.isAuthenticated) {
       showLogin();
+      if (discordLoginError) {
+        showLoginError(discordLoginError);
+      }
       return;
     }
 
     showApp();
     await refreshAll();
+    if (discordLinkResult) {
+      showAlert(discordLinkResult.message, discordLinkResult.isError);
+    }
   } catch (error) {
     showLogin();
-    showLoginError(error.message);
+    showLoginError(discordLoginError || error.message);
   }
+}
+
+function takeDiscordLinkResult() {
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("discordLink");
+  if (!code) {
+    return null;
+  }
+
+  url.searchParams.delete("discordLink");
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+
+  const messages = {
+    success: { message: "Discord 帳號綁定成功。", isError: false },
+    conflict: { message: "此 Discord 已綁定其他帳號。", isError: true },
+    denied: { message: "Discord 授權已取消。", isError: true },
+    session: { message: "登入狀態已失效，請重新登入後再綁定。", isError: true },
+    state: { message: "Discord 綁定驗證失敗，請重新操作。", isError: true },
+    config: { message: "Discord 登入尚未完成設定。", isError: true },
+    failed: { message: "Discord 綁定失敗，請稍後再試。", isError: true }
+  };
+  return messages[code] || messages.failed;
+}
+
+function takeDiscordLoginError() {
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("loginError");
+  if (!code) {
+    return "";
+  }
+
+  url.searchParams.delete("loginError");
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+
+  const messages = {
+    discord_config: "Discord 登入尚未設定，請先設定 Client ID / Client Secret。",
+    discord_denied: "Discord 授權已取消。",
+    discord_state: "Discord 登入驗證失敗，請重新登入。",
+    discord_unbound: "這個 Discord 帳號尚未綁定系統帳號，請聯絡管理員。",
+    discord_failed: "Discord 登入失敗，請稍後再試。"
+  };
+  return messages[code] || "Discord 登入失敗，請稍後再試。";
 }
 
 function showLogin() {
@@ -946,6 +998,7 @@ function showLogin() {
   document.getElementById("loginView").hidden = false;
   document.getElementById("logoutBtn").hidden = true;
   document.getElementById("changePasswordBtn").hidden = true;
+  document.getElementById("discordLinkBtn").hidden = true;
   document.getElementById("currentUser").hidden = true;
 }
 
@@ -959,6 +1012,11 @@ function showApp() {
     currentUser.hidden = false;
     document.getElementById("logoutBtn").hidden = false;
     document.getElementById("changePasswordBtn").hidden = false;
+    const discordLinkBtn = document.getElementById("discordLinkBtn");
+    discordLinkBtn.hidden = false;
+    discordLinkBtn.textContent = state.auth.user.discordId
+      ? `解除 Discord 綁定（${state.auth.user.discordName || "已綁定"}）`
+      : "綁定 Discord";
   }
   applyNavigationPermissions();
   if (state.auth?.user?.systemRole === "viewer") {
@@ -1083,6 +1141,30 @@ async function submitLogin(event) {
     await refreshAll();
   } catch (error) {
     showLoginError(error.message);
+  }
+}
+
+function startDiscordLogin() {
+  window.location.href = "/api/auth/discord/login";
+}
+
+async function toggleDiscordLink() {
+  if (!state.auth?.user?.discordId) {
+    window.location.href = "/api/auth/discord/link";
+    return;
+  }
+
+  if (!window.confirm("確定要解除目前的 Discord 綁定嗎？解除後將無法使用 Discord 登入。")) {
+    return;
+  }
+
+  try {
+    await api("/api/auth/discord/link", { method: "DELETE" });
+    state.auth = await api("/api/auth/me");
+    showApp();
+    showAlert("Discord 綁定已解除。", false);
+  } catch (error) {
+    showAlert(error.message);
   }
 }
 

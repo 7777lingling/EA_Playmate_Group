@@ -74,6 +74,114 @@ public sealed class AuthService
         return await ToDtoWithPermissionsAsync(user);
     }
 
+    public async Task<LoginUserDto?> LoginWithDiscordAsync(DiscordUserProfile profile)
+    {
+        var discordId = profile.Id.Trim();
+        if (string.IsNullOrWhiteSpace(discordId))
+        {
+            return null;
+        }
+
+        var loginUser = await _db.LoginUsers.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.DiscordId == discordId && x.IsActive);
+        if (loginUser is null)
+        {
+            return null;
+        }
+
+        var discordName = string.IsNullOrWhiteSpace(profile.GlobalName)
+            ? profile.Username
+            : profile.GlobalName;
+        if (!string.IsNullOrWhiteSpace(discordName) && loginUser.DiscordName != discordName)
+        {
+            loginUser.DiscordName = discordName;
+            loginUser.UpdatedAt = DateTime.UtcNow;
+        }
+
+        loginUser.LastLoginAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return await ToDtoWithPermissionsAsync(loginUser);
+    }
+
+    public async Task<bool> LinkDiscordAsync(int loginUserId, DiscordUserProfile profile)
+    {
+        var discordId = profile.Id.Trim();
+        if (string.IsNullOrWhiteSpace(discordId))
+        {
+            return false;
+        }
+
+        var alreadyLinked = await _db.LoginUsers.IgnoreQueryFilters()
+            .AnyAsync(x => x.DiscordId == discordId && x.Id != loginUserId);
+        if (alreadyLinked)
+        {
+            return false;
+        }
+
+        var loginUser = await _db.LoginUsers.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.Id == loginUserId && x.IsActive);
+        if (loginUser is null)
+        {
+            return false;
+        }
+
+        Models.Entities.User? member = null;
+        if (loginUser.UserId.HasValue)
+        {
+            var memberAlreadyLinked = await _db.Users.IgnoreQueryFilters()
+                .AnyAsync(x => x.DiscordId == discordId && x.Id != loginUser.UserId.Value);
+            if (memberAlreadyLinked)
+            {
+                return false;
+            }
+
+            member = await _db.Users.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x => x.Id == loginUser.UserId.Value);
+        }
+
+        loginUser.DiscordId = discordId;
+        loginUser.DiscordName = string.IsNullOrWhiteSpace(profile.GlobalName)
+            ? profile.Username
+            : profile.GlobalName;
+        loginUser.UpdatedAt = DateTime.UtcNow;
+        if (member is not null)
+        {
+            member.DiscordId = loginUser.DiscordId;
+            member.DiscordName = loginUser.DiscordName;
+            member.UpdatedAt = DateTime.UtcNow;
+        }
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> UnlinkDiscordAsync(int loginUserId)
+    {
+        var loginUser = await _db.LoginUsers.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.Id == loginUserId && x.IsActive);
+        if (loginUser is null)
+        {
+            return false;
+        }
+
+        loginUser.DiscordId = null;
+        loginUser.DiscordName = null;
+        loginUser.UpdatedAt = DateTime.UtcNow;
+        if (loginUser.UserId.HasValue)
+        {
+            var member = await _db.Users.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x => x.Id == loginUser.UserId.Value);
+            if (member is not null)
+            {
+                member.DiscordId = null;
+                member.DiscordName = null;
+                member.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
     private async Task<LoginUserDto> ToDtoWithPermissionsAsync(Models.Entities.LoginUser user)
     {
         var dto = LoginUserMapper.ToDto(user);

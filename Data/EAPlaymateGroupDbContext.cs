@@ -175,6 +175,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.DisplayName).HasColumnName("display_name").HasMaxLength(50).IsRequired();
         entity.Property(x => x.LoginAccount).HasColumnName("login_account").HasMaxLength(50).IsRequired();
         entity.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(500).IsRequired();
+        entity.Property(x => x.DiscordId).HasColumnName("discord_id").HasMaxLength(50);
+        entity.Property(x => x.DiscordName).HasColumnName("discord_name").HasMaxLength(100);
         entity.Property(x => x.SystemRole).HasColumnName("system_role").HasMaxLength(20).HasDefaultValue("staff").IsRequired();
         entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
@@ -183,6 +185,10 @@ public sealed class EAPlaymateGroupDbContext : DbContext
 
         entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_login_users_uuid");
         entity.HasIndex(x => x.LoginAccount).IsUnique().HasDatabaseName("UQ_login_users_login_account");
+        entity.HasIndex(x => x.DiscordId)
+            .IsUnique()
+            .HasFilter("[discord_id] IS NOT NULL")
+            .HasDatabaseName("UQ_login_users_discord_id");
     }
 
     private static void ConfigureOrder(ModelBuilder modelBuilder)
