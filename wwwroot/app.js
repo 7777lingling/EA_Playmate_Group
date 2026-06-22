@@ -589,7 +589,6 @@ function openUserRecordModal(user) {
           ${recordDetail("Discord 名稱", user.discordName)}
           ${recordDetail("Discord ID", user.discordId)}
           ${recordDetail("銀行帳號", user.bankAccount)}
-          ${recordDetail("系統權限", label("systemRole", user.systemRole))}
           ${recordDetail("身分類型", [user.isPlayer ? "團員" : "", user.isBoss ? "老闆" : ""].filter(Boolean).join(" / "))}
           ${recordDetail("狀態", user.isActive ? "啟用" : "停用")}
         </div>
@@ -615,13 +614,6 @@ function renderUserRecordEdit(user) {
       <label>Discord ID<input value="${escapeHtml(user.discordId || "尚未綁定")}" disabled></label>
       <label>Discord 名稱<input value="${escapeHtml(user.discordName || "尚未綁定")}" disabled></label>
       <label>銀行帳號<input name="bankAccount" maxlength="200" value="${escapeHtml(user.bankAccount || "")}"></label>
-      <label>系統權限
-        <select name="systemRole">
-          ${["staff", "admin", "viewer"].map((role) =>
-            `<option value="${role}" ${user.systemRole === role ? "selected" : ""}>${label("systemRole", role)}</option>`
-          ).join("")}
-        </select>
-      </label>
       <div class="check-grid">
         <label><input type="checkbox" name="isPlayer" ${user.isPlayer ? "checked" : ""}> 團員</label>
         <label><input type="checkbox" name="isBoss" ${user.isBoss ? "checked" : ""}> 老闆</label>
@@ -643,7 +635,6 @@ function renderUserRecordEdit(user) {
         body: JSON.stringify({
           nickname: data.get("nickname"),
           bankAccount: emptyToNull(data.get("bankAccount")),
-          systemRole: data.get("systemRole"),
           isPlayer: data.get("isPlayer") === "on",
           isBoss: data.get("isBoss") === "on",
           isActive: user.isActive,
@@ -1858,8 +1849,8 @@ function renderUserTable(elementId, users) {
   body.innerHTML = users.length ? users.map((user) => `
     <tr>
       <td><button class="record-name-link" type="button" data-user-open="${user.id}">${escapeHtml(user.nickname)}</button></td>
-      <td>${escapeHtml(user.discordId || "")}</td>
-      <td>${escapeHtml(user.discordName || "")}</td>
+      <td>${user.discordId ? escapeHtml(user.discordId) : plainText("未綁定", "muted")}</td>
+      <td>${user.discordName ? escapeHtml(user.discordName) : plainText("未綁定", "muted")}</td>
       <td>${user.isActive ? pill("啟用", "good") : pill("停用", "bad")}</td>
       <td>
         ${user.isActive
@@ -2074,7 +2065,6 @@ async function submitUser(event) {
   const payload = {
     nickname: data.get("nickname"),
     bankAccount: emptyToNull(data.get("bankAccount")),
-    systemRole: data.get("systemRole"),
     isPlayer: data.get("isPlayer") === "on",
     isBoss: data.get("isBoss") === "on"
   };
@@ -2197,7 +2187,6 @@ function startUserEdit(user) {
   form.elements.userId.value = user.id;
   form.elements.nickname.value = user.nickname || "";
   form.elements.bankAccount.value = user.bankAccount || "";
-  form.elements.systemRole.value = user.systemRole || "staff";
   form.elements.isPlayer.checked = Boolean(user.isPlayer);
   form.elements.isBoss.checked = Boolean(user.isBoss);
   document.getElementById("userFormTitle").textContent = "編輯成員";

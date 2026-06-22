@@ -17,9 +17,7 @@ public sealed class UserService
 
     public async Task<ServiceResult<UserDto>> CreateUserAsync(CreateUserRequestDto request)
     {
-        var validationResult = await ValidateUserAsync(
-            request.Nickname,
-            request.SystemRole);
+        var validationResult = await ValidateUserAsync(request.Nickname);
         if (!validationResult.Succeeded)
         {
             return ToGenericResult<UserDto>(validationResult);
@@ -29,7 +27,6 @@ public sealed class UserService
         {
             Nickname = request.Nickname.Trim(),
             BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount.Trim(),
-            SystemRole = request.SystemRole,
             IsPlayer = request.IsPlayer,
             IsBoss = request.IsBoss
         };
@@ -58,10 +55,7 @@ public sealed class UserService
             return ServiceResult.Missing();
         }
 
-        var validationResult = await ValidateUserAsync(
-            request.Nickname,
-            request.SystemRole,
-            id);
+        var validationResult = await ValidateUserAsync(request.Nickname, id);
         if (!validationResult.Succeeded)
         {
             return validationResult;
@@ -71,7 +65,6 @@ public sealed class UserService
 
         user.Nickname = request.Nickname.Trim();
         user.BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount.Trim();
-        user.SystemRole = request.SystemRole;
         user.IsPlayer = request.IsPlayer;
         user.IsBoss = request.IsBoss;
         user.IsActive = request.IsActive;
@@ -177,18 +170,12 @@ public sealed class UserService
 
     private async Task<ServiceResult> ValidateUserAsync(
         string nickname,
-        string systemRole,
         int? excludeUserId = null)
     {
         var errors = new Dictionary<string, string[]>();
         if (string.IsNullOrWhiteSpace(nickname))
         {
             errors["nickname"] = ["請輸入暱稱。"];
-        }
-
-        if (!DomainValues.IsSystemRole(systemRole))
-        {
-            errors["systemRole"] = ["系統權限必須是 admin、staff 或 viewer。"];
         }
 
         if (!string.IsNullOrWhiteSpace(nickname))
