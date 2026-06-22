@@ -231,6 +231,27 @@ public sealed class AuthService
         return true;
     }
 
+    public async Task RecordAuthEventAsync(int loginUserId, string action)
+    {
+        var loginUser = await _db.LoginUsers.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == loginUserId);
+        if (loginUser is null)
+        {
+            return;
+        }
+
+        var log = AuditLogWriter.Create(
+            action,
+            "login_users",
+            loginUser.Id,
+            loginUser.Uuid,
+            after: new { loginUser.LoginAccount });
+        log.OrganizationId = loginUser.OrganizationId;
+        log.LoginUserId = loginUser.Id;
+        _db.AuditLogs.Add(log);
+        await _db.SaveChangesAsync();
+    }
+
     private async Task<LoginUserDto> ToDtoWithPermissionsAsync(Models.Entities.LoginUser user)
     {
         var dto = LoginUserMapper.ToDto(user);

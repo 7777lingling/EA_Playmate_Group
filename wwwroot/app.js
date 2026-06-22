@@ -1094,7 +1094,7 @@ async function api(path, options = {}) {
     let message = `${response.status} ${response.statusText}`;
     try {
       const error = await response.json();
-      message = error.message || message;
+      message = error.detail || error.message || message;
       if (error.errors) {
         message += ` ${Object.values(error.errors).flat().join(" ")}`;
       }

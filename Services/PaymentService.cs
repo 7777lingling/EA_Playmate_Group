@@ -10,10 +10,12 @@ namespace EAPlaymateGroup.Services;
 public sealed class PaymentService
 {
     private readonly EAPlaymateGroupDbContext _db;
+    private readonly MoneyLogService _moneyLogService;
 
-    public PaymentService(EAPlaymateGroupDbContext db)
+    public PaymentService(EAPlaymateGroupDbContext db, MoneyLogService moneyLogService)
     {
         _db = db;
+        _moneyLogService = moneyLogService;
     }
 
     public async Task<ServiceResult<List<PaymentDto>>> GenerateMonthlyPaymentsAsync(GenerateMonthlyPaymentsRequestDto request)
@@ -171,18 +173,6 @@ public sealed class PaymentService
             .Select(x => PaymentMapper.ToDto(x))
             .ToListAsync();
 
-        _db.AuditLogs.Add(AuditLogWriter.Create(
-            action: "generate_monthly",
-            targetType: "payments",
-            after: new
-            {
-                request.PayMonth,
-                request.OverwriteExisting,
-                PaymentCount = payments.Count,
-                TotalExpectedAmount = payments.Sum(x => x.ExpectedAmount)
-            }));
-        await _db.SaveChangesAsync();
-
         return ServiceResult<List<PaymentDto>>.Success(payments);
     }
 
@@ -210,20 +200,14 @@ public sealed class PaymentService
 
         await _db.SaveChangesAsync();
 
-        _db.AuditLogs.Add(AuditLogWriter.Create(
-            action: "mark_paid",
-            targetType: "payments",
-            targetId: payment.Id,
-            targetUuid: payment.Uuid,
-            before: before,
-            after: new
-            {
-                payment.ActualAmount,
-                payment.PaymentStatus,
-                payment.PaidAt,
-                payment.Note
-            }));
-        await _db.SaveChangesAsync();
+        await _moneyLogService.AddAsync(
+            payment.UserId,
+            "monthly_settlement",
+            -(payment.ActualAmount ?? payment.ExpectedAmount),
+            "payments",
+            payment.Id,
+            payment.Uuid,
+            string.IsNullOrWhiteSpace(payment.Note) ? $"{payment.PayMonth} 月結" : payment.Note);
 
         return ServiceResult.Success();
     }

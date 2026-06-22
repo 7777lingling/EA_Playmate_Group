@@ -48,6 +48,7 @@ public sealed class AuthController : ControllerBase
         }
 
         SignIn(user);
+        await _authService.RecordAuthEventAsync(user.Id, "login");
 
         return Ok(new AuthMeDto
         {
@@ -139,6 +140,7 @@ public sealed class AuthController : ControllerBase
             }
 
             SignIn(user);
+            await _authService.RecordAuthEventAsync(user.Id, "login");
             return Redirect("/");
         }
         catch
@@ -164,8 +166,13 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("logout")]
-    public IActionResult Logout()
+    public async Task<IActionResult> Logout()
     {
+        var loginUserId = HttpContext.Session.GetInt32(AuthService.SessionUserId);
+        if (loginUserId.HasValue)
+        {
+            await _authService.RecordAuthEventAsync(loginUserId.Value, "logout");
+        }
         HttpContext.Session.Clear();
         return NoContent();
     }

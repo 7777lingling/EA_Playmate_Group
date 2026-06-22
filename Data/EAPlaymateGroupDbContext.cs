@@ -21,6 +21,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
     public DbSet<OrderMember> OrderMembers => Set<OrderMember>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<MoneyLog> MoneyLogs => Set<MoneyLog>();
     public DbSet<ServiceItem> ServiceItems => Set<ServiceItem>();
     public DbSet<GiftRecord> GiftRecords => Set<GiftRecord>();
     public DbSet<Department> Departments => Set<Department>();
@@ -53,6 +54,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         ConfigureOrderMember(modelBuilder);
         ConfigurePayment(modelBuilder);
         ConfigureAuditLog(modelBuilder);
+        ConfigureMoneyLog(modelBuilder);
         ConfigureServiceItem(modelBuilder);
         ConfigureGiftRecord(modelBuilder);
         ConfigureDepartment(modelBuilder);
@@ -113,6 +115,12 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         {
             entry.Entity.LoginUserId = loginUserId.Value;
             entry.Entity.IpAddress ??= _httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+        }
+
+        foreach (var entry in ChangeTracker.Entries<MoneyLog>()
+                     .Where(x => x.State == EntityState.Added && !x.Entity.LoginUserId.HasValue))
+        {
+            entry.Entity.LoginUserId = loginUserId.Value;
         }
     }
 
@@ -366,6 +374,31 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             .OnDelete(DeleteBehavior.NoAction);
     }
 
+    private static void ConfigureMoneyLog(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<MoneyLog>();
+        entity.ToTable("money_logs", "dbo");
+        entity.HasKey(x => x.Id).HasName("PK_money_logs");
+        entity.Property(x => x.Id).HasColumnName("id");
+        entity.Property(x => x.OrganizationId).HasColumnName("organization_id");
+        entity.Property(x => x.UserId).HasColumnName("user_id");
+        entity.Property(x => x.LoginUserId).HasColumnName("login_user_id");
+        entity.Property(x => x.Type).HasColumnName("type").HasMaxLength(30).IsRequired();
+        entity.Property(x => x.Amount).HasColumnName("amount").HasPrecision(12, 2);
+        entity.Property(x => x.BalanceAfter).HasColumnName("balance_after").HasPrecision(12, 2);
+        entity.Property(x => x.SourceType).HasColumnName("source_type").HasMaxLength(50);
+        entity.Property(x => x.SourceId).HasColumnName("source_id");
+        entity.Property(x => x.SourceUuid).HasColumnName("source_uuid");
+        entity.Property(x => x.Note).HasColumnName("note").HasMaxLength(500);
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
+        entity.HasIndex(x => new { x.UserId, x.Id }).HasDatabaseName("IX_money_logs_user_id");
+        entity.HasIndex(x => new { x.SourceType, x.SourceId }).HasDatabaseName("IX_money_logs_source");
+        entity.HasOne(x => x.User).WithMany(x => x.MoneyLogs).HasForeignKey(x => x.UserId)
+            .HasConstraintName("FK_money_logs_user").OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(x => x.LoginUser).WithMany().HasForeignKey(x => x.LoginUserId)
+            .HasConstraintName("FK_money_logs_login_user").OnDelete(DeleteBehavior.NoAction);
+    }
+
     private static void ConfigureServiceItem(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<ServiceItem>();
@@ -589,5 +622,9 @@ public sealed class EAPlaymateGroupDbContext : DbContext
              x.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<AuditLog>().HasQueryFilter(x =>
             IsSystemAdmin || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<MoneyLog>().HasQueryFilter(x =>
+            IsSystemAdmin ||
+            (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId &&
+             (!IsMember || (CurrentMemberUserId > 0 && x.UserId == CurrentMemberUserId))));
     }
 }

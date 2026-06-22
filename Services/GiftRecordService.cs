@@ -9,10 +9,12 @@ namespace EAPlaymateGroup.Services;
 public sealed class GiftRecordService
 {
     private readonly EAPlaymateGroupDbContext _db;
+    private readonly MoneyLogService _moneyLogService;
 
-    public GiftRecordService(EAPlaymateGroupDbContext db)
+    public GiftRecordService(EAPlaymateGroupDbContext db, MoneyLogService moneyLogService)
     {
         _db = db;
+        _moneyLogService = moneyLogService;
     }
 
     public async Task<ServiceResult<GiftRecordDto>> CreateAsync(CreateGiftRecordRequestDto request)
@@ -43,13 +45,12 @@ public sealed class GiftRecordService
 
         var saved = await GetWithRelations(record.Id).FirstAsync();
         var dto = GiftRecordMapper.ToDto(saved);
-        _db.AuditLogs.Add(AuditLogWriter.Create(
-            action: "create",
-            targetType: "gift_records",
-            targetId: record.Id,
-            targetUuid: record.Uuid,
-            after: dto));
-        await _db.SaveChangesAsync();
+        if (record.Status == "completed")
+        {
+            await _moneyLogService.AddAsync(
+                record.RecipientUserId, "gift_income", record.Amount * record.Quantity,
+                "gift_records", record.Id, record.Uuid, record.GiftName);
+        }
 
         return ServiceResult<GiftRecordDto>.Success(dto);
     }
@@ -84,14 +85,30 @@ public sealed class GiftRecordService
         await _db.SaveChangesAsync();
 
         var saved = await GetWithRelations(id).FirstAsync();
-        _db.AuditLogs.Add(AuditLogWriter.Create(
-            action: "update",
-            targetType: "gift_records",
-            targetId: record.Id,
-            targetUuid: record.Uuid,
-            before: before,
-            after: GiftRecordMapper.ToDto(saved)));
-        await _db.SaveChangesAsync();
+        var oldAmount = before.Status == "completed" ? before.Amount * before.Quantity : 0m;
+        var newAmount = saved.Status == "completed" ? saved.Amount * saved.Quantity : 0m;
+        if (before.RecipientUserId == saved.RecipientUserId)
+        {
+            var delta = newAmount - oldAmount;
+            if (delta != 0)
+            {
+                await _moneyLogService.AddAsync(saved.RecipientUserId, "gift_income", delta,
+                    "gift_records", saved.Id, saved.Uuid, $"修改：{saved.GiftName}");
+            }
+        }
+        else
+        {
+            if (oldAmount != 0)
+            {
+                await _moneyLogService.AddAsync(before.RecipientUserId, "gift_income", -oldAmount,
+                    "gift_records", saved.Id, saved.Uuid, $"移轉：{before.GiftName}");
+            }
+            if (newAmount != 0)
+            {
+                await _moneyLogService.AddAsync(saved.RecipientUserId, "gift_income", newAmount,
+                    "gift_records", saved.Id, saved.Uuid, $"移轉：{saved.GiftName}");
+            }
+        }
 
         return ServiceResult.Success();
     }
@@ -109,14 +126,11 @@ public sealed class GiftRecordService
         record.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        _db.AuditLogs.Add(AuditLogWriter.Create(
-            action: "cancel",
-            targetType: "gift_records",
-            targetId: record.Id,
-            targetUuid: record.Uuid,
-            before: before,
-            after: new { record.Status }));
-        await _db.SaveChangesAsync();
+        if (before.Status == "completed")
+        {
+            await _moneyLogService.AddAsync(record.RecipientUserId, "gift_income",
+                -(record.Amount * record.Quantity), "gift_records", record.Id, record.Uuid, "取消禮物收入");
+        }
 
         return ServiceResult.Success();
     }
@@ -131,13 +145,13 @@ public sealed class GiftRecordService
 
         var before = GiftRecordMapper.ToDto(record);
         _db.GiftRecords.Remove(record);
-        _db.AuditLogs.Add(AuditLogWriter.Create(
-            action: "delete",
-            targetType: "gift_records",
-            targetId: record.Id,
-            targetUuid: record.Uuid,
-            before: before));
         await _db.SaveChangesAsync();
+
+        if (before.Status == "completed")
+        {
+            await _moneyLogService.AddAsync(before.RecipientUserId, "gift_income",
+                -(before.Amount * before.Quantity), "gift_records", before.Id, before.Uuid, "刪除禮物收入");
+        }
 
         return ServiceResult.Success();
     }

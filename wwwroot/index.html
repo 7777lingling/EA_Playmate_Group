@@ -588,13 +588,34 @@
                 <tr>
                   <th>時間</th>
                   <th>操作者</th>
-                  <th>IP</th>
+                  <th>功能</th>
                   <th>動作</th>
-                  <th>目標</th>
-                  <th>備註</th>
+                  <th>內容</th>
               </tr>
             </thead>
             <tbody id="auditRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="moneyLogsView">
+      <section class="panel">
+        <div class="panel-head"><h2>金流紀錄</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>時間</th>
+                <th>會員</th>
+                <th>類型</th>
+                <th>金額</th>
+                <th>餘額</th>
+                <th>來源</th>
+                <th>備註</th>
+              </tr>
+            </thead>
+            <tbody id="moneyLogRows"></tbody>
           </table>
         </div>
       </section>
@@ -649,6 +670,11 @@
       </section>
     </section>
   </main>
+
+  <nav class="log-fab" id="logFab" aria-label="紀錄切換">
+    <button type="button" data-log-view="audit">📋 操作紀錄</button>
+    <button type="button" data-log-view="moneyLogs">💰 金流紀錄</button>
+  </nav>
 
   <div class="modal-backdrop" id="departmentModal" hidden>
     <section class="modal-panel department-modal" role="dialog" aria-modal="true" aria-labelledby="departmentModalTitle">
@@ -737,6 +763,6 @@
     </section>
   </div>
 
-  <script src="/app.js?v=20260622-discord-linking-v6"></script>
+  <script src="/app.js?v=20260622-api-errors-v1"></script>
 </body>
 </html>

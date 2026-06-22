@@ -2,9 +2,11 @@ using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Services;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,7 +26,55 @@ builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
     .SetApplicationName("EAPlaymateGroup");
 
-builder.Services.AddControllers();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddControllers(options =>
+    {
+        options.Filters.Add<ApiProblemDetailsResultFilter>();
+    })
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(entry => entry.Value?.Errors.Count > 0)
+                .ToDictionary(
+                    entry => entry.Key,
+                    entry => entry.Value!.Errors
+                        .Select(error => string.IsNullOrWhiteSpace(error.ErrorMessage)
+                            ? "輸入值格式不正確。"
+                            : error.ErrorMessage)
+                        .ToArray());
+
+            return new ObjectResult(ApiProblemDetails.Create(
+                context.HttpContext,
+                StatusCodes.Status400BadRequest,
+                "validation_error",
+                "輸入資料驗證失敗。",
+                errors))
+            {
+                StatusCode = StatusCodes.Status400BadRequest,
+                ContentTypes = { "application/problem+json" }
+            };
+        };
+    });
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "EA Playmate Group API",
+        Version = "v1",
+        Description = "目前網頁端使用 Session Cookie；JWT Bearer 將在 API 契約穩定後加入。"
+    });
+    options.AddSecurityDefinition("SessionCookie", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Cookie,
+        Name = ".EAPlaymateGroup.Session",
+        Description = "先呼叫 POST /api/auth/login 建立 Session；HttpOnly Cookie 由瀏覽器管理。"
+    });
+});
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient<DiscordAuthService>();
 builder.Services.AddDistributedMemoryCache();
@@ -53,6 +103,7 @@ builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<GiftRecordService>();
 builder.Services.AddScoped<DepartmentService>();
 builder.Services.AddScoped<PermissionService>();
+builder.Services.AddScoped<MoneyLogService>();
 
 builder.Services.AddCors(options =>
 {
@@ -63,6 +114,19 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
+app.UseStatusCodePages(async statusContext =>
+{
+    var context = statusContext.HttpContext;
+    if (context.Request.Path.StartsWithSegments("/api") &&
+        !context.Response.HasStarted &&
+        context.Response.ContentLength is null &&
+        string.IsNullOrWhiteSpace(context.Response.ContentType))
+    {
+        await ApiProblemDetails.WriteAsync(context, context.Response.StatusCode);
+    }
+});
 
 using (var scope = app.Services.CreateScope())
 {
@@ -92,8 +156,11 @@ app.Use(async (context, next) =>
         return;
     }
 
-    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-    await context.Response.WriteAsJsonAsync(new { message = "請先登入。" });
+    await ApiProblemDetails.WriteAsync(
+        context,
+        StatusCodes.Status401Unauthorized,
+        "authentication_required",
+        "請先登入。");
 });
 
 app.Use(async (context, next) =>
@@ -115,11 +182,11 @@ app.Use(async (context, next) =>
     var permission = context.GetEndpoint()?.Metadata.GetMetadata<RequirePermissionAttribute>();
     if (permission is null)
     {
-        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsJsonAsync(new
-        {
-            message = "此 API 尚未設定權限，已拒絕存取。"
-        });
+        await ApiProblemDetails.WriteAsync(
+            context,
+            StatusCodes.Status403Forbidden,
+            "permission_metadata_missing",
+            "此 API 尚未設定權限，已拒絕存取。");
         return;
     }
 
@@ -130,15 +197,25 @@ app.Use(async (context, next) =>
         return;
     }
 
-    context.Response.StatusCode = StatusCodes.Status403Forbidden;
-    await context.Response.WriteAsJsonAsync(new
-    {
-        message = $"權限不足，需要 {permission.PermissionCode}。"
-    });
+    await ApiProblemDetails.WriteAsync(
+        context,
+        StatusCodes.Status403Forbidden,
+        "permission_denied",
+        $"權限不足，需要 {permission.PermissionCode}。");
 });
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "EA Playmate Group API v1");
+        options.DocumentTitle = "EA Playmate Group API";
+    });
+}
 
 app.MapControllers();
 

@@ -12,6 +12,7 @@ public static class DatabaseSchemaInitializer
         await db.OrderMembers.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.Payments.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.AuditLogs.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.MoneyLogs.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.ServiceItems.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.GiftRecords.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.Departments.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
@@ -785,6 +786,33 @@ IF EXISTS
     WHERE a.organization_id <> lu.organization_id
 )
     THROW 51010, 'Organization data validation failed: audit actor organization mismatch.', 1;
+""");
+
+        await db.Database.ExecuteSqlRawAsync("""
+IF OBJECT_ID(N'dbo.money_logs', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.money_logs
+    (
+        id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_money_logs PRIMARY KEY,
+        organization_id INT NOT NULL,
+        user_id INT NOT NULL,
+        login_user_id INT NULL,
+        type NVARCHAR(30) NOT NULL,
+        amount DECIMAL(12,2) NOT NULL,
+        balance_after DECIMAL(12,2) NOT NULL,
+        source_type NVARCHAR(50) NULL,
+        source_id INT NULL,
+        source_uuid UNIQUEIDENTIFIER NULL,
+        note NVARCHAR(500) NULL,
+        created_at DATETIME2 NOT NULL CONSTRAINT DF_money_logs_created_at DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT FK_money_logs_organization FOREIGN KEY (organization_id) REFERENCES dbo.organizations(id),
+        CONSTRAINT FK_money_logs_user FOREIGN KEY (user_id) REFERENCES dbo.users(id),
+        CONSTRAINT FK_money_logs_login_user FOREIGN KEY (login_user_id) REFERENCES dbo.login_users(id)
+    );
+    CREATE INDEX IX_money_logs_user_id ON dbo.money_logs(user_id, id);
+    CREATE INDEX IX_money_logs_source ON dbo.money_logs(source_type, source_id);
+    CREATE INDEX IX_money_logs_created_at ON dbo.money_logs(created_at DESC);
+END;
 """);
     }
 }
