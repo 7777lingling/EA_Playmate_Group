@@ -2159,6 +2159,7 @@ function openAuditLogDetail(log) {
           ${recordDetail("動作", label("auditAction", log.action))}
           ${recordDetail("目標", auditTargetText(log))}
           ${recordDetail("CorrelationId", log.correlationId)}
+          ${recordDetail("BatchUuid", log.batchUuid)}
           ${recordDetail("IP", log.ipAddress)}
         </div>
         <h3>Before</h3>

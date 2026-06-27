@@ -99,6 +99,11 @@ public sealed class PermissionService
         }
 
         var rows = await _db.RolePermissions.Where(x => x.SystemRole == role).ToListAsync();
+        var beforePermissions = rows
+            .Where(x => x.IsAllowed)
+            .Select(x => x.PermissionCode)
+            .OrderBy(x => x)
+            .ToList();
         var now = DateTime.UtcNow;
         foreach (var code in PermissionCodes.All)
         {
@@ -121,7 +126,8 @@ public sealed class PermissionService
         _db.AuditLogs.Add(AuditLogWriter.Create(
             "update",
             "role_permissions",
-            after: new { systemRole = role, permissions }));
+            before: new { role, permissions = beforePermissions },
+            after: new { role, permissions = permissions.OrderBy(x => x).ToList() }));
         await _db.SaveChangesAsync();
 
         return ServiceResult<RolePermissionDto>.Success(new RolePermissionDto

@@ -251,6 +251,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.Remark).HasColumnName("remark").HasMaxLength(500);
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
         entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        entity.Property(x => x.CreatedAuditLogId).HasColumnName("created_audit_log_id");
+        entity.Property(x => x.CancelledAuditLogId).HasColumnName("cancelled_audit_log_id");
 
         entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_orders_uuid");
         entity.HasIndex(x => x.OrderNo).IsUnique().HasDatabaseName("UQ_orders_order_no");
@@ -259,11 +261,23 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             .HasDatabaseName("IX_orders_order_date_status");
         entity.HasIndex(x => new { x.CustomerPaymentStatus, x.Status, x.OrderDate })
             .HasDatabaseName("IX_orders_customer_payment_status");
+        entity.HasIndex(x => x.CreatedAuditLogId).HasDatabaseName("IX_orders_created_audit_log_id");
+        entity.HasIndex(x => x.CancelledAuditLogId).HasDatabaseName("IX_orders_cancelled_audit_log_id");
 
         entity.HasOne(x => x.OwnerUser)
             .WithMany(x => x.OwnedOrders)
             .HasForeignKey(x => x.OwnerUserId)
             .HasConstraintName("FK_orders_owner_user")
+            .OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(x => x.CreatedAuditLog)
+            .WithMany()
+            .HasForeignKey(x => x.CreatedAuditLogId)
+            .HasConstraintName("FK_orders_created_audit_log")
+            .OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(x => x.CancelledAuditLog)
+            .WithMany()
+            .HasForeignKey(x => x.CancelledAuditLogId)
+            .HasConstraintName("FK_orders_cancelled_audit_log")
             .OnDelete(DeleteBehavior.NoAction);
     }
 
@@ -335,15 +349,29 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.Note).HasColumnName("note").HasMaxLength(500);
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
         entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        entity.Property(x => x.GeneratedAuditLogId).HasColumnName("generated_audit_log_id");
+        entity.Property(x => x.PaidAuditLogId).HasColumnName("paid_audit_log_id");
 
         entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_payments_uuid");
         entity.HasIndex(x => new { x.UserId, x.PayMonth }).IsUnique().HasDatabaseName("UQ_payments_user_month");
         entity.HasIndex(x => new { x.PayMonth, x.PaymentStatus }).HasDatabaseName("IX_payments_pay_month");
+        entity.HasIndex(x => x.GeneratedAuditLogId).HasDatabaseName("IX_payments_generated_audit_log_id");
+        entity.HasIndex(x => x.PaidAuditLogId).HasDatabaseName("IX_payments_paid_audit_log_id");
 
         entity.HasOne(x => x.User)
             .WithMany(x => x.Payments)
             .HasForeignKey(x => x.UserId)
             .HasConstraintName("FK_payments_user")
+            .OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(x => x.GeneratedAuditLog)
+            .WithMany()
+            .HasForeignKey(x => x.GeneratedAuditLogId)
+            .HasConstraintName("FK_payments_generated_audit_log")
+            .OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(x => x.PaidAuditLog)
+            .WithMany()
+            .HasForeignKey(x => x.PaidAuditLogId)
+            .HasConstraintName("FK_payments_paid_audit_log")
             .OnDelete(DeleteBehavior.NoAction);
     }
 
@@ -367,6 +395,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.AfterJson).HasColumnName("after_json");
         entity.Property(x => x.IpAddress).HasColumnName("ip_address").HasMaxLength(64);
         entity.Property(x => x.CorrelationId).HasColumnName("correlation_id").HasDefaultValueSql("NEWID()");
+        entity.Property(x => x.BatchUuid).HasColumnName("batch_uuid");
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
 
         entity.HasIndex(x => new { x.TargetType, x.TargetId, x.CreatedAt })
@@ -375,6 +404,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             .HasDatabaseName("IX_audit_logs_login_user");
         entity.HasIndex(x => x.CorrelationId)
             .HasDatabaseName("IX_audit_logs_correlation_id");
+        entity.HasIndex(x => x.BatchUuid)
+            .HasDatabaseName("IX_audit_logs_batch_uuid");
 
         entity.HasOne(x => x.User)
             .WithMany(x => x.AuditLogs)
@@ -492,6 +523,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.HasIndex(x => new { x.GiftDate, x.Status }).HasDatabaseName("IX_gift_records_date_status");
         entity.HasIndex(x => new { x.BossUserId, x.GiftDate }).HasDatabaseName("IX_gift_records_boss_date");
         entity.HasIndex(x => new { x.RecipientUserId, x.GiftDate }).HasDatabaseName("IX_gift_records_recipient_date");
+        entity.HasIndex(x => x.CreatedAuditLogId).HasDatabaseName("IX_gift_records_created_audit_log_id");
+        entity.HasIndex(x => x.CancelledAuditLogId).HasDatabaseName("IX_gift_records_cancelled_audit_log_id");
 
         entity.HasOne(x => x.BossUser)
             .WithMany(x => x.SentGiftRecords)
@@ -509,6 +542,16 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             .WithMany()
             .HasForeignKey(x => x.ServiceItemId)
             .HasConstraintName("FK_gift_records_service_item")
+            .OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(x => x.CreatedAuditLog)
+            .WithMany()
+            .HasForeignKey(x => x.CreatedAuditLogId)
+            .HasConstraintName("FK_gift_records_created_audit_log")
+            .OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(x => x.CancelledAuditLog)
+            .WithMany()
+            .HasForeignKey(x => x.CancelledAuditLogId)
+            .HasConstraintName("FK_gift_records_cancelled_audit_log")
             .OnDelete(DeleteBehavior.NoAction);
     }
 

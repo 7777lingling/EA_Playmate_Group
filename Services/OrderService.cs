@@ -51,12 +51,16 @@ public sealed class OrderService
         var savedOrder = await GetOrderWithRelations(order.Id).FirstAsync();
         var dto = OrderMapper.ToDto(savedOrder);
 
-        _db.AuditLogs.Add(AuditLogWriter.Create(
+        var audit = AuditLogWriter.Create(
             action: "create",
             targetType: "orders",
             targetId: order.Id,
             targetUuid: order.Uuid,
-            after: dto));
+            after: dto);
+        _db.AuditLogs.Add(audit);
+        await _db.SaveChangesAsync();
+
+        order.CreatedAuditLogId = audit.Id;
         await _db.SaveChangesAsync();
 
         return ServiceResult<OrderDto>.Success(dto);
@@ -139,7 +143,7 @@ public sealed class OrderService
 
         await _db.SaveChangesAsync();
 
-        _db.AuditLogs.Add(AuditLogWriter.Create(
+        var audit = AuditLogWriter.Create(
             action: "cancel",
             targetType: "orders",
             targetId: order.Id,
@@ -149,7 +153,11 @@ public sealed class OrderService
             {
                 order.Status,
                 order.Remark
-            }));
+            });
+        _db.AuditLogs.Add(audit);
+        await _db.SaveChangesAsync();
+
+        order.CancelledAuditLogId = audit.Id;
         await _db.SaveChangesAsync();
 
         return ServiceResult.Success();

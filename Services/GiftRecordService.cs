@@ -45,6 +45,18 @@ public sealed class GiftRecordService
 
         var saved = await GetWithRelations(record.Id).FirstAsync();
         var dto = GiftRecordMapper.ToDto(saved);
+        var audit = AuditLogWriter.Create(
+            action: "create",
+            targetType: "gift_records",
+            targetId: record.Id,
+            targetUuid: record.Uuid,
+            after: dto);
+        _db.AuditLogs.Add(audit);
+        await _db.SaveChangesAsync();
+
+        record.CreatedAuditLogId = audit.Id;
+        await _db.SaveChangesAsync();
+
         if (record.Status == "completed")
         {
             await _moneyLogService.AddAsync(
@@ -124,6 +136,19 @@ public sealed class GiftRecordService
         var before = new { record.Status };
         record.Status = "cancelled";
         record.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        var audit = AuditLogWriter.Create(
+            action: "cancel",
+            targetType: "gift_records",
+            targetId: record.Id,
+            targetUuid: record.Uuid,
+            before: before,
+            after: new { record.Status });
+        _db.AuditLogs.Add(audit);
+        await _db.SaveChangesAsync();
+
+        record.CancelledAuditLogId = audit.Id;
         await _db.SaveChangesAsync();
 
         if (before.Status == "completed")

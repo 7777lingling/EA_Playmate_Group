@@ -75,6 +75,7 @@ public sealed class PaymentService
             return ServiceResult<List<PaymentDto>>.Success([]);
         }
 
+        var batchUuid = Guid.NewGuid();
         var nicknames = orderRows.Select(x => new { x.UserId, x.Nickname })
             .Concat(giftRows.Select(x => new { x.UserId, x.Nickname }))
             .GroupBy(x => x.UserId)
@@ -166,7 +167,38 @@ public sealed class PaymentService
 
         await _db.SaveChangesAsync();
 
-        var payments = await _db.Payments.AsNoTracking()
+        var paymentEntities = await _db.Payments
+            .Include(x => x.User)
+            .Where(x => x.PayMonth == request.PayMonth && userIds.Contains(x.UserId))
+            .OrderBy(x => x.User.Nickname)
+            .ToListAsync();
+        var payments = paymentEntities
+            .Select(PaymentMapper.ToDto)
+            .ToList();
+        var audit = AuditLogWriter.Create(
+            action: "generate_monthly",
+            targetType: "payments",
+            targetUuid: batchUuid,
+            after: new
+            {
+                payMonth = request.PayMonth,
+                request.OverwriteExisting,
+                batchUuid,
+                paymentIds = paymentEntities.Select(x => x.Id).ToList(),
+                userIds
+            },
+            batchUuid: batchUuid);
+        _db.AuditLogs.Add(audit);
+        await _db.SaveChangesAsync();
+
+        foreach (var payment in paymentEntities)
+        {
+            payment.GeneratedAuditLogId = audit.Id;
+        }
+
+        await _db.SaveChangesAsync();
+
+        payments = await _db.Payments.AsNoTracking()
             .Include(x => x.User)
             .Where(x => x.PayMonth == request.PayMonth && userIds.Contains(x.UserId))
             .OrderBy(x => x.User.Nickname)
@@ -198,6 +230,25 @@ public sealed class PaymentService
         payment.Note = string.IsNullOrWhiteSpace(request.Note) ? payment.Note : request.Note.Trim();
         payment.UpdatedAt = DateTime.UtcNow;
 
+        await _db.SaveChangesAsync();
+
+        var audit = AuditLogWriter.Create(
+            action: "mark_paid",
+            targetType: "payments",
+            targetId: payment.Id,
+            targetUuid: payment.Uuid,
+            before: before,
+            after: new
+            {
+                payment.ActualAmount,
+                payment.PaymentStatus,
+                payment.PaidAt,
+                payment.Note
+            });
+        _db.AuditLogs.Add(audit);
+        await _db.SaveChangesAsync();
+
+        payment.PaidAuditLogId = audit.Id;
         await _db.SaveChangesAsync();
 
         await _moneyLogService.AddAsync(

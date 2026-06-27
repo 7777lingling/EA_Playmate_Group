@@ -81,6 +81,7 @@ public sealed class AuditLogsController : ControllerBase
             AfterJson = log.AfterJson,
             IpAddress = log.IpAddress,
             CorrelationId = log.CorrelationId,
+            BatchUuid = log.BatchUuid,
             CreatedAt = log.CreatedAt
         };
     }
