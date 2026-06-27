@@ -409,6 +409,72 @@ h3 {
   display: block;
 }
 
+.log-switcher {
+  position: sticky;
+  top: 16px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.log-switcher button {
+  border: 1px solid var(--line-strong);
+  background: var(--glass-strong);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(14px);
+}
+
+.log-switcher button.active,
+.log-switcher button:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.log-fab {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 30;
+  display: grid;
+  gap: 8px;
+}
+
+.log-fab button {
+  min-width: 132px;
+  border: 1px solid var(--line-strong);
+  background: var(--glass-strong);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(14px);
+}
+
+.log-fab button.active,
+.log-fab button:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.amount-positive {
+  color: var(--success);
+  font-weight: 900;
+}
+
+.amount-negative {
+  color: var(--danger);
+  font-weight: 900;
+}
+
+.ghost.danger {
+  color: var(--danger);
+}
+
+.ghost.danger:hover {
+  background: var(--danger-soft);
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1407,6 +1473,20 @@ th:last-child {
 
 .record-detail strong {
   overflow-wrap: anywhere;
+}
+
+.record-json {
+  overflow: auto;
+  max-height: 260px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgb(17 24 39 / 4%);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 640px) {

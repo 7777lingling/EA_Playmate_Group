@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EA Playmate Group</title>
-  <link rel="stylesheet" href="/styles.css?v=20260614-mobile-org-editor-top">
+  <link rel="stylesheet" href="/styles.css?v=20260627-logs-ledger-v1">
 </head>
 <body>
   <section class="login-view" id="loginView" hidden>
@@ -578,6 +578,10 @@
     </section>
 
     <section class="view" id="auditView">
+      <nav class="log-switcher" aria-label="紀錄切換">
+        <button type="button" data-log-view="audit">📋 操作紀錄</button>
+        <button type="button" data-log-view="moneyLogs">💰 金流紀錄</button>
+      </nav>
       <section class="panel">
         <div class="panel-head">
           <h2>操作紀錄</h2>
@@ -590,7 +594,9 @@
                   <th>操作者</th>
                   <th>功能</th>
                   <th>動作</th>
-                  <th>內容</th>
+                  <th>目標</th>
+                  <th>摘要</th>
+                  <th>詳細</th>
               </tr>
             </thead>
             <tbody id="auditRows"></tbody>
@@ -600,6 +606,10 @@
     </section>
 
     <section class="view" id="moneyLogsView">
+      <nav class="log-switcher" aria-label="紀錄切換">
+        <button type="button" data-log-view="audit">📋 操作紀錄</button>
+        <button type="button" data-log-view="moneyLogs">💰 金流紀錄</button>
+      </nav>
       <section class="panel">
         <div class="panel-head"><h2>金流紀錄</h2></div>
         <div class="table-wrap">
@@ -613,6 +623,7 @@
                 <th>餘額</th>
                 <th>來源</th>
                 <th>備註</th>
+                <th>詳細</th>
               </tr>
             </thead>
             <tbody id="moneyLogRows"></tbody>
@@ -671,7 +682,7 @@
     </section>
   </main>
 
-  <nav class="log-fab" id="logFab" aria-label="紀錄切換">
+  <nav class="log-fab" id="logFab" aria-label="紀錄快速切換" hidden>
     <button type="button" data-log-view="audit">📋 操作紀錄</button>
     <button type="button" data-log-view="moneyLogs">💰 金流紀錄</button>
   </nav>
@@ -763,6 +774,6 @@
     </section>
   </div>
 
-  <script src="/app.js?v=20260622-api-errors-v1"></script>
+  <script src="/app.js?v=20260627-logs-ledger-v1"></script>
 </body>
 </html>

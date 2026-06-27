@@ -9,6 +9,7 @@ const state = {
   orders: [],
   payments: [],
   auditLogs: [],
+  moneyLogs: [],
   permissionMatrix: null,
   organizations: [],
   activeDepartmentId: null,
@@ -27,6 +28,7 @@ const titles = {
   giftRecords: ["Gift Records", "送禮紀錄"],
   payments: ["Payments", "月結"],
   audit: ["Audit", "紀錄"],
+  moneyLogs: ["Money Log", "金流紀錄"],
   permissions: ["Permissions", "權限管理"]
 };
 
@@ -78,7 +80,8 @@ const labels = {
     delete: "刪除",
     generate_monthly: "產生月結",
     mark_paid: "標記已發薪",
-    change_password: "變更密碼"
+    change_password: "變更密碼",
+    reverse: "沖正"
   },
   targetType: {
     users: "成員",
@@ -90,7 +93,22 @@ const labels = {
     departments: "部門",
     department_members: "部門成員",
     audit_logs: "操作紀錄",
+    money_logs: "金流紀錄",
     role_permissions: "角色權限"
+  },
+  moneyLogType: {
+    deposit: "儲值",
+    deduction: "扣款",
+    refund: "退款",
+    gift_income: "禮物收入",
+    monthly_settlement: "月結",
+    manual_adjustment: "手動調帳"
+  },
+  moneyLogSource: {
+    manual: "手動",
+    payments: "月結",
+    gift_records: "送禮紀錄",
+    orders: "訂單"
   }
 };
 
@@ -210,20 +228,30 @@ function setSidebarCollapsed(collapsed) {
 
 function bindNavigation() {
   document.querySelectorAll(".nav-tabs button").forEach((button) => {
-    button.addEventListener("click", async () => {
-      state.view = button.dataset.view;
-      document.querySelectorAll(".nav-tabs button").forEach((x) => x.classList.remove("active"));
-      button.classList.add("active");
-      document.querySelectorAll(".view").forEach((x) => x.classList.remove("active"));
-      document.getElementById(`${state.view}View`).classList.add("active");
-      document.getElementById("viewEyebrow").textContent = titles[state.view][0];
-      document.getElementById("viewTitle").textContent = titles[state.view][1];
-      await refreshAll();
-    });
+    button.addEventListener("click", () => navigateToView(button.dataset.view));
+  });
+
+  document.querySelectorAll("[data-log-view]").forEach((button) => {
+    button.addEventListener("click", () => navigateToView(button.dataset.logView));
   });
 
   document.getElementById("refreshBtn").addEventListener("click", refreshAll);
   document.getElementById("addMemberBtn").addEventListener("click", () => addMemberRow());
+}
+
+async function navigateToView(view) {
+  state.view = view;
+  document.querySelectorAll(".nav-tabs button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === view || (view === "moneyLogs" && button.dataset.view === "audit"));
+  });
+  document.querySelectorAll(".view").forEach((section) => section.classList.remove("active"));
+  document.getElementById(`${view}View`).classList.add("active");
+  document.getElementById("viewEyebrow").textContent = titles[view][0];
+  document.getElementById("viewTitle").textContent = titles[view][1];
+  document.querySelectorAll("[data-log-view]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.logView === view);
+  });
+  await refreshAll();
 }
 
 function bindForms() {
@@ -1029,6 +1057,10 @@ function hasPermission(code) {
     currentPermissions().has(code);
 }
 
+function hasAnyPermission(codes) {
+  return codes.some((code) => hasPermission(code));
+}
+
 function applyNavigationPermissions() {
   const viewPermissions = {
     dashboard: "Order.View",
@@ -1040,6 +1072,7 @@ function applyNavigationPermissions() {
     orders: "Order.View",
     payments: "Settlement.View",
     audit: "Audit.View",
+    moneyLogs: "Audit.View",
     permissions: null
   };
 
@@ -1055,6 +1088,14 @@ function applyNavigationPermissions() {
       button.hidden = true;
     }
   });
+
+  document.querySelectorAll(".log-switcher").forEach((switcher) => {
+    switcher.hidden = !hasPermission("Audit.View");
+  });
+  const logFab = document.getElementById("logFab");
+  if (logFab) {
+    logFab.hidden = !hasPermission("Audit.View");
+  }
 }
 
 function applyActionPermissions() {
@@ -1074,6 +1115,7 @@ function applyActionPermissions() {
   setHidden("[data-order-edit]", !hasPermission("Order.Edit"));
   setHidden("[data-order-delete]", !hasPermission("Order.Cancel"));
   setHidden("#paymentForm, [data-payment-paid]", !hasPermission("Settlement.Close"));
+  setHidden("[data-money-reverse]", !hasAnyPermission(["Settlement.Close", "Account.Manage"]));
 }
 
 async function api(path, options = {}) {
@@ -1246,6 +1288,9 @@ async function refreshAll() {
     if (state.view === "audit") {
       await loadAuditLogs();
     }
+    if (state.view === "moneyLogs") {
+      await loadMoneyLogs();
+    }
     if (state.view === "permissions") {
       await loadOrganizations();
       await loadPermissions();
@@ -1311,6 +1356,11 @@ async function loadPayments() {
 async function loadAuditLogs() {
   state.auditLogs = await api("/api/auditlogs?take=100");
   renderAuditLogs(state.auditLogs);
+}
+
+async function loadMoneyLogs() {
+  state.moneyLogs = await api("/api/moneylogs?take=100");
+  renderMoneyLogs(state.moneyLogs);
 }
 
 async function loadPermissions() {
@@ -1974,12 +2024,22 @@ function renderAuditLogs(rows) {
     <tr>
       <td>${formatDateTime(log.createdAt)}</td>
       <td>${escapeHtml(log.loginUserDisplayName || "系統")}</td>
-      <td>${escapeHtml(log.ipAddress || "-")}</td>
-      <td>${escapeHtml(label("auditAction", log.action))}</td>
       <td>${escapeHtml(label("targetType", log.targetType))}</td>
-      <td>${escapeHtml(auditNote(log))}</td>
+      <td>${escapeHtml(label("auditAction", log.action))}</td>
+      <td>${escapeHtml(auditTargetText(log))}</td>
+      <td>${escapeHtml(auditNote(log) || auditSummary(log))}</td>
+      <td><button class="ghost small" data-audit-detail="${log.id}" type="button">詳細</button></td>
     </tr>
-  `).join("") : emptyRow(6);
+  `).join("") : emptyRow(7);
+
+  body.querySelectorAll("[data-audit-detail]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const log = rows.find((item) => item.id === Number(button.dataset.auditDetail));
+      if (log) {
+        openAuditLogDetail(log);
+      }
+    });
+  });
 }
 
 function auditNote(log) {
@@ -2009,6 +2069,162 @@ function ensureAuditHeader(body) {
     th.textContent = "操作者";
     row.insertBefore(th, row.children[1]);
   }
+  if (row && row.children.length !== 7) {
+    row.querySelectorAll("th").forEach((cell) => cell.remove());
+    ["時間", "操作者", "功能", "動作", "目標", "摘要", "詳細"].forEach((text) => {
+      const th = document.createElement("th");
+      th.textContent = text;
+      row.appendChild(th);
+    });
+  }
+}
+
+function renderMoneyLogs(rows) {
+  const body = document.getElementById("moneyLogRows");
+  const canReverse = hasAnyPermission(["Settlement.Close", "Account.Manage"]);
+  body.innerHTML = rows.length ? rows.map((log) => `
+    <tr>
+      <td>${formatDateTime(log.createdAt)}</td>
+      <td>${escapeHtml(log.memberNickname || `會員${log.userId}`)}</td>
+      <td>${escapeHtml(label("moneyLogType", log.type))}</td>
+      <td class="${log.amount < 0 ? "amount-negative" : "amount-positive"}">${formatSignedMoney(log.amount)}</td>
+      <td>${money.format(log.balanceAfter)}</td>
+      <td>${escapeHtml(moneyLogSourceText(log))}</td>
+      <td>${escapeHtml(log.note || "")}</td>
+      <td>
+        <div class="table-actions">
+          <button class="ghost small" data-money-detail="${log.id}" type="button">詳細</button>
+          ${canReverse && !log.isReversal && !rows.some((item) => item.reversedMoneyLogId === log.id)
+            ? `<button class="ghost small danger" data-money-reverse="${log.id}" type="button">沖正</button>`
+            : ""}
+        </div>
+      </td>
+    </tr>
+  `).join("") : emptyRow(8);
+  applyActionPermissions();
+
+  body.querySelectorAll("[data-money-detail]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const log = rows.find((item) => item.id === Number(button.dataset.moneyDetail));
+      if (log) {
+        openMoneyLogDetail(log);
+      }
+    });
+  });
+
+  body.querySelectorAll("[data-money-reverse]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const log = rows.find((item) => item.id === Number(button.dataset.moneyReverse));
+      if (!log || !window.confirm(`確定要沖正金流紀錄 #${log.id}？系統會新增一筆反向金額紀錄，不會修改原紀錄。`)) {
+        return;
+      }
+
+      await runAction(async () => {
+        await api(`/api/moneylogs/${log.id}/reverse`, {
+          method: "POST",
+          body: JSON.stringify({ note: `沖正金流紀錄 #${log.id}` })
+        });
+        await loadMoneyLogs();
+        showAlert("金流紀錄已沖正。", false);
+      });
+    });
+  });
+}
+
+function auditTargetText(log) {
+  const target = label("targetType", log.targetType);
+  const id = log.targetId ? ` #${log.targetId}` : "";
+  return `${target}${id}`;
+}
+
+function auditSummary(log) {
+  const data = parseJson(log.afterJson) || parseJson(log.beforeJson);
+  if (!data || typeof data !== "object") {
+    return "";
+  }
+
+  return data.nickname || data.displayName || data.loginAccount || data.orderNo || data.name || data.type || "";
+}
+
+function openAuditLogDetail(log) {
+  openRecordModal({
+    title: `操作紀錄 #${log.id}`,
+    eyebrow: "Audit Log",
+    content: `
+      <div class="record-modal-content">
+        <div class="record-detail-grid">
+          ${recordDetail("時間", formatDateTime(log.createdAt))}
+          ${recordDetail("操作者", log.loginUserDisplayName || "系統")}
+          ${recordDetail("功能", label("targetType", log.targetType))}
+          ${recordDetail("動作", label("auditAction", log.action))}
+          ${recordDetail("目標", auditTargetText(log))}
+          ${recordDetail("CorrelationId", log.correlationId)}
+          ${recordDetail("IP", log.ipAddress)}
+        </div>
+        <h3>Before</h3>
+        <pre class="record-json">${escapeHtml(formatJson(log.beforeJson))}</pre>
+        <h3>After</h3>
+        <pre class="record-json">${escapeHtml(formatJson(log.afterJson))}</pre>
+      </div>
+    `
+  });
+}
+
+function openMoneyLogDetail(log) {
+  openRecordModal({
+    title: `金流紀錄 #${log.id}`,
+    eyebrow: "Money Log",
+    content: `
+      <div class="record-modal-content">
+        <div class="record-detail-grid">
+          ${recordDetail("時間", formatDateTime(log.createdAt))}
+          ${recordDetail("會員", log.memberNickname || `會員${log.userId}`)}
+          ${recordDetail("類型", label("moneyLogType", log.type))}
+          ${recordDetail("金額", formatSignedMoney(log.amount))}
+          ${recordDetail("餘額", money.format(log.balanceAfter))}
+          ${recordDetail("AuditLogId", log.auditLogId)}
+          ${recordDetail("SourceType", log.sourceType)}
+          ${recordDetail("SourceId", log.sourceId)}
+          ${recordDetail("ReversedMoneyLogId", log.reversedMoneyLogId)}
+          ${recordDetail("IsReversal", log.isReversal ? "true" : "false")}
+          ${recordDetail("CorrelationId", log.correlationId)}
+          ${recordDetail("備註", log.note)}
+        </div>
+      </div>
+    `
+  });
+}
+
+function moneyLogSourceText(log) {
+  const source = label("moneyLogSource", log.sourceType);
+  if (!source) {
+    return "-";
+  }
+
+  return log.sourceId ? `${source} #${log.sourceId}` : source;
+}
+
+function formatSignedMoney(value) {
+  const amount = Number(value || 0);
+  const prefix = amount > 0 ? "+" : amount < 0 ? "-" : "";
+  return `${prefix}${money.format(Math.abs(amount))}`;
+}
+
+function parseJson(value) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function formatJson(value) {
+  const parsed = parseJson(value);
+  return parsed ? JSON.stringify(parsed, null, 2) : (value || "-");
 }
 
 function renderSelects() {

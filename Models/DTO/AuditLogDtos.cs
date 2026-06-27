@@ -15,5 +15,6 @@ public sealed class AuditLogDto
     public string? BeforeJson { get; set; }
     public string? AfterJson { get; set; }
     public string? IpAddress { get; set; }
+    public Guid CorrelationId { get; set; }
     public DateTime CreatedAt { get; set; }
 }

@@ -35,10 +35,25 @@ public sealed class MoneyLogsController : ControllerBase
     }
 
     [HttpPost]
-    [RequirePermission("Settlement.Close")]
+    [RequirePermission("Settlement.Close", "Account.Manage")]
     public async Task<ActionResult<MoneyLogDto>> Create(CreateMoneyLogRequestDto request)
     {
         var result = await _moneyLogService.AddManualAsync(request);
+        if (result.Succeeded)
+        {
+            return Ok(result.Value);
+        }
+
+        return result.NotFound
+            ? NotFound()
+            : ApiErrors.BadRequest(result.ErrorCode ?? "operation_failed", result.ErrorMessage ?? "操作失敗。");
+    }
+
+    [HttpPost("{id:long}/reverse")]
+    [RequirePermission("Settlement.Close", "Account.Manage")]
+    public async Task<ActionResult<MoneyLogDto>> Reverse(long id, ReverseMoneyLogRequestDto request)
+    {
+        var result = await _moneyLogService.ReverseAsync(id, request);
         if (result.Succeeded)
         {
             return Ok(result.Value);

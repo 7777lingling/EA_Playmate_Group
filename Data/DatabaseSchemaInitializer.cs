@@ -207,6 +207,13 @@ BEGIN
     ALTER TABLE dbo.audit_logs ADD ip_address NVARCHAR(64) NULL;
 END;
 
+IF COL_LENGTH('dbo.audit_logs', 'correlation_id') IS NULL
+BEGIN
+    ALTER TABLE dbo.audit_logs
+        ADD correlation_id UNIQUEIDENTIFIER NOT NULL
+            CONSTRAINT DF_audit_logs_correlation_id DEFAULT NEWID();
+END;
+
 IF NOT EXISTS (
     SELECT 1
     FROM sys.foreign_keys
@@ -227,6 +234,17 @@ IF NOT EXISTS (
 BEGIN
     CREATE INDEX IX_audit_logs_login_user
     ON dbo.audit_logs(login_user_id, created_at);
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_audit_logs_correlation_id'
+      AND object_id = OBJECT_ID(N'dbo.audit_logs')
+)
+BEGIN
+    CREATE INDEX IX_audit_logs_correlation_id
+    ON dbo.audit_logs(correlation_id);
 END;
 """);
 
@@ -797,6 +815,8 @@ BEGIN
         organization_id INT NOT NULL,
         user_id INT NOT NULL,
         login_user_id INT NULL,
+        audit_log_id BIGINT NULL,
+        reversed_money_log_id BIGINT NULL,
         type NVARCHAR(30) NOT NULL,
         amount DECIMAL(12,2) NOT NULL,
         balance_after DECIMAL(12,2) NOT NULL,
@@ -804,14 +824,102 @@ BEGIN
         source_id INT NULL,
         source_uuid UNIQUEIDENTIFIER NULL,
         note NVARCHAR(500) NULL,
+        is_reversal BIT NOT NULL CONSTRAINT DF_money_logs_is_reversal DEFAULT 0,
+        correlation_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_money_logs_correlation_id DEFAULT NEWID(),
         created_at DATETIME2 NOT NULL CONSTRAINT DF_money_logs_created_at DEFAULT SYSUTCDATETIME(),
         CONSTRAINT FK_money_logs_organization FOREIGN KEY (organization_id) REFERENCES dbo.organizations(id),
         CONSTRAINT FK_money_logs_user FOREIGN KEY (user_id) REFERENCES dbo.users(id),
-        CONSTRAINT FK_money_logs_login_user FOREIGN KEY (login_user_id) REFERENCES dbo.login_users(id)
+        CONSTRAINT FK_money_logs_login_user FOREIGN KEY (login_user_id) REFERENCES dbo.login_users(id),
+        CONSTRAINT FK_money_logs_audit_log FOREIGN KEY (audit_log_id) REFERENCES dbo.audit_logs(id),
+        CONSTRAINT FK_money_logs_reversed_money_log FOREIGN KEY (reversed_money_log_id) REFERENCES dbo.money_logs(id)
     );
     CREATE INDEX IX_money_logs_user_id ON dbo.money_logs(user_id, id);
     CREATE INDEX IX_money_logs_source ON dbo.money_logs(source_type, source_id);
     CREATE INDEX IX_money_logs_created_at ON dbo.money_logs(created_at DESC);
+    CREATE INDEX IX_money_logs_audit_log_id ON dbo.money_logs(audit_log_id);
+    CREATE INDEX IX_money_logs_reversed_money_log_id ON dbo.money_logs(reversed_money_log_id);
+    CREATE INDEX IX_money_logs_correlation_id ON dbo.money_logs(correlation_id);
+END;
+
+IF COL_LENGTH('dbo.money_logs', 'audit_log_id') IS NULL
+BEGIN
+    ALTER TABLE dbo.money_logs ADD audit_log_id BIGINT NULL;
+END;
+
+IF COL_LENGTH('dbo.money_logs', 'reversed_money_log_id') IS NULL
+BEGIN
+    ALTER TABLE dbo.money_logs ADD reversed_money_log_id BIGINT NULL;
+END;
+
+IF COL_LENGTH('dbo.money_logs', 'is_reversal') IS NULL
+BEGIN
+    ALTER TABLE dbo.money_logs
+        ADD is_reversal BIT NOT NULL
+            CONSTRAINT DF_money_logs_is_reversal DEFAULT 0;
+END;
+
+IF COL_LENGTH('dbo.money_logs', 'correlation_id') IS NULL
+BEGIN
+    ALTER TABLE dbo.money_logs
+        ADD correlation_id UNIQUEIDENTIFIER NOT NULL
+            CONSTRAINT DF_money_logs_correlation_id DEFAULT NEWID();
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = N'FK_money_logs_audit_log'
+      AND parent_object_id = OBJECT_ID(N'dbo.money_logs')
+)
+BEGIN
+    ALTER TABLE dbo.money_logs WITH CHECK
+        ADD CONSTRAINT FK_money_logs_audit_log
+        FOREIGN KEY (audit_log_id) REFERENCES dbo.audit_logs(id);
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = N'FK_money_logs_reversed_money_log'
+      AND parent_object_id = OBJECT_ID(N'dbo.money_logs')
+)
+BEGIN
+    ALTER TABLE dbo.money_logs WITH CHECK
+        ADD CONSTRAINT FK_money_logs_reversed_money_log
+        FOREIGN KEY (reversed_money_log_id) REFERENCES dbo.money_logs(id);
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_money_logs_audit_log_id'
+      AND object_id = OBJECT_ID(N'dbo.money_logs')
+)
+BEGIN
+    CREATE INDEX IX_money_logs_audit_log_id
+        ON dbo.money_logs(audit_log_id);
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_money_logs_reversed_money_log_id'
+      AND object_id = OBJECT_ID(N'dbo.money_logs')
+)
+BEGIN
+    CREATE INDEX IX_money_logs_reversed_money_log_id
+        ON dbo.money_logs(reversed_money_log_id);
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_money_logs_correlation_id'
+      AND object_id = OBJECT_ID(N'dbo.money_logs')
+)
+BEGIN
+    CREATE INDEX IX_money_logs_correlation_id
+        ON dbo.money_logs(correlation_id);
 END;
 """);
     }

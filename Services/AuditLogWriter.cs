@@ -14,7 +14,8 @@ public static class AuditLogWriter
         Guid? targetUuid = null,
         object? before = null,
         object? after = null,
-        int? userId = null)
+        int? userId = null,
+        Guid? correlationId = null)
     {
         return new AuditLog
         {
@@ -24,7 +25,8 @@ public static class AuditLogWriter
             TargetId = targetId,
             TargetUuid = targetUuid,
             BeforeJson = before is null ? null : JsonSerializer.Serialize(before, JsonOptions),
-            AfterJson = after is null ? null : JsonSerializer.Serialize(after, JsonOptions)
+            AfterJson = after is null ? null : JsonSerializer.Serialize(after, JsonOptions),
+            CorrelationId = correlationId ?? Guid.NewGuid()
         };
     }
 }

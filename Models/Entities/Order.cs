@@ -23,6 +23,10 @@ public sealed class Order : IOrganizationScoped
 
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public long? CreatedAuditLogId { get; set; }
+    public AuditLog? CreatedAuditLog { get; set; }
+    public long? CancelledAuditLogId { get; set; }
+    public AuditLog? CancelledAuditLog { get; set; }
 
     public ICollection<OrderMember> Members { get; set; } = [];
 }

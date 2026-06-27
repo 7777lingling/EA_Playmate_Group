@@ -191,9 +191,28 @@ app.Use(async (context, next) =>
     }
 
     var permissionService = context.RequestServices.GetRequiredService<PermissionService>();
-    if (await permissionService.HasPermissionAsync(loginUserId.Value, permission.PermissionCode))
+    foreach (var code in permission.PermissionCodes)
     {
-        await next();
+        if (await permissionService.HasPermissionAsync(loginUserId.Value, code))
+        {
+            await next();
+            return;
+        }
+    }
+
+    var requiredPermissions = string.Join(" 或 ", permission.PermissionCodes);
+    if (string.IsNullOrWhiteSpace(requiredPermissions))
+    {
+        requiredPermissions = permission.PermissionCode;
+    }
+
+    if (string.IsNullOrWhiteSpace(requiredPermissions))
+    {
+        await ApiProblemDetails.WriteAsync(
+            context,
+            StatusCodes.Status403Forbidden,
+            "permission_metadata_missing",
+            "此 API 尚未設定有效權限，已拒絕存取。");
         return;
     }
 
@@ -201,7 +220,7 @@ app.Use(async (context, next) =>
         context,
         StatusCodes.Status403Forbidden,
         "permission_denied",
-        $"權限不足，需要 {permission.PermissionCode}。");
+        $"權限不足，需要 {requiredPermissions}。");
 });
 
 app.UseDefaultFiles();
@@ -252,10 +271,20 @@ static void ValidateControllerAccessMetadata(IServiceProvider services)
                 $"{actionName} 未標示 PublicApi 或 RequirePermission。");
         }
 
-        if (permission is not null && !PermissionCodes.IsValid(permission.PermissionCode))
+        if (permission is not null && permission.PermissionCodes.Count == 0)
         {
             throw new InvalidOperationException(
-                $"{actionName} 使用無效權限碼：{permission.PermissionCode}。");
+                $"{actionName} 未設定有效權限碼。");
+        }
+
+        if (permission is not null)
+        {
+            var invalidPermission = permission.PermissionCodes.FirstOrDefault(code => !PermissionCodes.IsValid(code));
+            if (invalidPermission is not null)
+            {
+                throw new InvalidOperationException(
+                    $"{actionName} 使用無效權限碼：{invalidPermission}。");
+            }
         }
     }
 }

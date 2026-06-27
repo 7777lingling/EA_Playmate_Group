@@ -105,6 +105,18 @@ public sealed class EAPlaymateGroupDbContext : DbContext
                 $"OrganizationId is required for: {string.Join(", ", missingOrganizationEntries)}.");
         }
 
+        foreach (var entry in ChangeTracker.Entries<AuditLog>()
+                     .Where(x => x.State == EntityState.Added && x.Entity.CorrelationId == Guid.Empty))
+        {
+            entry.Entity.CorrelationId = Guid.NewGuid();
+        }
+
+        foreach (var entry in ChangeTracker.Entries<MoneyLog>()
+                     .Where(x => x.State == EntityState.Added && x.Entity.CorrelationId == Guid.Empty))
+        {
+            entry.Entity.CorrelationId = Guid.NewGuid();
+        }
+
         if (!loginUserId.HasValue)
         {
             return;
@@ -354,12 +366,15 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.BeforeJson).HasColumnName("before_json");
         entity.Property(x => x.AfterJson).HasColumnName("after_json");
         entity.Property(x => x.IpAddress).HasColumnName("ip_address").HasMaxLength(64);
+        entity.Property(x => x.CorrelationId).HasColumnName("correlation_id").HasDefaultValueSql("NEWID()");
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
 
         entity.HasIndex(x => new { x.TargetType, x.TargetId, x.CreatedAt })
             .HasDatabaseName("IX_audit_logs_target");
         entity.HasIndex(x => new { x.LoginUserId, x.CreatedAt })
             .HasDatabaseName("IX_audit_logs_login_user");
+        entity.HasIndex(x => x.CorrelationId)
+            .HasDatabaseName("IX_audit_logs_correlation_id");
 
         entity.HasOne(x => x.User)
             .WithMany(x => x.AuditLogs)
@@ -383,6 +398,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.OrganizationId).HasColumnName("organization_id");
         entity.Property(x => x.UserId).HasColumnName("user_id");
         entity.Property(x => x.LoginUserId).HasColumnName("login_user_id");
+        entity.Property(x => x.AuditLogId).HasColumnName("audit_log_id");
+        entity.Property(x => x.ReversedMoneyLogId).HasColumnName("reversed_money_log_id");
         entity.Property(x => x.Type).HasColumnName("type").HasMaxLength(30).IsRequired();
         entity.Property(x => x.Amount).HasColumnName("amount").HasPrecision(12, 2);
         entity.Property(x => x.BalanceAfter).HasColumnName("balance_after").HasPrecision(12, 2);
@@ -390,13 +407,22 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.SourceId).HasColumnName("source_id");
         entity.Property(x => x.SourceUuid).HasColumnName("source_uuid");
         entity.Property(x => x.Note).HasColumnName("note").HasMaxLength(500);
+        entity.Property(x => x.IsReversal).HasColumnName("is_reversal").HasDefaultValue(false);
+        entity.Property(x => x.CorrelationId).HasColumnName("correlation_id").HasDefaultValueSql("NEWID()");
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
         entity.HasIndex(x => new { x.UserId, x.Id }).HasDatabaseName("IX_money_logs_user_id");
         entity.HasIndex(x => new { x.SourceType, x.SourceId }).HasDatabaseName("IX_money_logs_source");
+        entity.HasIndex(x => x.AuditLogId).HasDatabaseName("IX_money_logs_audit_log_id");
+        entity.HasIndex(x => x.ReversedMoneyLogId).HasDatabaseName("IX_money_logs_reversed_money_log_id");
+        entity.HasIndex(x => x.CorrelationId).HasDatabaseName("IX_money_logs_correlation_id");
         entity.HasOne(x => x.User).WithMany(x => x.MoneyLogs).HasForeignKey(x => x.UserId)
             .HasConstraintName("FK_money_logs_user").OnDelete(DeleteBehavior.NoAction);
         entity.HasOne(x => x.LoginUser).WithMany().HasForeignKey(x => x.LoginUserId)
             .HasConstraintName("FK_money_logs_login_user").OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(x => x.AuditLog).WithMany().HasForeignKey(x => x.AuditLogId)
+            .HasConstraintName("FK_money_logs_audit_log").OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(x => x.ReversedMoneyLog).WithMany().HasForeignKey(x => x.ReversedMoneyLogId)
+            .HasConstraintName("FK_money_logs_reversed_money_log").OnDelete(DeleteBehavior.NoAction);
     }
 
     private static void ConfigureServiceItem(ModelBuilder modelBuilder)
