@@ -104,6 +104,7 @@ builder.Services.AddScoped<GiftRecordService>();
 builder.Services.AddScoped<DepartmentService>();
 builder.Services.AddScoped<PermissionService>();
 builder.Services.AddScoped<MoneyLogService>();
+builder.Services.AddScoped<UserPreferenceService>();
 
 builder.Services.AddCors(options =>
 {

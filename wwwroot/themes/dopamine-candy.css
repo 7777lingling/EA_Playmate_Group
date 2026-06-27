@@ -1,0 +1,33 @@
+:root {
+  --bg: #fff7fb;
+  --bg-soft: #fff0f7;
+  --panel: #ffffff;
+  --panel-subtle: rgb(255 255 255 / 74%);
+  --ink: #1f1720;
+  --muted: #7c6470;
+  --line: rgb(255 77 158 / 12%);
+  --line-strong: rgb(255 77 158 / 22%);
+  --accent: #ff4d9e;
+  --accent-dark: #e73587;
+  --accent-2: #ffb703;
+  --accent-soft: rgb(255 77 158 / 13%);
+  --gold: #ffb703;
+  --gold-soft: rgb(255 183 3 / 16%);
+  --sidebar: transparent;
+  --sidebar-soft: rgb(255 255 255 / 52%);
+  --sidebar-line: rgb(255 77 158 / 13%);
+  --shadow: 0 24px 70px rgb(255 77 158 / 14%);
+  --shadow-soft: 0 8px 40px rgb(255 183 3 / 10%);
+  --primary-gradient: linear-gradient(135deg, #ff4d9e 0%, #ffb703 100%);
+  --app-background:
+    radial-gradient(circle at 8% 5%, rgb(255 77 158 / 18%), transparent 28rem),
+    radial-gradient(circle at 94% 15%, rgb(255 183 3 / 18%), transparent 25rem),
+    radial-gradient(circle at 70% 88%, rgb(124 58 237 / 8%), transparent 30rem),
+    linear-gradient(180deg, #ffffff 0%, #fff7fb 52%, #fff0f7 100%);
+  --login-background:
+    radial-gradient(circle at 18% 18%, rgb(255 77 158 / 23%), transparent 28rem),
+    radial-gradient(circle at 82% 14%, rgb(255 183 3 / 20%), transparent 24rem),
+    linear-gradient(145deg, #ffffff 0%, #fff0f7 100%);
+  --glass: rgb(255 255 255 / 62%);
+  --glass-strong: rgb(255 255 255 / 80%);
+}

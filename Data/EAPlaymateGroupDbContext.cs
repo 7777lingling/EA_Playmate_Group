@@ -28,6 +28,9 @@ public sealed class EAPlaymateGroupDbContext : DbContext
     public DbSet<DepartmentMember> DepartmentMembers => Set<DepartmentMember>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<LoginHistory> LoginHistories => Set<LoginHistory>();
+    public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();
+    public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
 
     private int CurrentOrganizationId =>
         _httpContextAccessor.HttpContext?.Session.GetInt32(Services.AuthService.SessionOrganizationId) ?? 0;
@@ -61,6 +64,9 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         ConfigureDepartmentMember(modelBuilder);
         ConfigureRolePermission(modelBuilder);
         ConfigureOrganization(modelBuilder);
+        ConfigureLoginHistory(modelBuilder);
+        ConfigureFileAttachment(modelBuilder);
+        ConfigureUserPreference(modelBuilder);
         ConfigureOrganizationFilters(modelBuilder);
     }
 
@@ -133,6 +139,12 @@ public sealed class EAPlaymateGroupDbContext : DbContext
                      .Where(x => x.State == EntityState.Added && !x.Entity.LoginUserId.HasValue))
         {
             entry.Entity.LoginUserId = loginUserId.Value;
+        }
+
+        foreach (var entry in ChangeTracker.Entries<FileAttachment>()
+                     .Where(x => x.State == EntityState.Added && !x.Entity.UploadedByLoginUserId.HasValue))
+        {
+            entry.Entity.UploadedByLoginUserId = loginUserId.Value;
         }
     }
 
@@ -518,6 +530,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.Remark).HasColumnName("remark").HasMaxLength(500);
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
         entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        entity.Property(x => x.CreatedAuditLogId).HasColumnName("created_audit_log_id");
+        entity.Property(x => x.CancelledAuditLogId).HasColumnName("cancelled_audit_log_id");
 
         entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_gift_records_uuid");
         entity.HasIndex(x => new { x.GiftDate, x.Status }).HasDatabaseName("IX_gift_records_date_status");
@@ -642,6 +656,80 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.HasIndex(x => x.Name).IsUnique().HasDatabaseName("UQ_organizations_name");
     }
 
+    private static void ConfigureLoginHistory(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<LoginHistory>();
+        entity.ToTable("login_histories", "dbo");
+        entity.HasKey(x => x.Id).HasName("PK_login_histories");
+        entity.Property(x => x.Id).HasColumnName("id");
+        entity.Property(x => x.OrganizationId).HasColumnName("organization_id");
+        entity.Property(x => x.LoginUserId).HasColumnName("login_user_id");
+        entity.Property(x => x.Action).HasColumnName("action").HasMaxLength(30).IsRequired();
+        entity.Property(x => x.Method).HasColumnName("method").HasMaxLength(30).IsRequired();
+        entity.Property(x => x.IpAddress).HasColumnName("ip_address").HasMaxLength(64);
+        entity.Property(x => x.UserAgent).HasColumnName("user_agent").HasMaxLength(500);
+        entity.Property(x => x.SessionId).HasColumnName("session_id").HasMaxLength(120);
+        entity.Property(x => x.Succeeded).HasColumnName("succeeded").HasDefaultValue(true);
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
+        entity.HasIndex(x => new { x.LoginUserId, x.CreatedAt }).HasDatabaseName("IX_login_histories_login_user");
+        entity.HasIndex(x => x.CreatedAt).HasDatabaseName("IX_login_histories_created_at");
+        entity.HasOne(x => x.LoginUser)
+            .WithMany()
+            .HasForeignKey(x => x.LoginUserId)
+            .HasConstraintName("FK_login_histories_login_user")
+            .OnDelete(DeleteBehavior.NoAction);
+    }
+
+    private static void ConfigureFileAttachment(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<FileAttachment>();
+        entity.ToTable("file_attachments", "dbo");
+        entity.HasKey(x => x.Id).HasName("PK_file_attachments");
+        entity.Property(x => x.Id).HasColumnName("id");
+        entity.Property(x => x.OrganizationId).HasColumnName("organization_id");
+        entity.Property(x => x.TargetType).HasColumnName("target_type").HasMaxLength(50).IsRequired();
+        entity.Property(x => x.TargetId).HasColumnName("target_id");
+        entity.Property(x => x.TargetUuid).HasColumnName("target_uuid");
+        entity.Property(x => x.OriginalFileName).HasColumnName("original_file_name").HasMaxLength(255).IsRequired();
+        entity.Property(x => x.StoredFileName).HasColumnName("stored_file_name").HasMaxLength(120).IsRequired();
+        entity.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(500).IsRequired();
+        entity.Property(x => x.ContentType).HasColumnName("content_type").HasMaxLength(120).IsRequired();
+        entity.Property(x => x.FileSize).HasColumnName("file_size");
+        entity.Property(x => x.UploadedByLoginUserId).HasColumnName("uploaded_by_login_user_id");
+        entity.Property(x => x.Note).HasColumnName("note").HasMaxLength(500);
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
+        entity.HasIndex(x => new { x.TargetType, x.TargetId, x.CreatedAt }).HasDatabaseName("IX_file_attachments_target");
+        entity.HasIndex(x => x.UploadedByLoginUserId).HasDatabaseName("IX_file_attachments_uploaded_by");
+        entity.HasOne(x => x.UploadedByLoginUser)
+            .WithMany()
+            .HasForeignKey(x => x.UploadedByLoginUserId)
+            .HasConstraintName("FK_file_attachments_uploaded_by")
+            .OnDelete(DeleteBehavior.NoAction);
+    }
+
+    private static void ConfigureUserPreference(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<UserPreference>();
+        entity.ToTable("user_preferences", "dbo");
+        entity.HasKey(x => x.Id).HasName("PK_user_preferences");
+        entity.Property(x => x.Id).HasColumnName("id");
+        entity.Property(x => x.LoginUserId).HasColumnName("login_user_id");
+        entity.Property(x => x.ThemeName).HasColumnName("theme_name").HasMaxLength(50).HasDefaultValue("purple-tech").IsRequired();
+        entity.Property(x => x.AccentColor).HasColumnName("accent_color").HasMaxLength(20);
+        entity.Property(x => x.DashboardLayout).HasColumnName("dashboard_layout");
+        entity.Property(x => x.TablePageSize).HasColumnName("table_page_size").HasDefaultValue(100);
+        entity.Property(x => x.DefaultOrderStatusFilter).HasColumnName("default_order_status_filter").HasMaxLength(30);
+        entity.Property(x => x.DefaultMoneyLogFilter).HasColumnName("default_money_log_filter").HasMaxLength(30);
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
+        entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        entity.HasIndex(x => x.LoginUserId).IsUnique().HasDatabaseName("UQ_user_preferences_login_user");
+        entity.HasOne(x => x.LoginUser)
+            .WithOne(x => x.Preference)
+            .HasForeignKey<UserPreference>(x => x.LoginUserId)
+            .HasConstraintName("FK_user_preferences_login_user")
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+
     private void ConfigureOrganizationFilters(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<LoginUser>().HasQueryFilter(x =>
@@ -695,5 +783,13 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             IsSystemAdmin ||
             (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId &&
              (!IsMember || (CurrentMemberUserId > 0 && x.UserId == CurrentMemberUserId))));
+        modelBuilder.Entity<LoginHistory>().HasQueryFilter(x =>
+            IsSystemAdmin || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<FileAttachment>().HasQueryFilter(x =>
+            IsSystemAdmin || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<UserPreference>().HasQueryFilter(x =>
+            IsSystemAdmin ||
+            (!IsMember && CurrentOrganizationId > 0 && x.LoginUser.OrganizationId == CurrentOrganizationId) ||
+            (CurrentLoginUserId > 0 && x.LoginUserId == CurrentLoginUserId));
     }
 }

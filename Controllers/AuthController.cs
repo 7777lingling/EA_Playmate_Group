@@ -16,45 +16,51 @@ public sealed class AuthController : ControllerBase
     private readonly AuthService _authService;
     private readonly DiscordAuthService _discordAuthService;
     private readonly LoginUserService _loginUserService;
+    private readonly UserPreferenceService _userPreferenceService;
 
     public AuthController(
         AuthService authService,
         DiscordAuthService discordAuthService,
-        LoginUserService loginUserService)
+        LoginUserService loginUserService,
+        UserPreferenceService userPreferenceService)
     {
         _authService = authService;
         _discordAuthService = discordAuthService;
         _loginUserService = loginUserService;
+        _userPreferenceService = userPreferenceService;
     }
 
     [HttpGet("me")]
     public async Task<ActionResult<AuthMeDto>> Me()
     {
+        var user = await _authService.GetCurrentUserAsync(HttpContext);
         return Ok(new AuthMeDto
         {
             AuthRequired = await _authService.IsAuthRequiredAsync(),
             IsAuthenticated = HttpContext.Session.GetInt32(AuthService.SessionUserId).HasValue,
-            User = await _authService.GetCurrentUserAsync(HttpContext)
+            User = user,
+            Preferences = user is null ? null : await _userPreferenceService.GetAsync(user.Id)
         });
     }
 
     [HttpPost("login")]
     public async Task<ActionResult<AuthMeDto>> Login(LoginRequestDto request)
     {
-        var user = await _authService.LoginAsync(request);
+        var user = await _authService.LoginAsync(request, HttpContext);
         if (user is null)
         {
             return Unauthorized(new { message = "帳號或密碼錯誤，或此帳號已停用。" });
         }
 
         SignIn(user);
-        await _authService.RecordAuthEventAsync(user.Id, "login");
+        await _authService.RecordAuthEventAsync(user.Id, "login", HttpContext, "password");
 
         return Ok(new AuthMeDto
         {
             AuthRequired = true,
             IsAuthenticated = true,
-            User = user
+            User = user,
+            Preferences = await _userPreferenceService.GetAsync(user.Id)
         });
     }
 
@@ -140,7 +146,7 @@ public sealed class AuthController : ControllerBase
             }
 
             SignIn(user);
-            await _authService.RecordAuthEventAsync(user.Id, "login");
+            await _authService.RecordAuthEventAsync(user.Id, "login", HttpContext, "discord");
             return Redirect("/");
         }
         catch
@@ -171,7 +177,7 @@ public sealed class AuthController : ControllerBase
         var loginUserId = HttpContext.Session.GetInt32(AuthService.SessionUserId);
         if (loginUserId.HasValue)
         {
-            await _authService.RecordAuthEventAsync(loginUserId.Value, "logout");
+            await _authService.RecordAuthEventAsync(loginUserId.Value, "logout", HttpContext, "session");
         }
         HttpContext.Session.Clear();
         return NoContent();

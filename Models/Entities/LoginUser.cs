@@ -20,4 +20,5 @@ public sealed class LoginUser : IOrganizationScoped
     public DateTime? LastLoginAt { get; set; }
 
     public ICollection<AuditLog> AuditLogs { get; set; } = [];
+    public UserPreference? Preference { get; set; }
 }

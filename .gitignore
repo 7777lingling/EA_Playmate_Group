@@ -12,6 +12,7 @@ secrets.json
 
 # ASP.NET Core runtime data
 DataProtectionKeys/
+FileAttachments/
 logs/
 *.log
 
@@ -38,6 +39,7 @@ temp/
 *.cache
 
 # Installer output
+installer/
 installer/Output/
 *.exe.config
 

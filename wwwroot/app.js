@@ -10,6 +10,13 @@ const state = {
   payments: [],
   auditLogs: [],
   moneyLogs: [],
+  loginHistories: [],
+  preferences: null,
+  logFilters: {
+    audit: { date: "", account: "", keyword: "", type: "", sort: "desc" },
+    money: { date: "", account: "", keyword: "", type: "", sort: "desc" },
+    login: { date: "", account: "", keyword: "", type: "", sort: "desc" }
+  },
   permissionMatrix: null,
   organizations: [],
   activeDepartmentId: null,
@@ -29,6 +36,8 @@ const titles = {
   payments: ["Payments", "月結"],
   audit: ["Audit", "紀錄"],
   moneyLogs: ["Money Log", "金流紀錄"],
+  loginHistory: ["Login History", "登入紀錄"],
+  settings: ["Settings", "個人化"],
   permissions: ["Permissions", "權限管理"]
 };
 
@@ -109,6 +118,15 @@ const labels = {
     payments: "月結",
     gift_records: "送禮紀錄",
     orders: "訂單"
+  },
+  loginHistoryAction: {
+    login: "登入",
+    logout: "登出"
+  },
+  loginHistoryMethod: {
+    password: "帳號密碼",
+    discord: "Discord",
+    session: "Session"
   }
 };
 
@@ -132,10 +150,12 @@ const permissionLabels = {
   "Organization.Manage": "組織 / 管理",
   "Audit.View": "操作紀錄 / 查看"
 };
+permissionLabels["Profile.Manage"] = "個人化 / 管理";
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindSidebar();
   bindMobileChrome();
+  setupPersonalizationUI();
   bindNavigation();
   bindForms();
   bindOrganizationEditor();
@@ -184,18 +204,167 @@ function bindMobileChrome() {
       setAccountActionsOpen(false);
     }
   });
+
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       setMobileNavOpen(false);
       setAccountActionsOpen(false);
     }
   });
+
   mobileQuery.addEventListener("change", (event) => {
     if (!event.matches) {
       setMobileNavOpen(false);
       setAccountActionsOpen(false);
     }
   });
+}
+
+function setupPersonalizationUI() {
+  const main = document.querySelector("main.main");
+  if (main && !document.getElementById("settingsView")) {
+    const section = document.createElement("section");
+    section.className = "view";
+    section.id = "settingsView";
+    section.innerHTML = `
+      <div class="grid two settings-layout theme-settings-layout">
+        <form class="panel form" id="preferenceForm">
+          <h2>個人化配色</h2>
+          <label>配色版本
+            <select name="themeName">
+              <option value="purple-tech">Cyber Violet｜霓紫科技</option>
+              <option value="blue-metal">Aurora Blue｜極光金屬</option>
+              <option value="dopamine-candy">Dopamine Candy｜甜感多巴胺</option>
+              <option value="mint-energy">Mint Energy｜薄荷能量</option>
+              <option value="sunset-neon">Sunset Neon｜落日霓虹</option>
+              <option value="light-clean">Light Clean｜清透白</option>
+            </select>
+          </label>
+          <div class="form-actions">
+            <button class="primary" type="submit">儲存配色</button>
+          </div>
+        </form>
+        <section class="panel settings-preview">
+          <div class="panel-head"><h2>預覽</h2></div>
+          <div class="theme-preview-card">
+            <span>主色</span>
+            <strong id="themePreviewName">紫色科技</strong>
+            <button class="primary" type="button">主要按鈕</button>
+            <button class="ghost" type="button">次要按鈕</button>
+          </div>
+        </section>
+      </div>
+    `;
+    main.appendChild(section);
+  }
+
+  document.getElementById("preferenceForm")?.addEventListener("submit", submitPreferences);
+  document.getElementById("preferenceForm")?.addEventListener("input", () => {
+    const preference = readPreferenceForm();
+    applyPreferences(preference);
+    renderPreferencePreview(preference);
+  });
+}
+
+function readPreferenceForm() {
+  const form = document.getElementById("preferenceForm");
+  const data = new FormData(form);
+  const current = normalizePreference(state.preferences);
+  return {
+    themeName: data.get("themeName") || "purple-tech",
+    accentColor: null,
+    dashboardLayout: current.dashboardLayout,
+    tablePageSize: current.tablePageSize,
+    defaultOrderStatusFilter: current.defaultOrderStatusFilter,
+    defaultMoneyLogFilter: current.defaultMoneyLogFilter
+  };
+}
+
+function renderPreferenceForm(preference) {
+  const form = document.getElementById("preferenceForm");
+  if (!form) {
+    return;
+  }
+
+  const resolved = normalizePreference(preference);
+  form.elements.themeName.value = resolved.themeName;
+  renderPreferencePreview(resolved);
+}
+
+function renderPreferencePreview(preference) {
+  const name = document.getElementById("themePreviewName");
+  if (!name) {
+    return;
+  }
+
+  const labels = {
+    "purple-tech": "Cyber Violet｜霓紫科技",
+    "blue-metal": "Aurora Blue｜極光金屬",
+    "dopamine-candy": "Dopamine Candy｜甜感多巴胺",
+    "mint-energy": "Mint Energy｜薄荷能量",
+    "sunset-neon": "Sunset Neon｜落日霓虹",
+    "light-clean": "Light Clean｜清透白"
+  };
+  name.textContent = labels[preference.themeName] || "Cyber Violet｜霓紫科技";
+}
+
+async function submitPreferences(event) {
+  event.preventDefault();
+  await runAction(async () => {
+    const preference = await api("/api/userpreferences/me", {
+      method: "PUT",
+      body: JSON.stringify(readPreferenceForm())
+    });
+    state.preferences = preference;
+    state.auth.preferences = preference;
+    applyPreferences(preference);
+    renderPreferenceForm(preference);
+    showAlert("個人化配色已儲存。", false);
+  });
+}
+
+function applyPreferences(preference) {
+  const resolved = normalizePreference(preference);
+  const link = document.getElementById("themeStylesheet");
+  if (link) {
+    link.href = `${themePreset(resolved.themeName).href}?v=20260627-theme-bg-v1`;
+  }
+  document.body.dataset.theme = resolved.themeName;
+}
+
+function normalizePreference(preference) {
+  return {
+    themeName: preference?.themeName || "purple-tech",
+    accentColor: preference?.accentColor || null,
+    dashboardLayout: preference?.dashboardLayout || null,
+    tablePageSize: Number(preference?.tablePageSize || 100),
+    defaultOrderStatusFilter: preference?.defaultOrderStatusFilter || null,
+    defaultMoneyLogFilter: preference?.defaultMoneyLogFilter || null
+  };
+}
+
+function themePreset(name) {
+  const presets = {
+    "purple-tech": {
+      href: "/themes/purple-tech.css"
+    },
+    "blue-metal": {
+      href: "/themes/blue-metal.css"
+    },
+    "dopamine-candy": {
+      href: "/themes/dopamine-candy.css"
+    },
+    "mint-energy": {
+      href: "/themes/mint-energy.css"
+    },
+    "sunset-neon": {
+      href: "/themes/sunset-neon.css"
+    },
+    "light-clean": {
+      href: "/themes/light-clean.css"
+    }
+  };
+  return presets[name] || presets["purple-tech"];
 }
 
 function bindSidebar() {
@@ -236,13 +405,14 @@ function bindNavigation() {
   });
 
   document.getElementById("refreshBtn").addEventListener("click", refreshAll);
+  document.getElementById("personalizationBtn")?.addEventListener("click", () => navigateToView("settings"));
   document.getElementById("addMemberBtn").addEventListener("click", () => addMemberRow());
 }
 
 async function navigateToView(view) {
   state.view = view;
   document.querySelectorAll(".nav-tabs button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === view || (view === "moneyLogs" && button.dataset.view === "audit"));
+    button.classList.toggle("active", button.dataset.view === view || (["moneyLogs", "loginHistory"].includes(view) && button.dataset.view === "audit"));
   });
   document.querySelectorAll(".view").forEach((section) => section.classList.remove("active"));
   document.getElementById(`${view}View`).classList.add("active");
@@ -285,6 +455,7 @@ function bindForms() {
   document.getElementById("orderForm").addEventListener("input", handleOrderInput);
   bindMemberPicker();
   bindRecordModal();
+  setupLogExperience();
 }
 
 function bindOrganizationEditor() {
@@ -448,6 +619,170 @@ function bindRecordModal() {
       closeRecordModal();
     }
   });
+}
+
+function setupLogExperience() {
+  const configs = [
+    {
+      viewId: "auditView",
+      kind: "audit",
+      title: "📋 操作紀錄",
+      subtitle: "所有系統操作皆可追溯",
+      accent: "purple",
+      tableHeaders: ["時間", "操作者", "功能", "動作", "目標", "摘要", "IP", "詳情"],
+      typeLabel: "功能"
+    },
+    {
+      viewId: "moneyLogsView",
+      kind: "money",
+      title: "💰 金流紀錄",
+      subtitle: "所有資金異動紀錄",
+      accent: "gold",
+      tableHeaders: ["時間", "會員", "類型", "金額", "餘額", "來源", "備註", "詳情"],
+      typeLabel: "類型"
+    },
+    {
+      viewId: "loginHistoryView",
+      kind: "login",
+      title: "🔐 登入紀錄",
+      subtitle: "帳號登入與安全紀錄",
+      accent: "blue",
+      tableHeaders: ["時間", "帳號", "動作", "登入方式", "IP", "裝置", "地區", "詳情"],
+      typeLabel: "登入方式"
+    }
+  ];
+
+  configs.forEach((config) => {
+    const view = document.getElementById(config.viewId);
+    if (!view || view.dataset.logEnhanced === "true") {
+      return;
+    }
+
+    view.dataset.logEnhanced = "true";
+    view.dataset.logKind = config.kind;
+    view.classList.add("log-page", `log-page-${config.accent}`);
+
+    const switcher = view.querySelector(".log-switcher");
+    const hero = document.createElement("header");
+    hero.className = "log-hero";
+    hero.innerHTML = `
+      <div>
+        <h2>${config.title}</h2>
+        <p>${config.subtitle}</p>
+      </div>
+    `;
+    switcher.after(hero);
+
+    const kpis = document.createElement("section");
+    kpis.className = "log-kpis";
+    kpis.id = `${config.kind}Kpis`;
+    hero.after(kpis);
+
+    const filters = document.createElement("section");
+    filters.className = "log-filters";
+    filters.dataset.logFilter = config.kind;
+    filters.innerHTML = `
+      <label>日期<input type="date" data-filter-field="date"></label>
+      <label>帳號<input type="search" data-filter-field="account" placeholder="帳號或操作者"></label>
+      <label>關鍵字<input type="search" data-filter-field="keyword" placeholder="搜尋摘要、IP、備註"></label>
+      <label>${config.typeLabel}<select data-filter-field="type"><option value="">全部</option></select></label>
+      <label>排序<select data-filter-field="sort"><option value="desc">最新優先</option><option value="asc">最舊優先</option></select></label>
+      <button class="primary" type="button" data-log-search>搜尋</button>
+    `;
+    kpis.after(filters);
+
+    const panel = view.querySelector(".panel");
+    panel?.classList.add("log-table-panel");
+    const table = view.querySelector("table");
+    table?.classList.add("log-table");
+    const headerRow = view.querySelector("thead tr");
+    if (headerRow) {
+      headerRow.innerHTML = config.tableHeaders.map((text) => `<th>${text}</th>`).join("");
+    }
+  });
+
+  document.addEventListener("input", handleLogFilterEvent);
+  document.addEventListener("change", handleLogFilterEvent);
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("[data-log-search]")) {
+      rerenderCurrentLogView();
+    }
+    if (event.target.closest("[data-log-drawer-close]") || event.target.classList.contains("log-drawer-backdrop")) {
+      closeLogDrawer();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeLogDrawer();
+    }
+  });
+
+  ensureLogDrawer();
+}
+
+function handleLogFilterEvent(event) {
+  const field = event.target.closest("[data-filter-field]");
+  if (!field) {
+    return;
+  }
+
+  const filter = field.closest("[data-log-filter]");
+  const kind = filter?.dataset.logFilter;
+  if (!kind || !state.logFilters[kind]) {
+    return;
+  }
+
+  state.logFilters[kind][field.dataset.filterField] = field.value;
+  rerenderCurrentLogView();
+}
+
+function rerenderCurrentLogView() {
+  if (state.view === "audit") {
+    renderAuditLogs(state.auditLogs);
+  } else if (state.view === "moneyLogs") {
+    renderMoneyLogs(state.moneyLogs);
+  } else if (state.view === "loginHistory") {
+    renderLoginHistories(state.loginHistories);
+  }
+}
+
+function ensureLogDrawer() {
+  if (document.getElementById("logDrawer")) {
+    return;
+  }
+
+  const drawer = document.createElement("aside");
+  drawer.id = "logDrawer";
+  drawer.className = "log-drawer-backdrop";
+  drawer.hidden = true;
+  drawer.innerHTML = `
+    <section class="log-drawer" role="dialog" aria-modal="true" aria-labelledby="logDrawerTitle">
+      <div class="log-drawer-head">
+        <div>
+          <p class="eyebrow" id="logDrawerEyebrow">Details</p>
+          <h2 id="logDrawerTitle">詳情</h2>
+        </div>
+        <button class="ghost small" type="button" data-log-drawer-close>關閉</button>
+      </div>
+      <div id="logDrawerBody"></div>
+    </section>
+  `;
+  document.body.appendChild(drawer);
+}
+
+function openLogDrawer({ title, eyebrow, content }) {
+  ensureLogDrawer();
+  document.getElementById("logDrawerTitle").textContent = title;
+  document.getElementById("logDrawerEyebrow").textContent = eyebrow;
+  document.getElementById("logDrawerBody").innerHTML = content;
+  document.getElementById("logDrawer").hidden = false;
+}
+
+function closeLogDrawer() {
+  const drawer = document.getElementById("logDrawer");
+  if (drawer) {
+    drawer.hidden = true;
+  }
 }
 
 function openMemberPicker(field) {
@@ -1017,6 +1352,7 @@ function showLogin() {
   document.getElementById("logoutBtn").hidden = true;
   document.getElementById("changePasswordBtn").hidden = true;
   document.getElementById("discordLinkBtn").hidden = true;
+  document.getElementById("personalizationBtn").hidden = true;
   document.getElementById("currentUser").hidden = true;
 }
 
@@ -1030,12 +1366,16 @@ function showApp() {
     currentUser.hidden = false;
     document.getElementById("logoutBtn").hidden = false;
     document.getElementById("changePasswordBtn").hidden = false;
+    document.getElementById("personalizationBtn").hidden = !hasPermission("Profile.Manage");
     const discordLinkBtn = document.getElementById("discordLinkBtn");
     discordLinkBtn.hidden = false;
     discordLinkBtn.textContent = state.auth.user.discordLinkedAt
       ? `解除 Discord 綁定（${state.auth.user.discordName || state.auth.user.discordId || "已綁定"}）`
       : "綁定 Discord";
   }
+  state.preferences = state.auth?.preferences || null;
+  applyPreferences(state.preferences);
+  renderPreferenceForm(state.preferences);
   applyNavigationPermissions();
   if (state.auth?.user?.systemRole === "viewer") {
     const userNav = document.querySelector('.nav-tabs button[data-view="users"]');
@@ -1073,6 +1413,7 @@ function applyNavigationPermissions() {
     payments: "Settlement.View",
     audit: "Audit.View",
     moneyLogs: "Audit.View",
+    settings: "Profile.Manage",
     permissions: null
   };
 
@@ -1092,10 +1433,6 @@ function applyNavigationPermissions() {
   document.querySelectorAll(".log-switcher").forEach((switcher) => {
     switcher.hidden = !hasPermission("Audit.View");
   });
-  const logFab = document.getElementById("logFab");
-  if (logFab) {
-    logFab.hidden = !hasPermission("Audit.View");
-  }
 }
 
 function applyActionPermissions() {
@@ -1291,9 +1628,15 @@ async function refreshAll() {
     if (state.view === "moneyLogs") {
       await loadMoneyLogs();
     }
+    if (state.view === "loginHistory") {
+      await loadLoginHistories();
+    }
     if (state.view === "permissions") {
       await loadOrganizations();
       await loadPermissions();
+    }
+    if (state.view === "settings") {
+      await loadPreferences();
     }
     applyActionPermissions();
   } catch (error) {
@@ -1354,13 +1697,22 @@ async function loadPayments() {
 }
 
 async function loadAuditLogs() {
-  state.auditLogs = await api("/api/auditlogs?take=100");
+  state.auditLogs = await api(`/api/auditlogs?take=${preferredTablePageSize()}`);
   renderAuditLogs(state.auditLogs);
 }
 
 async function loadMoneyLogs() {
-  state.moneyLogs = await api("/api/moneylogs?take=100");
+  state.moneyLogs = await api(`/api/moneylogs?take=${preferredTablePageSize()}`);
   renderMoneyLogs(state.moneyLogs);
+}
+
+async function loadLoginHistories() {
+  state.loginHistories = await api(`/api/loginhistories?take=${preferredTablePageSize()}`);
+  renderLoginHistories(state.loginHistories);
+}
+
+function preferredTablePageSize() {
+  return Math.max(20, Math.min(500, Number(state.preferences?.tablePageSize || 100)));
 }
 
 async function loadPermissions() {
@@ -1369,6 +1721,12 @@ async function loadPermissions() {
     .find((role) => role.systemRole === state.auth.user.systemRole)?.permissions || [];
   renderPermissions();
   applyNavigationPermissions();
+}
+
+async function loadPreferences() {
+  state.preferences = await api("/api/userpreferences/me");
+  applyPreferences(state.preferences);
+  renderPreferenceForm(state.preferences);
 }
 
 async function loadOrganizations() {
@@ -2131,6 +2489,24 @@ function renderMoneyLogs(rows) {
   });
 }
 
+function renderLoginHistories(rows) {
+  const body = document.getElementById("loginHistoryRows");
+  if (!body) {
+    return;
+  }
+
+  body.innerHTML = rows.length ? rows.map((row) => `
+    <tr>
+      <td>${formatDateTime(row.createdAt)}</td>
+      <td>${escapeHtml(row.loginUserDisplayName || row.loginAccount || `#${row.loginUserId}`)}</td>
+      <td>${escapeHtml(label("loginHistoryAction", row.action))}</td>
+      <td>${escapeHtml(label("loginHistoryMethod", row.method))}</td>
+      <td>${escapeHtml(row.ipAddress || "")}</td>
+      <td class="truncate-cell" title="${escapeHtml(row.userAgent || "")}">${escapeHtml(row.userAgent || "")}</td>
+    </tr>
+  `).join("") : emptyRow(6);
+}
+
 function auditTargetText(log) {
   const target = label("targetType", log.targetType);
   const id = log.targetId ? ` #${log.targetId}` : "";
@@ -2226,6 +2602,340 @@ function parseJson(value) {
 function formatJson(value) {
   const parsed = parseJson(value);
   return parsed ? JSON.stringify(parsed, null, 2) : (value || "-");
+}
+
+function renderAuditLogs(rows) {
+  const body = document.getElementById("auditRows");
+  updateLogTypeOptions("audit", rows, (log) => log.targetType, (value) => label("targetType", value));
+  const filteredRows = filterLogRows("audit", rows, {
+    date: (log) => log.createdAt,
+    account: (log) => log.loginUserDisplayName || log.loginAccount || "",
+    keyword: (log) => [
+      log.targetType,
+      label("targetType", log.targetType),
+      log.action,
+      label("auditAction", log.action),
+      auditTargetText(log),
+      auditNote(log),
+      auditSummary(log),
+      log.ipAddress
+    ].join(" "),
+    type: (log) => log.targetType
+  });
+  renderAuditKpis(rows);
+  body.innerHTML = filteredRows.length ? filteredRows.map((log) => `
+    <tr class="log-row" data-log-row="audit" data-log-id="${log.id}">
+      <td>${formatDateTime(log.createdAt)}</td>
+      <td>${escapeHtml(log.loginUserDisplayName || log.loginAccount || "系統")}</td>
+      <td>${escapeHtml(label("targetType", log.targetType))}</td>
+      <td>${escapeHtml(label("auditAction", log.action))}</td>
+      <td>${escapeHtml(auditTargetText(log))}</td>
+      <td>${escapeHtml(auditNote(log) || auditSummary(log))}</td>
+      <td>${escapeHtml(log.ipAddress || "")}</td>
+      <td><button class="ghost small" data-audit-detail-new="${log.id}" type="button">詳情</button></td>
+    </tr>
+  `).join("") : emptyRow(8);
+
+  bindLogRowDetails(body, filteredRows, "audit", openAuditLogDetail);
+}
+
+function renderMoneyLogs(rows) {
+  const body = document.getElementById("moneyLogRows");
+  const canReverse = hasAnyPermission(["Settlement.Close", "Account.Manage"]);
+  updateLogTypeOptions("money", rows, (log) => log.type, (value) => label("moneyLogType", value));
+  const filteredRows = filterLogRows("money", rows, {
+    date: (log) => log.createdAt,
+    account: (log) => log.memberNickname || `會員${log.userId}`,
+    keyword: (log) => [moneyLogSourceText(log), log.note, log.amount, log.balanceAfter].join(" "),
+    type: (log) => log.type
+  });
+  renderMoneyKpis(rows);
+  body.innerHTML = filteredRows.length ? filteredRows.map((log) => `
+    <tr class="log-row" data-log-row="money" data-log-id="${log.id}">
+      <td>${formatDateTime(log.createdAt)}</td>
+      <td>${escapeHtml(log.memberNickname || `會員${log.userId}`)}</td>
+      <td>${escapeHtml(label("moneyLogType", log.type))}</td>
+      <td class="${log.amount < 0 ? "amount-negative" : "amount-positive"}">${formatSignedMoney(log.amount)}</td>
+      <td>${money.format(log.balanceAfter)}</td>
+      <td>${escapeHtml(moneyLogSourceText(log))}</td>
+      <td>${escapeHtml(log.note || "")}</td>
+      <td>
+        <div class="table-actions">
+          <button class="ghost small" data-money-detail-new="${log.id}" type="button">詳情</button>
+          ${canReverse && !log.isReversal && !rows.some((item) => item.reversedMoneyLogId === log.id)
+            ? `<button class="ghost small danger" data-money-reverse="${log.id}" type="button">沖正</button>`
+            : ""}
+        </div>
+      </td>
+    </tr>
+  `).join("") : emptyRow(8);
+  applyActionPermissions();
+  bindLogRowDetails(body, filteredRows, "money", openMoneyLogDetail);
+
+  body.querySelectorAll("[data-money-reverse]").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const log = rows.find((item) => item.id === Number(button.dataset.moneyReverse));
+      if (!log || !window.confirm(`確定要沖正金流紀錄 #${log.id}？系統會新增一筆反向金額紀錄，不會修改原紀錄。`)) {
+        return;
+      }
+
+      await runAction(async () => {
+        await api(`/api/moneylogs/${log.id}/reverse`, {
+          method: "POST",
+          body: JSON.stringify({ note: `沖正金流紀錄 #${log.id}` })
+        });
+        await loadMoneyLogs();
+        showAlert("金流紀錄已沖正。", false);
+      });
+    });
+  });
+}
+
+function renderLoginHistories(rows) {
+  const body = document.getElementById("loginHistoryRows");
+  if (!body) {
+    return;
+  }
+
+  updateLogTypeOptions("login", rows, (row) => row.method, (value) => label("loginHistoryMethod", value));
+  const filteredRows = filterLogRows("login", rows, {
+    date: (row) => row.createdAt,
+    account: (row) => row.loginUserDisplayName || row.loginAccount || "",
+    keyword: (row) => [row.ipAddress, row.userAgent, loginRegion(row), row.action, row.method].join(" "),
+    type: (row) => row.method
+  });
+  renderLoginKpis(rows);
+  body.innerHTML = filteredRows.length ? filteredRows.map((row) => `
+    <tr class="log-row" data-log-row="login" data-log-id="${row.id}">
+      <td>${formatDateTime(row.createdAt)}</td>
+      <td>${escapeHtml(row.loginUserDisplayName || row.loginAccount || `#${row.loginUserId}`)}</td>
+      <td>${plainText(label("loginHistoryAction", row.action), row.succeeded ? "good" : "bad")}</td>
+      <td>${escapeHtml(label("loginHistoryMethod", row.method))}</td>
+      <td>${escapeHtml(row.ipAddress || "")}</td>
+      <td class="truncate-cell" title="${escapeHtml(row.userAgent || "")}">${escapeHtml(shortUserAgent(row.userAgent))}</td>
+      <td>${escapeHtml(loginRegion(row))}</td>
+      <td><button class="ghost small" data-login-detail-new="${row.id}" type="button">詳情</button></td>
+    </tr>
+  `).join("") : emptyRow(8);
+
+  bindLogRowDetails(body, filteredRows, "login", openLoginHistoryDetail);
+}
+
+function bindLogRowDetails(body, rows, kind, openDetail) {
+  body.querySelectorAll(`[data-log-row="${kind}"], [data-${kind === "audit" ? "audit" : kind === "money" ? "money" : "login"}-detail-new]`).forEach((element) => {
+    element.addEventListener("click", (event) => {
+      const action = event.target.closest("button");
+      if (action && !action.matches(`[data-${kind === "audit" ? "audit" : kind === "money" ? "money" : "login"}-detail-new]`)) {
+        return;
+      }
+
+      event.stopPropagation();
+      const id = Number(element.dataset.logId || element.dataset.auditDetailNew || element.dataset.moneyDetailNew || element.dataset.loginDetailNew);
+      const row = rows.find((item) => item.id === id);
+      if (row) {
+        openDetail(row);
+      }
+    });
+  });
+}
+
+function filterLogRows(kind, rows, readers) {
+  const filter = state.logFilters[kind] || {};
+  const date = filter.date;
+  const account = (filter.account || "").trim().toLowerCase();
+  const keyword = (filter.keyword || "").trim().toLowerCase();
+  const type = filter.type || "";
+  const sorted = rows.filter((row) => {
+    const rowDate = dateValue(readers.date(row));
+    const accountText = String(readers.account(row) || "").toLowerCase();
+    const keywordText = String(readers.keyword(row) || "").toLowerCase();
+    const rowType = String(readers.type(row) || "");
+    return (!date || rowDate === date) &&
+      (!account || accountText.includes(account)) &&
+      (!keyword || keywordText.includes(keyword)) &&
+      (!type || rowType === type);
+  });
+
+  sorted.sort((a, b) => {
+    const left = new Date(readers.date(a)).getTime();
+    const right = new Date(readers.date(b)).getTime();
+    return filter.sort === "asc" ? left - right : right - left;
+  });
+  return sorted;
+}
+
+function updateLogTypeOptions(kind, rows, getValue, getLabel) {
+  const select = document.querySelector(`[data-log-filter="${kind}"] [data-filter-field="type"]`);
+  if (!select) {
+    return;
+  }
+
+  const current = select.value;
+  const options = [...new Set(rows.map(getValue).filter(Boolean))]
+    .sort((a, b) => String(getLabel(a)).localeCompare(String(getLabel(b)), "zh-Hant"));
+  select.innerHTML = `<option value="">全部</option>` + options.map((value) =>
+    `<option value="${escapeHtml(value)}">${escapeHtml(getLabel(value))}</option>`
+  ).join("");
+  select.value = options.includes(current) ? current : "";
+}
+
+function renderAuditKpis(rows) {
+  renderKpis("auditKpis", [
+    ["今日操作", rows.filter((row) => isToday(row.createdAt)).length],
+    ["本月操作", rows.filter((row) => isThisMonth(row.createdAt)).length],
+    ["異常操作", rows.filter((row) => ["delete", "cancel", "reverse", "deactivate"].includes(row.action)).length]
+  ]);
+}
+
+function renderMoneyKpis(rows) {
+  const todayRows = rows.filter((row) => isToday(row.createdAt));
+  const monthRows = rows.filter((row) => isThisMonth(row.createdAt));
+  renderKpis("moneyKpis", [
+    ["今日收入", money.format(sumBy(todayRows.filter((row) => row.amount > 0), (row) => row.amount))],
+    ["今日支出", money.format(Math.abs(sumBy(todayRows.filter((row) => row.amount < 0), (row) => row.amount)))],
+    ["目前餘額", money.format(currentBalance(rows))],
+    ["本月淨收入", formatSignedMoney(sumBy(monthRows, (row) => row.amount))]
+  ]);
+}
+
+function renderLoginKpis(rows) {
+  renderKpis("loginKpis", [
+    ["今日登入", rows.filter((row) => isToday(row.createdAt) && row.action === "login").length],
+    ["失敗登入", rows.filter((row) => row.succeeded === false).length],
+    ["Discord登入", rows.filter((row) => row.method === "discord").length],
+    ["一般登入", rows.filter((row) => row.method === "password").length]
+  ]);
+}
+
+function renderKpis(id, items) {
+  const wrap = document.getElementById(id);
+  if (!wrap) {
+    return;
+  }
+
+  wrap.innerHTML = items.map(([labelText, value]) => `
+    <article class="log-kpi-card">
+      <strong>${escapeHtml(String(value))}</strong>
+      <span>${escapeHtml(labelText)}</span>
+    </article>
+  `).join("");
+}
+
+function openAuditLogDetail(log) {
+  openLogDrawer({
+    title: `操作紀錄 #${log.id}`,
+    eyebrow: "操作資訊",
+    content: `
+      <div class="log-drawer-section">
+        ${recordDetail("時間", formatDateTime(log.createdAt))}
+        ${recordDetail("操作者", log.loginUserDisplayName || log.loginAccount || "系統")}
+        ${recordDetail("功能", label("targetType", log.targetType))}
+        ${recordDetail("動作", label("auditAction", log.action))}
+        ${recordDetail("目標", auditTargetText(log))}
+        ${recordDetail("摘要", auditNote(log) || auditSummary(log))}
+        ${recordDetail("IP", log.ipAddress)}
+        ${recordDetail("UUID", log.targetUuid)}
+        ${recordDetail("CorrelationId", log.correlationId)}
+        ${recordDetail("BatchUuid", log.batchUuid)}
+      </div>
+      <h3>JSON Before</h3>
+      <pre class="record-json">${escapeHtml(formatJson(log.beforeJson))}</pre>
+      <h3>JSON After</h3>
+      <pre class="record-json">${escapeHtml(formatJson(log.afterJson))}</pre>
+    `
+  });
+}
+
+function openMoneyLogDetail(log) {
+  openLogDrawer({
+    title: `金流紀錄 #${log.id}`,
+    eyebrow: "金流資訊",
+    content: `
+      <div class="log-drawer-section">
+        ${recordDetail("時間", formatDateTime(log.createdAt))}
+        ${recordDetail("會員", log.memberNickname || `會員${log.userId}`)}
+        ${recordDetail("類型", label("moneyLogType", log.type))}
+        ${recordDetail("金額", formatSignedMoney(log.amount))}
+        ${recordDetail("餘額", money.format(log.balanceAfter))}
+        ${recordDetail("來源", moneyLogSourceText(log))}
+        ${recordDetail("備註", log.note)}
+        ${recordDetail("AuditLogId", log.auditLogId)}
+        ${recordDetail("ReversedMoneyLogId", log.reversedMoneyLogId)}
+        ${recordDetail("CorrelationId", log.correlationId)}
+      </div>
+    `
+  });
+}
+
+function openLoginHistoryDetail(row) {
+  openLogDrawer({
+    title: `登入紀錄 #${row.id}`,
+    eyebrow: "登入資訊",
+    content: `
+      <div class="log-drawer-section">
+        ${recordDetail("時間", formatDateTime(row.createdAt))}
+        ${recordDetail("帳號", row.loginUserDisplayName || row.loginAccount || `#${row.loginUserId}`)}
+        ${recordDetail("動作", label("loginHistoryAction", row.action))}
+        ${recordDetail("登入方式", label("loginHistoryMethod", row.method))}
+        ${recordDetail("狀態", row.succeeded ? "成功" : "失敗")}
+        ${recordDetail("IP", row.ipAddress)}
+        ${recordDetail("地區", loginRegion(row))}
+        ${recordDetail("UserAgent", row.userAgent)}
+      </div>
+    `
+  });
+}
+
+function currentBalance(rows) {
+  const latestByUser = new Map();
+  rows.forEach((row) => {
+    const current = latestByUser.get(row.userId);
+    if (!current || new Date(row.createdAt) > new Date(current.createdAt)) {
+      latestByUser.set(row.userId, row);
+    }
+  });
+  return sumBy([...latestByUser.values()], (row) => row.balanceAfter);
+}
+
+function sumBy(rows, getValue) {
+  return rows.reduce((total, row) => total + Number(getValue(row) || 0), 0);
+}
+
+function isToday(value) {
+  return dateValue(value) === dateValue(new Date());
+}
+
+function isThisMonth(value) {
+  const date = new Date(value);
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
+function dateValue(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function shortUserAgent(value) {
+  if (!value) {
+    return "";
+  }
+
+  return String(value)
+    .replace(/\s+/g, " ")
+    .replace(/Mozilla\/5\.0\s*/i, "")
+    .slice(0, 80);
+}
+
+function loginRegion(row) {
+  return row.region || row.country || row.location || "-";
 }
 
 function renderSelects() {

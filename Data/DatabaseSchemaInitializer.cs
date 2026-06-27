@@ -7,6 +7,7 @@ public static class DatabaseSchemaInitializer
     public static async Task ValidateOrganizationFiltersAsync(EAPlaymateGroupDbContext db)
     {
         await db.LoginUsers.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.UserPreferences.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.Users.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.Orders.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.OrderMembers.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
@@ -57,9 +58,11 @@ WITH defaults AS
         (N'staff', N'Account.Manage', 1),
         (N'staff', N'Organization.Manage', 1),
         (N'staff', N'Audit.View', 1),
+        (N'staff', N'Profile.Manage', 1),
         (N'viewer', N'Member.View', 1),
         (N'viewer', N'Gift.View', 1),
-        (N'viewer', N'Order.View', 1)
+        (N'viewer', N'Order.View', 1),
+        (N'viewer', N'Profile.Manage', 1)
     ) AS value(system_role, permission_code, is_allowed)
 )
 INSERT INTO dbo.role_permissions(system_role, permission_code, is_allowed, updated_at)
@@ -984,6 +987,84 @@ END;
 
 IF OBJECT_ID(N'dbo.TR_money_logs_prevent_delete', N'TR') IS NULL
     EXEC(N'CREATE TRIGGER dbo.TR_money_logs_prevent_delete ON dbo.money_logs INSTEAD OF DELETE AS BEGIN SET NOCOUNT ON; THROW 51021, ''money_logs is append-only and cannot be deleted.'', 1; END;');
+""");
+
+        await db.Database.ExecuteSqlRawAsync("""
+IF OBJECT_ID(N'dbo.login_histories', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.login_histories
+    (
+        id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_login_histories PRIMARY KEY,
+        organization_id INT NOT NULL,
+        login_user_id INT NOT NULL,
+        action NVARCHAR(30) NOT NULL,
+        method NVARCHAR(30) NOT NULL,
+        ip_address NVARCHAR(64) NULL,
+        user_agent NVARCHAR(500) NULL,
+        session_id NVARCHAR(120) NULL,
+        succeeded BIT NOT NULL CONSTRAINT DF_login_histories_succeeded DEFAULT 1,
+        created_at DATETIME2 NOT NULL CONSTRAINT DF_login_histories_created_at DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT FK_login_histories_organization FOREIGN KEY (organization_id) REFERENCES dbo.organizations(id),
+        CONSTRAINT FK_login_histories_login_user FOREIGN KEY (login_user_id) REFERENCES dbo.login_users(id)
+    );
+    CREATE INDEX IX_login_histories_login_user ON dbo.login_histories(login_user_id, created_at);
+    CREATE INDEX IX_login_histories_created_at ON dbo.login_histories(created_at DESC);
+END;
+
+IF OBJECT_ID(N'dbo.file_attachments', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.file_attachments
+    (
+        id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_file_attachments PRIMARY KEY,
+        organization_id INT NOT NULL,
+        target_type NVARCHAR(50) NOT NULL,
+        target_id INT NOT NULL,
+        target_uuid UNIQUEIDENTIFIER NULL,
+        original_file_name NVARCHAR(255) NOT NULL,
+        stored_file_name NVARCHAR(120) NOT NULL,
+        storage_path NVARCHAR(500) NOT NULL,
+        content_type NVARCHAR(120) NOT NULL,
+        file_size BIGINT NOT NULL,
+        uploaded_by_login_user_id INT NULL,
+        note NVARCHAR(500) NULL,
+        created_at DATETIME2 NOT NULL CONSTRAINT DF_file_attachments_created_at DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT FK_file_attachments_organization FOREIGN KEY (organization_id) REFERENCES dbo.organizations(id),
+        CONSTRAINT FK_file_attachments_uploaded_by FOREIGN KEY (uploaded_by_login_user_id) REFERENCES dbo.login_users(id)
+    );
+    CREATE INDEX IX_file_attachments_target ON dbo.file_attachments(target_type, target_id, created_at);
+    CREATE INDEX IX_file_attachments_uploaded_by ON dbo.file_attachments(uploaded_by_login_user_id);
+END;
+""");
+
+        await db.Database.ExecuteSqlRawAsync("""
+IF OBJECT_ID(N'dbo.user_preferences', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.user_preferences
+    (
+        id INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_user_preferences PRIMARY KEY,
+        login_user_id INT NOT NULL,
+        theme_name NVARCHAR(50) NOT NULL CONSTRAINT DF_user_preferences_theme_name DEFAULT N'purple-tech',
+        accent_color NVARCHAR(20) NULL,
+        dashboard_layout NVARCHAR(MAX) NULL,
+        table_page_size INT NOT NULL CONSTRAINT DF_user_preferences_table_page_size DEFAULT 100,
+        default_order_status_filter NVARCHAR(30) NULL,
+        default_money_log_filter NVARCHAR(30) NULL,
+        created_at DATETIME2 NOT NULL CONSTRAINT DF_user_preferences_created_at DEFAULT SYSUTCDATETIME(),
+        updated_at DATETIME2 NULL,
+        CONSTRAINT FK_user_preferences_login_user FOREIGN KEY (login_user_id) REFERENCES dbo.login_users(id) ON DELETE CASCADE
+    );
+    CREATE UNIQUE INDEX UQ_user_preferences_login_user ON dbo.user_preferences(login_user_id);
+END;
+
+INSERT INTO dbo.user_preferences(login_user_id, theme_name, table_page_size, created_at)
+SELECT lu.id, N'purple-tech', 100, SYSUTCDATETIME()
+FROM dbo.login_users lu
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.user_preferences existing
+    WHERE existing.login_user_id = lu.id
+);
 """);
     }
 }

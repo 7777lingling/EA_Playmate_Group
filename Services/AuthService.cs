@@ -53,7 +53,7 @@ public sealed class AuthService
         return await ToDtoWithPermissionsAsync(user);
     }
 
-    public async Task<LoginUserDto?> LoginAsync(LoginRequestDto request)
+    public async Task<LoginUserDto?> LoginAsync(LoginRequestDto request, HttpContext? httpContext = null)
     {
         var loginAccount = request.LoginAccount.Trim();
         if (string.IsNullOrWhiteSpace(loginAccount) || string.IsNullOrWhiteSpace(request.Password))
@@ -63,8 +63,25 @@ public sealed class AuthService
 
         var user = await _db.LoginUsers.IgnoreQueryFilters()
             .FirstOrDefaultAsync(x => x.LoginAccount == loginAccount && x.IsActive);
-        if (user is null || !_passwordHasher.Verify(request.Password, user.PasswordHash))
+        if (user is null)
         {
+            return null;
+        }
+
+        if (!_passwordHasher.Verify(request.Password, user.PasswordHash))
+        {
+            _db.LoginHistories.Add(new Models.Entities.LoginHistory
+            {
+                OrganizationId = user.OrganizationId,
+                LoginUserId = user.Id,
+                Action = "login",
+                Method = "password",
+                IpAddress = httpContext?.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = httpContext?.Request.Headers.UserAgent.ToString(),
+                SessionId = httpContext?.Session.Id,
+                Succeeded = false
+            });
+            await _db.SaveChangesAsync();
             return null;
         }
 
@@ -231,7 +248,12 @@ public sealed class AuthService
         return true;
     }
 
-    public async Task RecordAuthEventAsync(int loginUserId, string action)
+    public async Task RecordAuthEventAsync(
+        int loginUserId,
+        string action,
+        HttpContext? httpContext = null,
+        string method = "password",
+        bool succeeded = true)
     {
         var loginUser = await _db.LoginUsers.IgnoreQueryFilters().AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == loginUserId);
@@ -249,6 +271,17 @@ public sealed class AuthService
         log.OrganizationId = loginUser.OrganizationId;
         log.LoginUserId = loginUser.Id;
         _db.AuditLogs.Add(log);
+        _db.LoginHistories.Add(new Models.Entities.LoginHistory
+        {
+            OrganizationId = loginUser.OrganizationId,
+            LoginUserId = loginUser.Id,
+            Action = action,
+            Method = method,
+            IpAddress = httpContext?.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = httpContext?.Request.Headers.UserAgent.ToString(),
+            SessionId = httpContext?.Session.Id,
+            Succeeded = succeeded
+        });
         await _db.SaveChangesAsync();
     }
 

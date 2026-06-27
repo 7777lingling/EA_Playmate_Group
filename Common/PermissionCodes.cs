@@ -21,7 +21,8 @@ public static class PermissionCodes
         "Settlement.Export",
         "Account.Manage",
         "Organization.Manage",
-        "Audit.View"
+        "Audit.View",
+        "Profile.Manage"
     ];
 
     public static bool IsValid(string value) =>

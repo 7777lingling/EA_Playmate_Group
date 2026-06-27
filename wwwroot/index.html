@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EA Playmate Group</title>
-  <link rel="stylesheet" href="/styles.css?v=20260627-logs-ledger-v1">
+  <link rel="stylesheet" href="/styles.css?v=20260627-theme-bg-v1">
+  <link rel="stylesheet" id="themeStylesheet" href="/themes/purple-tech.css?v=20260627-theme-bg-v1">
 </head>
 <body>
   <section class="login-view" id="loginView" hidden>
@@ -64,6 +65,7 @@
         <span class="status-dot" id="apiStatus">API</span>
         <span class="status-dot" id="currentUser" hidden></span>
         <button class="ghost" id="refreshBtn" type="button">重新整理</button>
+        <button class="ghost" id="personalizationBtn" type="button" hidden>個人化</button>
         <button class="ghost mobile-more-toggle" id="mobileMoreToggle" type="button" aria-label="更多帳號操作" aria-expanded="false">更多</button>
         <div class="account-actions" id="accountActions">
           <button class="ghost" id="discordLinkBtn" type="button" hidden>綁定 Discord</button>
@@ -581,6 +583,7 @@
       <nav class="log-switcher" aria-label="紀錄切換">
         <button type="button" data-log-view="audit">📋 操作紀錄</button>
         <button type="button" data-log-view="moneyLogs">💰 金流紀錄</button>
+        <button type="button" data-log-view="loginHistory">登入紀錄</button>
       </nav>
       <section class="panel">
         <div class="panel-head">
@@ -609,6 +612,7 @@
       <nav class="log-switcher" aria-label="紀錄切換">
         <button type="button" data-log-view="audit">📋 操作紀錄</button>
         <button type="button" data-log-view="moneyLogs">💰 金流紀錄</button>
+        <button type="button" data-log-view="loginHistory">登入紀錄</button>
       </nav>
       <section class="panel">
         <div class="panel-head"><h2>金流紀錄</h2></div>
@@ -627,6 +631,32 @@
               </tr>
             </thead>
             <tbody id="moneyLogRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="loginHistoryView">
+      <nav class="log-switcher" aria-label="log switcher">
+        <button type="button" data-log-view="audit">📋 操作紀錄</button>
+        <button type="button" data-log-view="moneyLogs">💰 金流紀錄</button>
+        <button type="button" data-log-view="loginHistory">登入紀錄</button>
+      </nav>
+      <section class="panel">
+        <div class="panel-head"><h2>登入紀錄</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>時間</th>
+                <th>帳號</th>
+                <th>動作</th>
+                <th>方式</th>
+                <th>IP</th>
+                <th>裝置資訊</th>
+              </tr>
+            </thead>
+            <tbody id="loginHistoryRows"></tbody>
           </table>
         </div>
       </section>
@@ -681,11 +711,6 @@
       </section>
     </section>
   </main>
-
-  <nav class="log-fab" id="logFab" aria-label="紀錄快速切換" hidden>
-    <button type="button" data-log-view="audit">📋 操作紀錄</button>
-    <button type="button" data-log-view="moneyLogs">💰 金流紀錄</button>
-  </nav>
 
   <div class="modal-backdrop" id="departmentModal" hidden>
     <section class="modal-panel department-modal" role="dialog" aria-modal="true" aria-labelledby="departmentModalTitle">
@@ -774,6 +799,6 @@
     </section>
   </div>
 
-  <script src="/app.js?v=20260627-logs-ledger-v1"></script>
+  <script src="/app.js?v=20260627-click-fix-v1"></script>
 </body>
 </html>
