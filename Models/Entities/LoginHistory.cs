@@ -11,6 +11,10 @@ public sealed class LoginHistory : IOrganizationScoped
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
     public string? SessionId { get; set; }
+    public string? DeviceInfo { get; set; }
+    public string? FailureReason { get; set; }
     public bool Succeeded { get; set; } = true;
+    public DateTime? LoggedOutAt { get; set; }
+    public int? DurationSeconds { get; set; }
     public DateTime CreatedAt { get; set; }
 }

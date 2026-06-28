@@ -629,7 +629,7 @@ function setupLogExperience() {
       title: "📋 操作紀錄",
       subtitle: "所有系統操作皆可追溯",
       accent: "purple",
-      tableHeaders: ["時間", "操作者", "功能", "動作", "目標", "摘要", "IP", "詳情"],
+      tableHeaders: ["時間", "操作者", "功能", "動作", "目標", "摘要", "IP 位址", "詳情"],
       typeLabel: "功能"
     },
     {
@@ -647,7 +647,7 @@ function setupLogExperience() {
       title: "🔐 登入紀錄",
       subtitle: "帳號登入與安全紀錄",
       accent: "blue",
-      tableHeaders: ["時間", "帳號", "動作", "登入方式", "IP", "裝置", "地區", "詳情"],
+      tableHeaders: ["時間", "帳號", "動作", "登入方式", "IP 位址", "裝置", "地區", "詳情"],
       typeLabel: "登入方式"
     }
   ];
@@ -2534,13 +2534,13 @@ function openAuditLogDetail(log) {
           ${recordDetail("功能", label("targetType", log.targetType))}
           ${recordDetail("動作", label("auditAction", log.action))}
           ${recordDetail("目標", auditTargetText(log))}
-          ${recordDetail("CorrelationId", log.correlationId)}
-          ${recordDetail("BatchUuid", log.batchUuid)}
-          ${recordDetail("IP", log.ipAddress)}
+          ${recordDetail("關聯編號", log.correlationId)}
+          ${recordDetail("批次編號", log.batchUuid)}
+          ${recordDetail("IP 位址", log.ipAddress)}
         </div>
-        <h3>Before</h3>
+        <h3>變更前資料</h3>
         <pre class="record-json">${escapeHtml(formatJson(log.beforeJson))}</pre>
-        <h3>After</h3>
+        <h3>變更後資料</h3>
         <pre class="record-json">${escapeHtml(formatJson(log.afterJson))}</pre>
       </div>
     `
@@ -2559,12 +2559,12 @@ function openMoneyLogDetail(log) {
           ${recordDetail("類型", label("moneyLogType", log.type))}
           ${recordDetail("金額", formatSignedMoney(log.amount))}
           ${recordDetail("餘額", money.format(log.balanceAfter))}
-          ${recordDetail("AuditLogId", log.auditLogId)}
-          ${recordDetail("SourceType", log.sourceType)}
-          ${recordDetail("SourceId", log.sourceId)}
-          ${recordDetail("ReversedMoneyLogId", log.reversedMoneyLogId)}
-          ${recordDetail("IsReversal", log.isReversal ? "true" : "false")}
-          ${recordDetail("CorrelationId", log.correlationId)}
+          ${recordDetail("操作紀錄編號", log.auditLogId)}
+          ${recordDetail("來源類型", log.sourceType)}
+          ${recordDetail("來源編號", log.sourceId)}
+          ${recordDetail("沖正原紀錄編號", log.reversedMoneyLogId)}
+          ${recordDetail("是否為沖正", log.isReversal ? "是" : "否")}
+          ${recordDetail("關聯編號", log.correlationId)}
           ${recordDetail("備註", log.note)}
         </div>
       </div>
@@ -2618,7 +2618,9 @@ function renderAuditLogs(rows) {
       auditTargetText(log),
       auditNote(log),
       auditSummary(log),
-      log.ipAddress
+      log.ipAddress,
+      log.deviceInfo,
+      log.sessionId
     ].join(" "),
     type: (log) => log.targetType
   });
@@ -2646,7 +2648,16 @@ function renderMoneyLogs(rows) {
   const filteredRows = filterLogRows("money", rows, {
     date: (log) => log.createdAt,
     account: (log) => log.memberNickname || `會員${log.userId}`,
-    keyword: (log) => [moneyLogSourceText(log), log.note, log.amount, log.balanceAfter].join(" "),
+    keyword: (log) => [
+      moneyLogSourceText(log),
+      log.note,
+      log.amount,
+      log.balanceBefore,
+      log.balanceAfter,
+      log.status,
+      log.operatorDisplayName,
+      log.operatorLoginAccount
+    ].join(" "),
     type: (log) => log.type
   });
   renderMoneyKpis(rows);
@@ -2702,7 +2713,16 @@ function renderLoginHistories(rows) {
   const filteredRows = filterLogRows("login", rows, {
     date: (row) => row.createdAt,
     account: (row) => row.loginUserDisplayName || row.loginAccount || "",
-    keyword: (row) => [row.ipAddress, row.userAgent, loginRegion(row), row.action, row.method].join(" "),
+    keyword: (row) => [
+      row.ipAddress,
+      row.userAgent,
+      row.deviceInfo,
+      row.sessionId,
+      row.failureReason,
+      loginRegion(row),
+      row.action,
+      row.method
+    ].join(" "),
     type: (row) => row.method
   });
   renderLoginKpis(rows);
@@ -2834,14 +2854,17 @@ function openAuditLogDetail(log) {
         ${recordDetail("動作", label("auditAction", log.action))}
         ${recordDetail("目標", auditTargetText(log))}
         ${recordDetail("摘要", auditNote(log) || auditSummary(log))}
-        ${recordDetail("IP", log.ipAddress)}
-        ${recordDetail("UUID", log.targetUuid)}
-        ${recordDetail("CorrelationId", log.correlationId)}
-        ${recordDetail("BatchUuid", log.batchUuid)}
+        ${recordDetail("IP 位址", log.ipAddress)}
+        ${recordDetail("裝置", log.deviceInfo)}
+        ${recordDetail("工作階段編號", log.sessionId)}
+        ${recordDetail("瀏覽器資訊", log.userAgent)}
+        ${recordDetail("目標唯一識別碼", log.targetUuid)}
+        ${recordDetail("關聯編號", log.correlationId)}
+        ${recordDetail("批次編號", log.batchUuid)}
       </div>
-      <h3>JSON Before</h3>
+      <h3>變更前資料</h3>
       <pre class="record-json">${escapeHtml(formatJson(log.beforeJson))}</pre>
-      <h3>JSON After</h3>
+      <h3>變更後資料</h3>
       <pre class="record-json">${escapeHtml(formatJson(log.afterJson))}</pre>
     `
   });
@@ -2855,14 +2878,18 @@ function openMoneyLogDetail(log) {
       <div class="log-drawer-section">
         ${recordDetail("時間", formatDateTime(log.createdAt))}
         ${recordDetail("會員", log.memberNickname || `會員${log.userId}`)}
+        ${recordDetail("操作者", log.operatorDisplayName || log.operatorLoginAccount || "系統")}
         ${recordDetail("類型", label("moneyLogType", log.type))}
+        ${recordDetail("狀態", log.status || "completed")}
         ${recordDetail("金額", formatSignedMoney(log.amount))}
+        ${recordDetail("交易前餘額", money.format(log.balanceBefore ?? 0))}
         ${recordDetail("餘額", money.format(log.balanceAfter))}
         ${recordDetail("來源", moneyLogSourceText(log))}
         ${recordDetail("備註", log.note)}
-        ${recordDetail("AuditLogId", log.auditLogId)}
-        ${recordDetail("ReversedMoneyLogId", log.reversedMoneyLogId)}
-        ${recordDetail("CorrelationId", log.correlationId)}
+        ${recordDetail("來源唯一識別碼", log.sourceUuid)}
+        ${recordDetail("操作紀錄編號", log.auditLogId)}
+        ${recordDetail("沖正原紀錄編號", log.reversedMoneyLogId)}
+        ${recordDetail("關聯編號", log.correlationId)}
       </div>
     `
   });
@@ -2879,9 +2906,14 @@ function openLoginHistoryDetail(row) {
         ${recordDetail("動作", label("loginHistoryAction", row.action))}
         ${recordDetail("登入方式", label("loginHistoryMethod", row.method))}
         ${recordDetail("狀態", row.succeeded ? "成功" : "失敗")}
-        ${recordDetail("IP", row.ipAddress)}
+        ${recordDetail("失敗原因", row.failureReason)}
+        ${recordDetail("IP 位址", row.ipAddress)}
+        ${recordDetail("裝置", row.deviceInfo)}
         ${recordDetail("地區", loginRegion(row))}
-        ${recordDetail("UserAgent", row.userAgent)}
+        ${recordDetail("工作階段編號", row.sessionId)}
+        ${recordDetail("登出時間", row.loggedOutAt ? formatDateTime(row.loggedOutAt) : "")}
+        ${recordDetail("在線時間", formatDuration(row.durationSeconds))}
+        ${recordDetail("瀏覽器資訊", row.userAgent)}
       </div>
     `
   });
@@ -2896,6 +2928,22 @@ function currentBalance(rows) {
     }
   });
   return sumBy([...latestByUser.values()], (row) => row.balanceAfter);
+}
+
+function formatDuration(seconds) {
+  if (seconds == null || seconds === "") {
+    return "";
+  }
+
+  const total = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainSeconds = Math.floor(total % 60);
+  return [
+    hours ? `${hours} 小時` : "",
+    minutes ? `${minutes} 分` : "",
+    !hours && !minutes ? `${remainSeconds} 秒` : ""
+  ].filter(Boolean).join(" ");
 }
 
 function sumBy(rows, getValue) {

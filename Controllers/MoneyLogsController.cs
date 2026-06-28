@@ -27,6 +27,7 @@ public sealed class MoneyLogsController : ControllerBase
         take = Math.Clamp(take, 1, 500);
         var rows = await _db.MoneyLogs.AsNoTracking()
             .Include(x => x.User)
+            .Include(x => x.LoginUser)
             .OrderByDescending(x => x.CreatedAt)
             .ThenByDescending(x => x.Id)
             .Take(take)

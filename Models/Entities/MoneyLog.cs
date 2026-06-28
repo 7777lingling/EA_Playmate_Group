@@ -14,7 +14,9 @@ public sealed class MoneyLog : IOrganizationScoped
     public MoneyLog? ReversedMoneyLog { get; set; }
     public string Type { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+    public decimal BalanceBefore { get; set; }
     public decimal BalanceAfter { get; set; }
+    public string Status { get; set; } = "completed";
     public string? SourceType { get; set; }
     public int? SourceId { get; set; }
     public Guid? SourceUuid { get; set; }

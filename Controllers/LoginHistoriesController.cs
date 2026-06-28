@@ -56,7 +56,12 @@ public sealed class LoginHistoriesController : ControllerBase
         Method = row.Method,
         IpAddress = row.IpAddress,
         UserAgent = row.UserAgent,
+        SessionId = row.SessionId,
+        DeviceInfo = row.DeviceInfo,
+        FailureReason = row.FailureReason,
         Succeeded = row.Succeeded,
+        LoggedOutAt = row.LoggedOutAt,
+        DurationSeconds = row.DurationSeconds,
         CreatedAt = row.CreatedAt
     };
 }

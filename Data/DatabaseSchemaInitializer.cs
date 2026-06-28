@@ -210,6 +210,21 @@ BEGIN
     ALTER TABLE dbo.audit_logs ADD ip_address NVARCHAR(64) NULL;
 END;
 
+IF COL_LENGTH('dbo.audit_logs', 'user_agent') IS NULL
+BEGIN
+    ALTER TABLE dbo.audit_logs ADD user_agent NVARCHAR(500) NULL;
+END;
+
+IF COL_LENGTH('dbo.audit_logs', 'session_id') IS NULL
+BEGIN
+    ALTER TABLE dbo.audit_logs ADD session_id NVARCHAR(120) NULL;
+END;
+
+IF COL_LENGTH('dbo.audit_logs', 'device_info') IS NULL
+BEGIN
+    ALTER TABLE dbo.audit_logs ADD device_info NVARCHAR(160) NULL;
+END;
+
 IF COL_LENGTH('dbo.audit_logs', 'correlation_id') IS NULL
 BEGIN
     ALTER TABLE dbo.audit_logs
@@ -882,7 +897,9 @@ BEGIN
         reversed_money_log_id BIGINT NULL,
         type NVARCHAR(30) NOT NULL,
         amount DECIMAL(12,2) NOT NULL,
+        balance_before DECIMAL(12,2) NOT NULL CONSTRAINT DF_money_logs_balance_before DEFAULT 0,
         balance_after DECIMAL(12,2) NOT NULL,
+        status NVARCHAR(30) NOT NULL CONSTRAINT DF_money_logs_status DEFAULT N'completed',
         source_type NVARCHAR(50) NULL,
         source_id INT NULL,
         source_uuid UNIQUEIDENTIFIER NULL,
@@ -908,6 +925,25 @@ IF COL_LENGTH('dbo.money_logs', 'audit_log_id') IS NULL
 BEGIN
     ALTER TABLE dbo.money_logs ADD audit_log_id BIGINT NULL;
 END;
+
+IF COL_LENGTH('dbo.money_logs', 'balance_before') IS NULL
+BEGIN
+    ALTER TABLE dbo.money_logs
+        ADD balance_before DECIMAL(12,2) NOT NULL
+            CONSTRAINT DF_money_logs_balance_before DEFAULT 0;
+END;
+
+IF COL_LENGTH('dbo.money_logs', 'status') IS NULL
+BEGIN
+    ALTER TABLE dbo.money_logs
+        ADD status NVARCHAR(30) NOT NULL
+            CONSTRAINT DF_money_logs_status DEFAULT N'completed';
+END;
+
+UPDATE dbo.money_logs
+SET balance_before = balance_after - amount
+WHERE balance_before = 0
+  AND balance_after <> amount;
 
 IF COL_LENGTH('dbo.money_logs', 'reversed_money_log_id') IS NULL
 BEGIN
@@ -1002,13 +1038,37 @@ BEGIN
         ip_address NVARCHAR(64) NULL,
         user_agent NVARCHAR(500) NULL,
         session_id NVARCHAR(120) NULL,
+        device_info NVARCHAR(160) NULL,
+        failure_reason NVARCHAR(160) NULL,
         succeeded BIT NOT NULL CONSTRAINT DF_login_histories_succeeded DEFAULT 1,
+        logged_out_at DATETIME2 NULL,
+        duration_seconds INT NULL,
         created_at DATETIME2 NOT NULL CONSTRAINT DF_login_histories_created_at DEFAULT SYSUTCDATETIME(),
         CONSTRAINT FK_login_histories_organization FOREIGN KEY (organization_id) REFERENCES dbo.organizations(id),
         CONSTRAINT FK_login_histories_login_user FOREIGN KEY (login_user_id) REFERENCES dbo.login_users(id)
     );
     CREATE INDEX IX_login_histories_login_user ON dbo.login_histories(login_user_id, created_at);
     CREATE INDEX IX_login_histories_created_at ON dbo.login_histories(created_at DESC);
+END;
+
+IF COL_LENGTH('dbo.login_histories', 'device_info') IS NULL
+BEGIN
+    ALTER TABLE dbo.login_histories ADD device_info NVARCHAR(160) NULL;
+END;
+
+IF COL_LENGTH('dbo.login_histories', 'failure_reason') IS NULL
+BEGIN
+    ALTER TABLE dbo.login_histories ADD failure_reason NVARCHAR(160) NULL;
+END;
+
+IF COL_LENGTH('dbo.login_histories', 'logged_out_at') IS NULL
+BEGIN
+    ALTER TABLE dbo.login_histories ADD logged_out_at DATETIME2 NULL;
+END;
+
+IF COL_LENGTH('dbo.login_histories', 'duration_seconds') IS NULL
+BEGIN
+    ALTER TABLE dbo.login_histories ADD duration_seconds INT NULL;
 END;
 
 IF OBJECT_ID(N'dbo.file_attachments', N'U') IS NULL

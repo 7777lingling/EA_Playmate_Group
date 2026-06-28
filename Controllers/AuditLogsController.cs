@@ -80,6 +80,9 @@ public sealed class AuditLogsController : ControllerBase
             BeforeJson = log.BeforeJson,
             AfterJson = log.AfterJson,
             IpAddress = log.IpAddress,
+            UserAgent = log.UserAgent,
+            SessionId = log.SessionId,
+            DeviceInfo = log.DeviceInfo,
             CorrelationId = log.CorrelationId,
             BatchUuid = log.BatchUuid,
             CreatedAt = log.CreatedAt

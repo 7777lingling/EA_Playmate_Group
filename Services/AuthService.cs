@@ -70,6 +70,7 @@ public sealed class AuthService
 
         if (!_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
+            var userAgent = httpContext?.Request.Headers.UserAgent.ToString();
             _db.LoginHistories.Add(new Models.Entities.LoginHistory
             {
                 OrganizationId = user.OrganizationId,
@@ -77,8 +78,10 @@ public sealed class AuthService
                 Action = "login",
                 Method = "password",
                 IpAddress = httpContext?.Connection.RemoteIpAddress?.ToString(),
-                UserAgent = httpContext?.Request.Headers.UserAgent.ToString(),
+                UserAgent = userAgent,
                 SessionId = httpContext?.Session.Id,
+                DeviceInfo = ClientInfoParser.ToDeviceInfo(userAgent),
+                FailureReason = "invalid_credentials",
                 Succeeded = false
             });
             await _db.SaveChangesAsync();
@@ -271,6 +274,27 @@ public sealed class AuthService
         log.OrganizationId = loginUser.OrganizationId;
         log.LoginUserId = loginUser.Id;
         _db.AuditLogs.Add(log);
+        var userAgent = httpContext?.Request.Headers.UserAgent.ToString();
+        var sessionId = httpContext?.Session.Id;
+        if (action == "logout" && !string.IsNullOrWhiteSpace(sessionId))
+        {
+            var loginRow = await _db.LoginHistories
+                .Where(x =>
+                    x.LoginUserId == loginUser.Id &&
+                    x.SessionId == sessionId &&
+                    x.Action == "login" &&
+                    x.Succeeded &&
+                    x.LoggedOutAt == null)
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync();
+            if (loginRow is not null)
+            {
+                var loggedOutAt = DateTime.UtcNow;
+                loginRow.LoggedOutAt = loggedOutAt;
+                loginRow.DurationSeconds = Math.Max(0, (int)Math.Round((loggedOutAt - loginRow.CreatedAt).TotalSeconds));
+            }
+        }
+
         _db.LoginHistories.Add(new Models.Entities.LoginHistory
         {
             OrganizationId = loginUser.OrganizationId,
@@ -278,8 +302,9 @@ public sealed class AuthService
             Action = action,
             Method = method,
             IpAddress = httpContext?.Connection.RemoteIpAddress?.ToString(),
-            UserAgent = httpContext?.Request.Headers.UserAgent.ToString(),
-            SessionId = httpContext?.Session.Id,
+            UserAgent = userAgent,
+            SessionId = sessionId,
+            DeviceInfo = ClientInfoParser.ToDeviceInfo(userAgent),
             Succeeded = succeeded
         });
         await _db.SaveChangesAsync();

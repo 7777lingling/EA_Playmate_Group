@@ -19,6 +19,9 @@ public sealed class AuditLog : IOrganizationScoped
     public string? BeforeJson { get; set; }
     public string? AfterJson { get; set; }
     public string? IpAddress { get; set; }
+    public string? UserAgent { get; set; }
+    public string? SessionId { get; set; }
+    public string? DeviceInfo { get; set; }
     public Guid CorrelationId { get; set; }
     public Guid? BatchUuid { get; set; }
 

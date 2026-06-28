@@ -86,7 +86,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
 
     private void StampAuditActors()
     {
-        var loginUserId = _httpContextAccessor.HttpContext?.Session.GetInt32(EAPlaymateGroup.Services.AuthService.SessionUserId);
+        var httpContext = _httpContextAccessor.HttpContext;
+        var loginUserId = httpContext?.Session.GetInt32(EAPlaymateGroup.Services.AuthService.SessionUserId);
         var organizationId = CurrentOrganizationId;
         if (organizationId > 0)
         {
@@ -112,9 +113,18 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         }
 
         foreach (var entry in ChangeTracker.Entries<AuditLog>()
-                     .Where(x => x.State == EntityState.Added && x.Entity.CorrelationId == Guid.Empty))
+                      .Where(x => x.State == EntityState.Added && x.Entity.CorrelationId == Guid.Empty))
         {
             entry.Entity.CorrelationId = Guid.NewGuid();
+        }
+
+        foreach (var entry in ChangeTracker.Entries<AuditLog>()
+                     .Where(x => x.State == EntityState.Added))
+        {
+            entry.Entity.IpAddress ??= httpContext?.Connection.RemoteIpAddress?.ToString();
+            entry.Entity.UserAgent ??= httpContext?.Request.Headers.UserAgent.ToString();
+            entry.Entity.SessionId ??= httpContext?.Session.Id;
+            entry.Entity.DeviceInfo ??= EAPlaymateGroup.Services.ClientInfoParser.ToDeviceInfo(entry.Entity.UserAgent);
         }
 
         foreach (var entry in ChangeTracker.Entries<MoneyLog>()
@@ -129,10 +139,9 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         }
 
         foreach (var entry in ChangeTracker.Entries<AuditLog>()
-                     .Where(x => x.State == EntityState.Added && !x.Entity.LoginUserId.HasValue))
+                      .Where(x => x.State == EntityState.Added && !x.Entity.LoginUserId.HasValue))
         {
             entry.Entity.LoginUserId = loginUserId.Value;
-            entry.Entity.IpAddress ??= _httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
         }
 
         foreach (var entry in ChangeTracker.Entries<MoneyLog>()
@@ -406,6 +415,9 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.BeforeJson).HasColumnName("before_json");
         entity.Property(x => x.AfterJson).HasColumnName("after_json");
         entity.Property(x => x.IpAddress).HasColumnName("ip_address").HasMaxLength(64);
+        entity.Property(x => x.UserAgent).HasColumnName("user_agent").HasMaxLength(500);
+        entity.Property(x => x.SessionId).HasColumnName("session_id").HasMaxLength(120);
+        entity.Property(x => x.DeviceInfo).HasColumnName("device_info").HasMaxLength(160);
         entity.Property(x => x.CorrelationId).HasColumnName("correlation_id").HasDefaultValueSql("NEWID()");
         entity.Property(x => x.BatchUuid).HasColumnName("batch_uuid");
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
@@ -445,7 +457,9 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.ReversedMoneyLogId).HasColumnName("reversed_money_log_id");
         entity.Property(x => x.Type).HasColumnName("type").HasMaxLength(30).IsRequired();
         entity.Property(x => x.Amount).HasColumnName("amount").HasPrecision(12, 2);
+        entity.Property(x => x.BalanceBefore).HasColumnName("balance_before").HasPrecision(12, 2);
         entity.Property(x => x.BalanceAfter).HasColumnName("balance_after").HasPrecision(12, 2);
+        entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(30).HasDefaultValue("completed").IsRequired();
         entity.Property(x => x.SourceType).HasColumnName("source_type").HasMaxLength(50);
         entity.Property(x => x.SourceId).HasColumnName("source_id");
         entity.Property(x => x.SourceUuid).HasColumnName("source_uuid");
@@ -669,7 +683,11 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.IpAddress).HasColumnName("ip_address").HasMaxLength(64);
         entity.Property(x => x.UserAgent).HasColumnName("user_agent").HasMaxLength(500);
         entity.Property(x => x.SessionId).HasColumnName("session_id").HasMaxLength(120);
+        entity.Property(x => x.DeviceInfo).HasColumnName("device_info").HasMaxLength(160);
+        entity.Property(x => x.FailureReason).HasColumnName("failure_reason").HasMaxLength(160);
         entity.Property(x => x.Succeeded).HasColumnName("succeeded").HasDefaultValue(true);
+        entity.Property(x => x.LoggedOutAt).HasColumnName("logged_out_at");
+        entity.Property(x => x.DurationSeconds).HasColumnName("duration_seconds");
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
         entity.HasIndex(x => new { x.LoginUserId, x.CreatedAt }).HasDatabaseName("IX_login_histories_login_user");
         entity.HasIndex(x => x.CreatedAt).HasDatabaseName("IX_login_histories_created_at");
