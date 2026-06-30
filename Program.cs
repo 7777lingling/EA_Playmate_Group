@@ -104,6 +104,8 @@ builder.Services.AddScoped<GiftRecordService>();
 builder.Services.AddScoped<DepartmentService>();
 builder.Services.AddScoped<PermissionService>();
 builder.Services.AddScoped<MoneyLogService>();
+builder.Services.AddScoped<AttachmentRequirementService>();
+builder.Services.AddScoped<FileAttachmentService>();
 builder.Services.AddScoped<UserPreferenceService>();
 
 builder.Services.AddCors(options =>
@@ -132,6 +134,7 @@ app.UseStatusCodePages(async statusContext =>
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<EAPlaymateGroupDbContext>();
+    await DatabaseSchemaInitializer.EnsureOrderColumnsAsync(db);
     await DatabaseSchemaInitializer.EnsureAuthColumnsAsync(db);
     await DatabaseSchemaInitializer.ValidateOrganizationFiltersAsync(db);
 }
@@ -177,6 +180,19 @@ app.Use(async (context, next) =>
     if (!loginUserId.HasValue)
     {
         await next();
+        return;
+    }
+
+    var authService = context.RequestServices.GetRequiredService<AuthService>();
+    var currentUser = await authService.GetCurrentUserAsync(context);
+    if (currentUser is null)
+    {
+        context.Session.Clear();
+        await ApiProblemDetails.WriteAsync(
+            context,
+            StatusCodes.Status401Unauthorized,
+            "authentication_required",
+            "璜嬪厛鐧诲叆銆?");
         return;
     }
 

@@ -23,7 +23,7 @@ public sealed class OrganizationsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<OrganizationDto>>> GetOrganizations()
     {
-        if (!IsSystemAdmin())
+        if (!await CanManageOrganizationsAsync())
         {
             return Forbid();
         }
@@ -37,7 +37,7 @@ public sealed class OrganizationsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<OrganizationDto>> CreateOrganization(SaveOrganizationRequestDto request)
     {
-        if (!IsSystemAdmin())
+        if (!await CanManageOrganizationsAsync())
         {
             return Forbid();
         }
@@ -60,6 +60,9 @@ public sealed class OrganizationsController : ControllerBase
         };
         _db.Organizations.Add(organization);
         await _db.SaveChangesAsync();
+
+        await SeedOrganizationDefaultsAsync(organization.Id);
+
         _db.AuditLogs.Add(AuditLogWriter.Create(
             "create",
             "organizations",
@@ -74,7 +77,7 @@ public sealed class OrganizationsController : ControllerBase
         int id,
         SaveOrganizationRequestDto request)
     {
-        if (!IsSystemAdmin())
+        if (!await CanManageOrganizationsAsync())
         {
             return Forbid();
         }
@@ -110,8 +113,99 @@ public sealed class OrganizationsController : ControllerBase
         return Ok(ToDto(organization));
     }
 
-    private bool IsSystemAdmin() =>
-        HttpContext.Session.GetString(AuthService.SessionSystemRole) == "admin";
+    private async Task<bool> CanManageOrganizationsAsync()
+    {
+        if (HttpContext.Session.GetString(AuthService.SessionSystemRole) == "admin")
+        {
+            return true;
+        }
+
+        return !await _db.LoginUsers
+            .IgnoreQueryFilters()
+            .AnyAsync(x => x.IsActive);
+    }
+
+    private async Task SeedOrganizationDefaultsAsync(int organizationId)
+    {
+        var templateOrganizationId = await _db.Organizations
+            .IgnoreQueryFilters()
+            .Where(x => x.Id != organizationId)
+            .OrderBy(x => x.Id)
+            .Select(x => x.Id)
+            .FirstOrDefaultAsync();
+
+        if (templateOrganizationId <= 0)
+        {
+            return;
+        }
+
+        var departments = await _db.Departments
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => x.OrganizationId == templateOrganizationId)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Name)
+            .ToListAsync();
+
+        foreach (var department in departments)
+        {
+            var exists = await _db.Departments
+                .IgnoreQueryFilters()
+                .AnyAsync(x => x.OrganizationId == organizationId && x.Name == department.Name);
+
+            if (exists)
+            {
+                continue;
+            }
+
+            _db.Departments.Add(new Department
+            {
+                OrganizationId = organizationId,
+                Name = department.Name,
+                EnglishName = department.EnglishName,
+                Description = department.Description,
+                SortOrder = department.SortOrder,
+                IsActive = department.IsActive
+            });
+        }
+
+        var serviceItems = await _db.ServiceItems
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => x.OrganizationId == templateOrganizationId)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Name)
+            .ToListAsync();
+
+        foreach (var item in serviceItems)
+        {
+            var exists = await _db.ServiceItems
+                .IgnoreQueryFilters()
+                .AnyAsync(x => x.OrganizationId == organizationId && x.SeedKey == item.SeedKey);
+
+            if (exists)
+            {
+                continue;
+            }
+
+            _db.ServiceItems.Add(new ServiceItem
+            {
+                OrganizationId = organizationId,
+                SeedKey = item.SeedKey,
+                Category = item.Category,
+                Subcategory = item.Subcategory,
+                Name = item.Name,
+                UnitType = item.UnitType,
+                DefaultPrice = item.DefaultPrice,
+                PriceNote = item.PriceNote,
+                Remark = item.Remark,
+                SortOrder = item.SortOrder,
+                IsActive = item.IsActive
+            });
+        }
+
+        await _db.SaveChangesAsync();
+    }
 
     private static OrganizationDto ToDto(Organization organization) => new()
     {

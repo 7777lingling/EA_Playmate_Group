@@ -2,6 +2,7 @@ using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace EAPlaymateGroup.Services;
@@ -9,10 +10,17 @@ namespace EAPlaymateGroup.Services;
 public sealed class OrderService
 {
     private readonly EAPlaymateGroupDbContext _db;
+    private readonly AttachmentRequirementService _attachmentRequirementService;
+    private readonly FileAttachmentService _fileAttachmentService;
 
-    public OrderService(EAPlaymateGroupDbContext db)
+    public OrderService(
+        EAPlaymateGroupDbContext db,
+        AttachmentRequirementService attachmentRequirementService,
+        FileAttachmentService fileAttachmentService)
     {
         _db = db;
+        _attachmentRequirementService = attachmentRequirementService;
+        _fileAttachmentService = fileAttachmentService;
     }
 
     public async Task<ServiceResult<OrderDto>> CreateOrderAsync(CreateOrderRequestDto request)
@@ -22,6 +30,12 @@ public sealed class OrderService
         {
             return ToGenericResult<OrderDto>(validationResult);
         }
+        if (request.Status == "disputed" || request.CustomerPaymentStatus is "paid" or "partial")
+        {
+            return ServiceResult<OrderDto>.Failure(
+                "attachment_required",
+                "Attachment is required before creating a disputed or paid order. Create the order first, upload attachments, then update status.");
+        }
 
         var commissionAmount = request.CommissionAmount
             ?? decimal.Round(request.Amount * request.CommissionRate, 2, MidpointRounding.AwayFromZero);
@@ -29,6 +43,7 @@ public sealed class OrderService
         var order = new Order
         {
             OrderNo = string.IsNullOrWhiteSpace(request.OrderNo) ? null : request.OrderNo.Trim(),
+            OrderType = string.IsNullOrWhiteSpace(request.OrderType) ? "boosting" : request.OrderType,
             OrderDate = request.OrderDate,
             OwnerUserId = request.OwnerUserId,
             Amount = request.Amount,
@@ -66,6 +81,104 @@ public sealed class OrderService
         return ServiceResult<OrderDto>.Success(dto);
     }
 
+    public async Task<ServiceResult<OrderDto>> CreateOrderWithAttachmentsAsync(
+        CreateOrderRequestDto request,
+        IReadOnlyCollection<IFormFile> attachments)
+    {
+        var validationResult = await ValidateCreateOrderAsync(request);
+        if (!validationResult.Succeeded)
+        {
+            return ToGenericResult<OrderDto>(validationResult);
+        }
+
+        if ((request.Status == "disputed" || request.CustomerPaymentStatus is "paid" or "partial") && attachments.Count == 0)
+        {
+            return ServiceResult<OrderDto>.Failure(
+                "attachment_required",
+                "Attachment is required when creating a disputed, paid, or partial order.");
+        }
+
+        if (attachments.Count > 0)
+        {
+            var attachmentValidation = _fileAttachmentService.ValidateFiles(attachments);
+            if (!attachmentValidation.Succeeded)
+            {
+                return ServiceResult<OrderDto>.Failure(
+                    attachmentValidation.ErrorCode ?? "invalid_attachment",
+                    attachmentValidation.ErrorMessage ?? "Invalid attachment.");
+            }
+        }
+
+        var commissionAmount = request.CommissionAmount
+            ?? decimal.Round(request.Amount * request.CommissionRate, 2, MidpointRounding.AwayFromZero);
+
+        var order = new Order
+        {
+            OrderNo = string.IsNullOrWhiteSpace(request.OrderNo) ? null : request.OrderNo.Trim(),
+            OrderType = string.IsNullOrWhiteSpace(request.OrderType) ? "boosting" : request.OrderType,
+            OrderDate = request.OrderDate,
+            OwnerUserId = request.OwnerUserId,
+            Amount = request.Amount,
+            CommissionRate = request.CommissionRate,
+            CommissionAmount = commissionAmount,
+            Status = request.Status,
+            CustomerPaymentStatus = request.CustomerPaymentStatus,
+            Remark = string.IsNullOrWhiteSpace(request.Remark) ? null : request.Remark.Trim(),
+            Members = request.Members.Select(x => new OrderMember
+            {
+                UserId = x.UserId,
+                Role = x.Role,
+                ShareAmount = x.ShareAmount
+            }).ToList()
+        };
+
+        _db.Orders.Add(order);
+        await _db.SaveChangesAsync();
+
+        if (attachments.Count > 0)
+        {
+            var savedAttachments = await _fileAttachmentService.UploadManyAsync(
+                "orders",
+                order.Id,
+                attachments,
+                order.CustomerPaymentStatus is "paid" or "partial"
+                    ? "payment_proof"
+                    : order.Status == "disputed"
+                        ? "evidence"
+                        : "general",
+                order.Remark);
+
+            _db.AuditLogs.Add(AuditLogWriter.Create(
+                "bind_attachments",
+                "orders",
+                order.Id,
+                order.Uuid,
+                after: new
+                {
+                    attachmentIds = savedAttachments.Select(x => x.Id).ToList(),
+                    attachmentCount = savedAttachments.Count
+                }));
+            await _db.SaveChangesAsync();
+        }
+
+        var savedOrder = await GetOrderWithRelations(order.Id).FirstAsync();
+        var dto = OrderMapper.ToDto(savedOrder);
+
+        var audit = AuditLogWriter.Create(
+            action: "create",
+            targetType: "orders",
+            targetId: order.Id,
+            targetUuid: order.Uuid,
+            after: dto);
+        _db.AuditLogs.Add(audit);
+        await _db.SaveChangesAsync();
+
+        order.CreatedAuditLogId = audit.Id;
+        await _db.SaveChangesAsync();
+
+        return ServiceResult<OrderDto>.Success(dto);
+    }
+
     public async Task<ServiceResult> UpdateOrderAsync(int id, UpdateOrderRequestDto request)
     {
         var order = await _db.Orders
@@ -84,10 +197,16 @@ public sealed class OrderService
         {
             return validationResult;
         }
+        var attachmentValidation = await ValidateRequiredAttachmentsAsync(order.Id, request.Status, request.CustomerPaymentStatus);
+        if (!attachmentValidation.Succeeded)
+        {
+            return attachmentValidation;
+        }
 
         var before = OrderMapper.ToDto(order);
 
         order.OrderNo = string.IsNullOrWhiteSpace(request.OrderNo) ? null : request.OrderNo.Trim();
+        order.OrderType = string.IsNullOrWhiteSpace(request.OrderType) ? "boosting" : request.OrderType;
         order.OrderDate = request.OrderDate;
         order.OwnerUserId = request.OwnerUserId;
         order.Amount = request.Amount;
@@ -129,6 +248,18 @@ public sealed class OrderService
         if (order is null)
         {
             return ServiceResult.Missing();
+        }
+        if (request.Status == "disputed")
+        {
+            var attachmentValidation = await _attachmentRequirementService.RequireAsync(
+                "orders",
+                order.Id,
+                "attachment_required",
+                "Attachment is required when changing an order to disputed.");
+            if (!attachmentValidation.Succeeded)
+            {
+                return attachmentValidation;
+            }
         }
 
         var before = new
@@ -175,6 +306,18 @@ public sealed class OrderService
         {
             return ServiceResult.Missing();
         }
+        if (request.Status == "disputed")
+        {
+            var attachmentValidation = await _attachmentRequirementService.RequireAsync(
+                "orders",
+                order.Id,
+                "attachment_required",
+                "Attachment is required when changing an order to disputed.");
+            if (!attachmentValidation.Succeeded)
+            {
+                return attachmentValidation;
+            }
+        }
 
         var before = new
         {
@@ -216,6 +359,18 @@ public sealed class OrderService
         {
             return ServiceResult.Missing();
         }
+        if (request.CustomerPaymentStatus is "paid" or "partial")
+        {
+            var attachmentValidation = await _attachmentRequirementService.RequireAsync(
+                "orders",
+                order.Id,
+                "attachment_required",
+                "Attachment is required when changing order payment status to paid or partial.");
+            if (!attachmentValidation.Succeeded)
+            {
+                return attachmentValidation;
+            }
+        }
 
         var before = new
         {
@@ -250,6 +405,7 @@ public sealed class OrderService
         return await ValidateOrderAsync(
             request.Amount,
             commissionAmount,
+            request.OrderType,
             request.Status,
             request.CustomerPaymentStatus,
             request.OwnerUserId,
@@ -261,6 +417,7 @@ public sealed class OrderService
         return await ValidateOrderAsync(
             request.Amount,
             request.CommissionAmount,
+            request.OrderType,
             request.Status,
             request.CustomerPaymentStatus,
             request.OwnerUserId,
@@ -270,6 +427,7 @@ public sealed class OrderService
     private async Task<ServiceResult> ValidateOrderAsync(
         decimal amount,
         decimal commissionAmount,
+        string orderType,
         string status,
         string customerPaymentStatus,
         int? ownerUserId,
@@ -285,7 +443,7 @@ public sealed class OrderService
             return ServiceResult.Failure("missing_order_members", "At least one order member is required.");
         }
 
-        var valueErrors = ValidateOrderValues(status, customerPaymentStatus, members.Select(x => x.Role));
+        var valueErrors = ValidateOrderValues(orderType, status, customerPaymentStatus, members.Select(x => x.Role));
         if (valueErrors.Count > 0)
         {
             return ServiceResult.Validation(valueErrors);
@@ -331,12 +489,35 @@ public sealed class OrderService
             .Where(x => x.Id == orderId);
     }
 
+    private async Task<ServiceResult> ValidateRequiredAttachmentsAsync(
+        int orderId,
+        string status,
+        string customerPaymentStatus)
+    {
+        if (status == "disputed" || customerPaymentStatus is "paid" or "partial")
+        {
+            return await _attachmentRequirementService.RequireAsync(
+                "orders",
+                orderId,
+                "attachment_required",
+                "Attachment is required for disputed or paid orders.");
+        }
+
+        return ServiceResult.Success();
+    }
+
     private static Dictionary<string, string[]> ValidateOrderValues(
+        string orderType,
         string status,
         string customerPaymentStatus,
         IEnumerable<string> memberRoles)
     {
         var errors = new Dictionary<string, string[]>();
+
+        if (!DomainValues.IsOrderType(orderType))
+        {
+            errors["orderType"] = ["OrderType must be boosting, farming, companion, or prepaid."];
+        }
 
         if (!DomainValues.IsOrderStatus(status))
         {

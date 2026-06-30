@@ -1,7 +1,6 @@
 using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
-using EAPlaymateGroup.Models.Entities;
 using EAPlaymateGroup.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,25 +11,18 @@ namespace EAPlaymateGroup.Controllers;
 [Route("api/[controller]")]
 public sealed class FileAttachmentsController : ControllerBase
 {
-    private const long MaxFileSize = 25 * 1024 * 1024;
-    private static readonly HashSet<string> TargetTypes =
-    [
-        "users",
-        "login_users",
-        "orders",
-        "gift_records",
-        "payments",
-        "service_items",
-        "departments"
-    ];
-
     private readonly EAPlaymateGroupDbContext _db;
     private readonly IWebHostEnvironment _environment;
+    private readonly FileAttachmentService _fileAttachmentService;
 
-    public FileAttachmentsController(EAPlaymateGroupDbContext db, IWebHostEnvironment environment)
+    public FileAttachmentsController(
+        EAPlaymateGroupDbContext db,
+        IWebHostEnvironment environment,
+        FileAttachmentService fileAttachmentService)
     {
         _db = db;
         _environment = environment;
+        _fileAttachmentService = fileAttachmentService;
     }
 
     [HttpGet]
@@ -39,109 +31,44 @@ public sealed class FileAttachmentsController : ControllerBase
         [FromQuery] string targetType,
         [FromQuery] int targetId)
     {
-        if (!IsValidTarget(targetType, targetId))
+        if (!FileAttachmentService.IsValidTarget(targetType, targetId))
         {
             return ApiErrors.BadRequest("invalid_target", "Invalid attachment target.");
         }
 
-        if (!await TargetExistsAsync(targetType, targetId))
+        if (!await _fileAttachmentService.TargetExistsAsync(targetType, targetId))
         {
             return NotFound();
         }
 
         var rows = await _db.FileAttachments.AsNoTracking()
             .Include(x => x.UploadedByLoginUser)
-            .Where(x => x.TargetType == targetType && x.TargetId == targetId)
+            .Where(x => x.TargetType == targetType && x.TargetId == targetId && !x.IsDeleted)
             .OrderByDescending(x => x.CreatedAt)
             .ThenByDescending(x => x.Id)
-            .Select(x => ToDto(x))
+            .Select(x => FileAttachmentService.ToDto(x))
             .ToListAsync();
 
         return Ok(rows);
     }
 
     [HttpPost]
-    [RequestSizeLimit(MaxFileSize + 1024 * 1024)]
+    [RequestSizeLimit(FileAttachmentService.MaxFileSize + 1024 * 1024)]
     [RequirePermission("Member.Edit", "Order.Edit", "Gift.Edit", "Settlement.Close", "Account.Manage")]
     public async Task<ActionResult<FileAttachmentDto>> Upload(
         [FromForm] string targetType,
         [FromForm] int targetId,
         [FromForm] IFormFile file,
+        [FromForm] string? attachmentKind,
         [FromForm] string? note)
     {
-        if (!IsValidTarget(targetType, targetId))
+        var result = await _fileAttachmentService.UploadAsync(targetType, targetId, file, attachmentKind, note);
+        if (result.Succeeded)
         {
-            return ApiErrors.BadRequest("invalid_target", "Invalid attachment target.");
+            return CreatedAtAction(nameof(Download), new { id = result.Value!.Id }, result.Value);
         }
 
-        var targetUuid = await GetTargetUuidAsync(targetType, targetId);
-        if (targetUuid is null)
-        {
-            return NotFound();
-        }
-
-        if (file.Length <= 0 || file.Length > MaxFileSize)
-        {
-            return ApiErrors.BadRequest("invalid_file_size", "File size must be between 1 byte and 25 MB.");
-        }
-
-        var originalFileName = Path.GetFileName(file.FileName);
-        if (string.IsNullOrWhiteSpace(originalFileName))
-        {
-            return ApiErrors.BadRequest("invalid_file_name", "File name is required.");
-        }
-
-        var extension = Path.GetExtension(originalFileName);
-        if (extension.Length > 20)
-        {
-            extension = string.Empty;
-        }
-
-        var storedFileName = $"{Guid.NewGuid():N}{extension}";
-        var relativeDirectory = Path.Combine("FileAttachments", targetType, targetId.ToString());
-        var absoluteDirectory = Path.Combine(_environment.ContentRootPath, relativeDirectory);
-        Directory.CreateDirectory(absoluteDirectory);
-
-        var relativePath = Path.Combine(relativeDirectory, storedFileName);
-        var absolutePath = Path.Combine(_environment.ContentRootPath, relativePath);
-        await using (var stream = System.IO.File.Create(absolutePath))
-        {
-            await file.CopyToAsync(stream);
-        }
-
-        var attachment = new FileAttachment
-        {
-            TargetType = targetType,
-            TargetId = targetId,
-            TargetUuid = targetUuid,
-            OriginalFileName = originalFileName,
-            StoredFileName = storedFileName,
-            StoragePath = relativePath,
-            ContentType = string.IsNullOrWhiteSpace(file.ContentType)
-                ? "application/octet-stream"
-                : file.ContentType,
-            FileSize = file.Length,
-            Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim()
-        };
-        _db.FileAttachments.Add(attachment);
-        await _db.SaveChangesAsync();
-
-        _db.AuditLogs.Add(AuditLogWriter.Create(
-            "upload",
-            "file_attachments",
-            ToNullableInt(attachment.Id),
-            after: new
-            {
-                attachment.TargetType,
-                attachment.TargetId,
-                attachment.OriginalFileName,
-                attachment.FileSize,
-                attachment.Note
-            }));
-        await _db.SaveChangesAsync();
-
-        await _db.Entry(attachment).Reference(x => x.UploadedByLoginUser).LoadAsync();
-        return CreatedAtAction(nameof(Download), new { id = attachment.Id }, ToDto(attachment));
+        return ToActionResult(result);
     }
 
     [HttpGet("{id:long}/download")]
@@ -149,7 +76,7 @@ public sealed class FileAttachmentsController : ControllerBase
     public async Task<IActionResult> Download(long id)
     {
         var attachment = await _db.FileAttachments.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id);
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (attachment is null)
         {
             return NotFound();
@@ -161,7 +88,53 @@ public sealed class FileAttachmentsController : ControllerBase
             return NotFound();
         }
 
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            "download",
+            "file_attachments",
+            ToNullableInt(attachment.Id),
+            after: new
+            {
+                attachment.TargetType,
+                attachment.TargetId,
+                attachment.OriginalFileName,
+                attachment.FileSize
+            }));
+        await _db.SaveChangesAsync();
+
         return PhysicalFile(path, attachment.ContentType, attachment.OriginalFileName);
+    }
+
+    [HttpGet("{id:long}/preview")]
+    [RequirePermission("Member.View", "Order.View", "Gift.View", "Settlement.View", "Audit.View")]
+    public async Task<IActionResult> Preview(long id)
+    {
+        var attachment = await _db.FileAttachments.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (attachment is null)
+        {
+            return NotFound();
+        }
+
+        var path = Path.Combine(_environment.ContentRootPath, attachment.StoragePath);
+        if (!System.IO.File.Exists(path))
+        {
+            return NotFound();
+        }
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            "preview",
+            "file_attachments",
+            ToNullableInt(attachment.Id),
+            after: new
+            {
+                attachment.TargetType,
+                attachment.TargetId,
+                attachment.OriginalFileName,
+                attachment.FileSize
+            }));
+        await _db.SaveChangesAsync();
+
+        return PhysicalFile(path, attachment.ContentType);
     }
 
     [HttpDelete("{id:long}")]
@@ -174,8 +147,9 @@ public sealed class FileAttachmentsController : ControllerBase
             return NotFound();
         }
 
-        var before = ToDto(attachment);
-        _db.FileAttachments.Remove(attachment);
+        var before = FileAttachmentService.ToDto(attachment);
+        attachment.IsDeleted = true;
+        attachment.DeletedAt = DateTime.UtcNow;
         _db.AuditLogs.Add(AuditLogWriter.Create(
             "delete",
             "file_attachments",
@@ -183,71 +157,20 @@ public sealed class FileAttachmentsController : ControllerBase
             before: before));
         await _db.SaveChangesAsync();
 
-        var path = Path.Combine(_environment.ContentRootPath, attachment.StoragePath);
-        if (System.IO.File.Exists(path))
-        {
-            System.IO.File.Delete(path);
-        }
-
         return NoContent();
     }
 
-    private static FileAttachmentDto ToDto(FileAttachment attachment) => new()
+    private ActionResult ToActionResult<T>(ServiceResult<T> result)
     {
-        Id = attachment.Id,
-        TargetType = attachment.TargetType,
-        TargetId = attachment.TargetId,
-        TargetUuid = attachment.TargetUuid,
-        OriginalFileName = attachment.OriginalFileName,
-        ContentType = attachment.ContentType,
-        FileSize = attachment.FileSize,
-        UploadedByLoginUserId = attachment.UploadedByLoginUserId,
-        UploadedByDisplayName = attachment.UploadedByLoginUser?.DisplayName,
-        Note = attachment.Note,
-        CreatedAt = attachment.CreatedAt
-    };
-
-    private async Task<bool> TargetExistsAsync(string targetType, int targetId) =>
-        await GetTargetUuidAsync(targetType, targetId) is not null;
-
-    private async Task<Guid?> GetTargetUuidAsync(string targetType, int targetId)
-    {
-        return targetType switch
+        if (result.NotFound)
         {
-            "users" => await _db.Users.AsNoTracking()
-                .Where(x => x.Id == targetId)
-                .Select(x => (Guid?)x.Uuid)
-                .FirstOrDefaultAsync(),
-            "login_users" => await _db.LoginUsers.AsNoTracking()
-                .Where(x => x.Id == targetId)
-                .Select(x => (Guid?)x.Uuid)
-                .FirstOrDefaultAsync(),
-            "orders" => await _db.Orders.AsNoTracking()
-                .Where(x => x.Id == targetId)
-                .Select(x => (Guid?)x.Uuid)
-                .FirstOrDefaultAsync(),
-            "gift_records" => await _db.GiftRecords.AsNoTracking()
-                .Where(x => x.Id == targetId)
-                .Select(x => (Guid?)x.Uuid)
-                .FirstOrDefaultAsync(),
-            "payments" => await _db.Payments.AsNoTracking()
-                .Where(x => x.Id == targetId)
-                .Select(x => (Guid?)x.Uuid)
-                .FirstOrDefaultAsync(),
-            "service_items" => await _db.ServiceItems.AsNoTracking()
-                .Where(x => x.Id == targetId)
-                .Select(x => (Guid?)x.Uuid)
-                .FirstOrDefaultAsync(),
-            "departments" => await _db.Departments.AsNoTracking()
-                .Where(x => x.Id == targetId)
-                .Select(x => (Guid?)x.Uuid)
-                .FirstOrDefaultAsync(),
-            _ => null
-        };
-    }
+            return NotFound();
+        }
 
-    private static bool IsValidTarget(string targetType, int targetId) =>
-        targetId > 0 && TargetTypes.Contains(targetType);
+        return ApiErrors.BadRequest(
+            result.ErrorCode ?? "operation_failed",
+            result.ErrorMessage ?? "Operation failed.");
+    }
 
     private static int? ToNullableInt(long value) =>
         value <= int.MaxValue ? (int)value : null;

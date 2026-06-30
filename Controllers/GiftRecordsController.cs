@@ -70,10 +70,52 @@ public sealed class GiftRecordsController : ControllerBase
     }
 
     [HttpPost]
+    [Consumes("application/json")]
     [RequirePermission("Gift.Create")]
     public async Task<ActionResult<GiftRecordDto>> CreateGiftRecord(CreateGiftRecordRequestDto request)
     {
         var result = await _giftRecordService.CreateAsync(request);
+        if (result.Succeeded)
+        {
+            return CreatedAtAction(nameof(GetGiftRecord), new { id = result.Value!.Id }, result.Value);
+        }
+
+        return ToActionResult(result);
+    }
+
+    [HttpPost]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(FileAttachmentService.MaxFileSize * 10)]
+    [RequirePermission("Gift.Create")]
+    public async Task<ActionResult<GiftRecordDto>> CreateGiftRecordMultipart(
+        [FromForm] DateOnly giftDate,
+        [FromForm] int bossUserId,
+        [FromForm] int recipientUserId,
+        [FromForm] int? serviceItemId,
+        [FromForm] string? giftName,
+        [FromForm] decimal amount,
+        [FromForm] decimal quantity,
+        [FromForm] string customerPaymentStatus,
+        [FromForm] string status,
+        [FromForm] string? remark,
+        [FromForm] List<IFormFile> attachments)
+    {
+        var result = await _giftRecordService.CreateWithAttachmentsAsync(
+            new CreateGiftRecordRequestDto
+            {
+                GiftDate = giftDate,
+                BossUserId = bossUserId,
+                RecipientUserId = recipientUserId,
+                ServiceItemId = serviceItemId,
+                GiftName = giftName,
+                Amount = amount,
+                Quantity = quantity == 0 ? 1 : quantity,
+                CustomerPaymentStatus = string.IsNullOrWhiteSpace(customerPaymentStatus) ? "unpaid" : customerPaymentStatus,
+                Status = string.IsNullOrWhiteSpace(status) ? "completed" : status,
+                Remark = remark
+            },
+            attachments ?? []);
+
         if (result.Succeeded)
         {
             return CreatedAtAction(nameof(GetGiftRecord), new { id = result.Value!.Id }, result.Value);

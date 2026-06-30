@@ -74,10 +74,35 @@ public sealed class PaymentsController : ControllerBase
     }
 
     [HttpPost("{id:int}/mark-paid")]
+    [Consumes("application/json")]
     [RequirePermission("Settlement.Close")]
     public async Task<IActionResult> MarkPaid(int id, MarkPaymentPaidRequestDto request)
     {
         var result = await _paymentService.MarkPaidAsync(id, request);
+        return result.Succeeded ? NoContent() : ToActionResult(result);
+    }
+
+    [HttpPost("{id:int}/mark-paid")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(FileAttachmentService.MaxFileSize * 10)]
+    [RequirePermission("Settlement.Close")]
+    public async Task<IActionResult> MarkPaidMultipart(
+        int id,
+        [FromForm] decimal? actualAmount,
+        [FromForm] DateTime? paidAt,
+        [FromForm] string? note,
+        [FromForm] List<IFormFile> attachments)
+    {
+        var result = await _paymentService.MarkPaidWithAttachmentsAsync(
+            id,
+            new MarkPaymentPaidRequestDto
+            {
+                ActualAmount = actualAmount,
+                PaidAt = paidAt,
+                Note = note
+            },
+            attachments ?? []);
+
         return result.Succeeded ? NoContent() : ToActionResult(result);
     }
 

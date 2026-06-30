@@ -5,6 +5,7 @@ public sealed class OrderDto
     public int Id { get; set; }
     public Guid Uuid { get; set; }
     public string? OrderNo { get; set; }
+    public string OrderType { get; set; } = "boosting";
     public DateOnly OrderDate { get; set; }
     public int? OwnerUserId { get; set; }
     public string? OwnerNickname { get; set; }
@@ -23,6 +24,7 @@ public sealed class OrderDto
 public sealed class CreateOrderRequestDto
 {
     public string? OrderNo { get; set; }
+    public string OrderType { get; set; } = "boosting";
     public DateOnly OrderDate { get; set; }
     public int? OwnerUserId { get; set; }
     public decimal Amount { get; set; }
@@ -37,6 +39,7 @@ public sealed class CreateOrderRequestDto
 public sealed class UpdateOrderRequestDto
 {
     public string? OrderNo { get; set; }
+    public string OrderType { get; set; } = "boosting";
     public DateOnly OrderDate { get; set; }
     public int? OwnerUserId { get; set; }
     public decimal Amount { get; set; }
@@ -64,6 +67,7 @@ public sealed class OrderListItemDto
     public int Id { get; set; }
     public Guid Uuid { get; set; }
     public string? OrderNo { get; set; }
+    public string OrderType { get; set; } = "boosting";
     public DateOnly OrderDate { get; set; }
     public string? OwnerNickname { get; set; }
     public decimal Amount { get; set; }

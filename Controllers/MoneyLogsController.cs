@@ -36,6 +36,7 @@ public sealed class MoneyLogsController : ControllerBase
     }
 
     [HttpPost]
+    [Consumes("application/json")]
     [RequirePermission("Settlement.Close", "Account.Manage")]
     public async Task<ActionResult<MoneyLogDto>> Create(CreateMoneyLogRequestDto request)
     {
@@ -48,6 +49,38 @@ public sealed class MoneyLogsController : ControllerBase
         return result.NotFound
             ? NotFound()
             : ApiErrors.BadRequest(result.ErrorCode ?? "operation_failed", result.ErrorMessage ?? "操作失敗。");
+    }
+
+    [HttpPost]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(FileAttachmentService.MaxFileSize * 10)]
+    [RequirePermission("Settlement.Close", "Account.Manage")]
+    public async Task<ActionResult<MoneyLogDto>> CreateMultipart(
+        [FromForm] int userId,
+        [FromForm] string type,
+        [FromForm] decimal amount,
+        [FromForm] string? source,
+        [FromForm] string? note,
+        [FromForm] List<IFormFile> attachments)
+    {
+        var result = await _moneyLogService.AddManualWithAttachmentsAsync(
+            new CreateMoneyLogRequestDto
+            {
+                UserId = userId,
+                Type = type,
+                Amount = amount,
+                Source = source,
+                Note = note
+            },
+            attachments ?? []);
+        if (result.Succeeded)
+        {
+            return Ok(result.Value);
+        }
+
+        return result.NotFound
+            ? NotFound()
+            : ApiErrors.BadRequest(result.ErrorCode ?? "operation_failed", result.ErrorMessage ?? "Operation failed.");
     }
 
     [HttpPost("{id:long}/reverse")]

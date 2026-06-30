@@ -47,6 +47,9 @@ public sealed class EAPlaymateGroupDbContext : DbContext
     private int CurrentLoginUserId =>
         _httpContextAccessor.HttpContext?.Session.GetInt32(Services.AuthService.SessionUserId) ?? 0;
 
+    private bool HasNoSessionScope =>
+        CurrentLoginUserId == 0 && CurrentOrganizationId == 0;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -88,7 +91,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
     {
         var httpContext = _httpContextAccessor.HttpContext;
         var loginUserId = httpContext?.Session.GetInt32(EAPlaymateGroup.Services.AuthService.SessionUserId);
-        var organizationId = CurrentOrganizationId;
+        var organizationId = ResolveWriteOrganizationId();
         if (organizationId > 0)
         {
             foreach (var entry in ChangeTracker.Entries<IOrganizationScoped>()
@@ -155,6 +158,35 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         {
             entry.Entity.UploadedByLoginUserId = loginUserId.Value;
         }
+
+        foreach (var entry in ChangeTracker.Entries<FileAttachment>()
+                     .Where(x => x.State == EntityState.Modified &&
+                                 x.Entity.IsDeleted &&
+                                 !x.Entity.DeletedByLoginUserId.HasValue))
+        {
+            entry.Entity.DeletedByLoginUserId = loginUserId.Value;
+        }
+    }
+
+    private int ResolveWriteOrganizationId()
+    {
+        var sessionOrganizationId = CurrentOrganizationId;
+        if (sessionOrganizationId > 0)
+        {
+            return sessionOrganizationId;
+        }
+
+        if (!ChangeTracker.Entries<IOrganizationScoped>()
+                .Any(x => x.State == EntityState.Added && x.Entity.OrganizationId == 0))
+        {
+            return 0;
+        }
+
+        return Organizations
+            .IgnoreQueryFilters()
+            .OrderBy(x => x.Id)
+            .Select(x => x.Id)
+            .FirstOrDefault();
     }
 
     private static void ConfigureUser(ModelBuilder modelBuilder)
@@ -188,7 +220,9 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
 
         entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_users_uuid");
-        entity.HasIndex(x => x.Nickname).IsUnique().HasDatabaseName("UQ_users_nickname");
+        entity.HasIndex(x => new { x.OrganizationId, x.Nickname })
+            .IsUnique()
+            .HasDatabaseName("UQ_users_organization_nickname");
         entity.HasIndex(x => x.LoginAccount)
             .IsUnique()
             .HasFilter("[login_account] IS NOT NULL")
@@ -252,6 +286,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             table.HasCheckConstraint("CK_orders_amount", "[amount] >= 0");
             table.HasCheckConstraint("CK_orders_commission_rate", "[commission_rate] >= 0 AND [commission_rate] <= 1");
             table.HasCheckConstraint("CK_orders_commission_amount", "[commission_amount] >= 0");
+            table.HasCheckConstraint("CK_orders_order_type", "[order_type] IN (N'boosting', N'farming', N'companion', N'prepaid')");
             table.HasCheckConstraint("CK_orders_status", "[status] IN (N'draft', N'completed', N'cancelled', N'disputed')");
             table.HasCheckConstraint("CK_orders_customer_payment_status", "[customer_payment_status] IN (N'unpaid', N'partial', N'paid', N'refunded')");
         });
@@ -262,6 +297,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.OrganizationId).HasColumnName("organization_id");
         entity.Property(x => x.Uuid).HasColumnName("uuid").HasDefaultValueSql("NEWID()");
         entity.Property(x => x.OrderNo).HasColumnName("order_no").HasMaxLength(30);
+        entity.Property(x => x.OrderType).HasColumnName("order_type").HasMaxLength(20).HasDefaultValue("boosting").IsRequired();
         entity.Property(x => x.OrderDate).HasColumnName("order_date");
         entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
         entity.Property(x => x.Amount).HasColumnName("amount").HasPrecision(12, 2);
@@ -489,7 +525,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.ToTable("service_items", "dbo", table =>
         {
             table.HasCheckConstraint("CK_service_items_default_price", "[default_price] IS NULL OR [default_price] >= 0");
-            table.HasCheckConstraint("CK_service_items_category", "[category] IN (N'boost', N'grind', N'play', N'gift', N'deposit_bonus', N'other')");
+            table.HasCheckConstraint("CK_service_items_category", "[category] IN (N'boost', N'grind', N'play', N'special_companion', N'gift', N'deposit_bonus', N'other')");
         });
 
         entity.HasKey(x => x.Id).HasName("PK_service_items");
@@ -511,7 +547,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
 
         entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_service_items_uuid");
-        entity.HasIndex(x => x.SeedKey).IsUnique().HasDatabaseName("UQ_service_items_seed_key");
+        entity.HasIndex(x => new { x.OrganizationId, x.SeedKey }).IsUnique().HasDatabaseName("UQ_service_items_organization_seed_key");
         entity.HasIndex(x => new { x.Category, x.SortOrder }).HasDatabaseName("IX_service_items_category_sort");
     }
 
@@ -602,7 +638,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
 
         entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_departments_uuid");
-        entity.HasIndex(x => x.Name).IsUnique().HasDatabaseName("UQ_departments_name");
+        entity.HasIndex(x => new { x.OrganizationId, x.Name }).IsUnique().HasDatabaseName("UQ_departments_organization_name");
         entity.HasIndex(x => new { x.SortOrder, x.Name }).HasDatabaseName("IX_departments_sort");
     }
 
@@ -708,20 +744,32 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.TargetType).HasColumnName("target_type").HasMaxLength(50).IsRequired();
         entity.Property(x => x.TargetId).HasColumnName("target_id");
         entity.Property(x => x.TargetUuid).HasColumnName("target_uuid");
+        entity.Property(x => x.AttachmentKind).HasColumnName("attachment_kind").HasMaxLength(30);
         entity.Property(x => x.OriginalFileName).HasColumnName("original_file_name").HasMaxLength(255).IsRequired();
         entity.Property(x => x.StoredFileName).HasColumnName("stored_file_name").HasMaxLength(120).IsRequired();
         entity.Property(x => x.StoragePath).HasColumnName("storage_path").HasMaxLength(500).IsRequired();
         entity.Property(x => x.ContentType).HasColumnName("content_type").HasMaxLength(120).IsRequired();
+        entity.Property(x => x.FileExtension).HasColumnName("file_extension").HasMaxLength(20);
         entity.Property(x => x.FileSize).HasColumnName("file_size");
+        entity.Property(x => x.Sha256Hash).HasColumnName("sha256_hash").HasMaxLength(64).IsFixedLength();
         entity.Property(x => x.UploadedByLoginUserId).HasColumnName("uploaded_by_login_user_id");
         entity.Property(x => x.Note).HasColumnName("note").HasMaxLength(500);
+        entity.Property(x => x.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
+        entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+        entity.Property(x => x.DeletedByLoginUserId).HasColumnName("deleted_by_login_user_id");
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
-        entity.HasIndex(x => new { x.TargetType, x.TargetId, x.CreatedAt }).HasDatabaseName("IX_file_attachments_target");
+        entity.HasIndex(x => new { x.OrganizationId, x.TargetType, x.TargetId, x.IsDeleted, x.CreatedAt }).HasDatabaseName("IX_file_attachments_target");
+        entity.HasIndex(x => new { x.OrganizationId, x.TargetType, x.TargetUuid }).HasDatabaseName("IX_file_attachments_target_uuid");
         entity.HasIndex(x => x.UploadedByLoginUserId).HasDatabaseName("IX_file_attachments_uploaded_by");
         entity.HasOne(x => x.UploadedByLoginUser)
             .WithMany()
             .HasForeignKey(x => x.UploadedByLoginUserId)
             .HasConstraintName("FK_file_attachments_uploaded_by")
+            .OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(x => x.DeletedByLoginUser)
+            .WithMany()
+            .HasForeignKey(x => x.DeletedByLoginUserId)
+            .HasConstraintName("FK_file_attachments_deleted_by")
             .OnDelete(DeleteBehavior.NoAction);
     }
 
@@ -752,14 +800,17 @@ public sealed class EAPlaymateGroupDbContext : DbContext
     {
         modelBuilder.Entity<LoginUser>().HasQueryFilter(x =>
             IsSystemAdmin ||
+            HasNoSessionScope ||
             (!IsMember && CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId) ||
             (IsMember && CurrentLoginUserId > 0 && x.Id == CurrentLoginUserId));
         modelBuilder.Entity<User>().HasQueryFilter(x =>
             IsSystemAdmin ||
+            HasNoSessionScope ||
             (!IsMember && CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId) ||
             (IsMember && CurrentMemberUserId > 0 && x.Id == CurrentMemberUserId));
         modelBuilder.Entity<Order>().HasQueryFilter(x =>
             IsSystemAdmin ||
+            HasNoSessionScope ||
             (CurrentOrganizationId > 0 &&
              x.OrganizationId == CurrentOrganizationId &&
              (!IsMember ||
@@ -768,6 +819,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
                 x.Members.Any(m => m.UserId == CurrentMemberUserId))))));
         modelBuilder.Entity<OrderMember>().HasQueryFilter(x =>
             IsSystemAdmin ||
+            HasNoSessionScope ||
             (CurrentOrganizationId > 0 &&
              x.OrganizationId == CurrentOrganizationId &&
              (!IsMember ||
@@ -775,11 +827,13 @@ public sealed class EAPlaymateGroupDbContext : DbContext
                x.UserId == CurrentMemberUserId))));
         modelBuilder.Entity<Payment>().HasQueryFilter(x =>
             IsSystemAdmin ||
+            HasNoSessionScope ||
             (CurrentOrganizationId > 0 &&
              x.OrganizationId == CurrentOrganizationId &&
              (!IsMember || (CurrentMemberUserId > 0 && x.UserId == CurrentMemberUserId))));
         modelBuilder.Entity<GiftRecord>().HasQueryFilter(x =>
             IsSystemAdmin ||
+            HasNoSessionScope ||
             (CurrentOrganizationId > 0 &&
              x.OrganizationId == CurrentOrganizationId &&
              (!IsMember ||
@@ -787,26 +841,29 @@ public sealed class EAPlaymateGroupDbContext : DbContext
                (x.BossUserId == CurrentMemberUserId ||
                 x.RecipientUserId == CurrentMemberUserId)))));
         modelBuilder.Entity<ServiceItem>().HasQueryFilter(x =>
-            IsSystemAdmin || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
+            IsSystemAdmin || HasNoSessionScope || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<Department>().HasQueryFilter(x =>
-            IsSystemAdmin || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
+            IsSystemAdmin || HasNoSessionScope || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<DepartmentMember>().HasQueryFilter(x =>
             IsSystemAdmin ||
+            HasNoSessionScope ||
             (!IsMember &&
              CurrentOrganizationId > 0 &&
              x.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<AuditLog>().HasQueryFilter(x =>
-            IsSystemAdmin || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
+            IsSystemAdmin || HasNoSessionScope || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<MoneyLog>().HasQueryFilter(x =>
             IsSystemAdmin ||
+            HasNoSessionScope ||
             (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId &&
              (!IsMember || (CurrentMemberUserId > 0 && x.UserId == CurrentMemberUserId))));
         modelBuilder.Entity<LoginHistory>().HasQueryFilter(x =>
-            IsSystemAdmin || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
+            IsSystemAdmin || HasNoSessionScope || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<FileAttachment>().HasQueryFilter(x =>
-            IsSystemAdmin || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
+            IsSystemAdmin || HasNoSessionScope || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<UserPreference>().HasQueryFilter(x =>
             IsSystemAdmin ||
+            HasNoSessionScope ||
             (!IsMember && CurrentOrganizationId > 0 && x.LoginUser.OrganizationId == CurrentOrganizationId) ||
             (CurrentLoginUserId > 0 && x.LoginUserId == CurrentLoginUserId));
     }

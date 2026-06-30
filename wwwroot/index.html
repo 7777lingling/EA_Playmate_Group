@@ -341,6 +341,10 @@
           <img src="/價目表/陪玩.png" alt="陪玩價目表">
           <span>陪玩</span>
         </a>
+        <a class="price-shot" href="/價目表/特殊陪.png" data-price-preview>
+          <img src="/價目表/特殊陪.png" alt="特殊陪價目表">
+          <span>特殊陪</span>
+        </a>
         <a class="price-shot" href="/價目表/代肝.jpg" data-price-preview>
           <img src="/價目表/代肝.jpg" alt="代肝價目表">
           <span>代肝</span>
@@ -428,6 +432,10 @@
           </div>
           <label>備註<textarea name="remark" rows="2"></textarea></label>
           <div class="form-actions">
+            <label class="ghost attachment-trigger" id="giftRecordAttachmentBtn" title="用途：付款證明、送禮截圖、交易紀錄">
+              <input id="giftRecordAttachmentInput" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.xlsx,.pptx,.csv,.txt,.log,.mp4,.mov">
+              <span data-attachment-label>附件：付款證明/送禮截圖</span>
+            </label>
             <button class="primary" id="giftRecordSubmitBtn" type="submit">新增紀錄</button>
             <button class="ghost" id="cancelGiftRecordEditBtn" type="button" hidden>取消編輯</button>
           </div>
@@ -466,6 +474,14 @@
           <div class="order-form-section">
             <label>日期<input name="orderDate" type="date" required></label>
             <label>單號<input name="orderNo" maxlength="30"></label>
+            <label>訂單類型
+              <select name="orderType" required>
+                <option value="boosting">代打</option>
+                <option value="farming">代肝</option>
+                <option value="companion">陪玩</option>
+                <option value="prepaid">預存</option>
+              </select>
+            </label>
             <label>老闆
               <span class="member-picker-field" data-member-picker data-source="bosses" data-title="選擇訂單老闆" data-empty-label="未指定">
                 <input name="ownerUserId" id="bossSelect" type="hidden">
@@ -515,6 +531,10 @@
           </div>
 
           <div class="form-actions">
+            <label class="ghost attachment-trigger" id="orderAttachmentBtn" title="用途：收款證明、付款截圖、爭議依據">
+              <input id="orderAttachmentInput" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.xlsx,.pptx,.csv,.txt,.log,.mp4,.mov">
+              <span data-attachment-label>附件：收款證明/爭議依據</span>
+            </label>
             <button class="primary" id="orderSubmitBtn" type="submit">新增訂單</button>
             <button class="ghost" id="copyOrderBtn" type="button" hidden>另存新訂單</button>
             <button class="ghost" id="cancelOrderEditBtn" type="button" hidden>取消編輯</button>
@@ -532,6 +552,7 @@
                   <th>ID</th>
                   <th>日期</th>
                   <th>單號</th>
+                  <th>類型</th>
                   <th>金額</th>
                   <th>團抽</th>
                   <th>狀態</th>
@@ -776,6 +797,19 @@
         <button class="ghost small" id="recordModalClose" type="button">關閉</button>
       </div>
       <div id="recordModalBody"></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="attachmentModal" hidden>
+    <section class="modal-panel attachment-modal" role="dialog" aria-modal="true" aria-labelledby="attachmentModalTitle">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow" id="attachmentModalEyebrow">Attachments</p>
+          <h2 id="attachmentModalTitle">附件</h2>
+        </div>
+        <button class="ghost small" id="attachmentModalClose" type="button">關閉</button>
+      </div>
+      <div id="attachmentModalBody"></div>
     </section>
   </div>
 

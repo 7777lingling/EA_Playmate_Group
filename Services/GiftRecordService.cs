@@ -2,6 +2,7 @@ using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace EAPlaymateGroup.Services;
@@ -10,11 +11,19 @@ public sealed class GiftRecordService
 {
     private readonly EAPlaymateGroupDbContext _db;
     private readonly MoneyLogService _moneyLogService;
+    private readonly AttachmentRequirementService _attachmentRequirementService;
+    private readonly FileAttachmentService _fileAttachmentService;
 
-    public GiftRecordService(EAPlaymateGroupDbContext db, MoneyLogService moneyLogService)
+    public GiftRecordService(
+        EAPlaymateGroupDbContext db,
+        MoneyLogService moneyLogService,
+        AttachmentRequirementService attachmentRequirementService,
+        FileAttachmentService fileAttachmentService)
     {
         _db = db;
         _moneyLogService = moneyLogService;
+        _attachmentRequirementService = attachmentRequirementService;
+        _fileAttachmentService = fileAttachmentService;
     }
 
     public async Task<ServiceResult<GiftRecordDto>> CreateAsync(CreateGiftRecordRequestDto request)
@@ -23,6 +32,12 @@ public sealed class GiftRecordService
         if (!validation.Succeeded)
         {
             return ToGenericResult<GiftRecordDto>(validation);
+        }
+        if (request.CustomerPaymentStatus is "paid" or "partial")
+        {
+            return ServiceResult<GiftRecordDto>.Failure(
+                "attachment_required",
+                "Attachment is required before creating a paid gift record. Create the record first, upload attachments, then update payment status.");
         }
 
         var giftName = await ResolveGiftNameAsync(request.ServiceItemId, request.GiftName);
@@ -67,6 +82,98 @@ public sealed class GiftRecordService
         return ServiceResult<GiftRecordDto>.Success(dto);
     }
 
+    public async Task<ServiceResult<GiftRecordDto>> CreateWithAttachmentsAsync(
+        CreateGiftRecordRequestDto request,
+        IReadOnlyCollection<IFormFile> attachments)
+    {
+        var validation = await ValidateAsync(request.GiftDate, request.BossUserId, request.RecipientUserId, request.ServiceItemId, request.GiftName, request.Amount, request.Quantity, request.CustomerPaymentStatus, request.Status);
+        if (!validation.Succeeded)
+        {
+            return ToGenericResult<GiftRecordDto>(validation);
+        }
+
+        if (request.CustomerPaymentStatus is "paid" or "partial" && attachments.Count == 0)
+        {
+            return ServiceResult<GiftRecordDto>.Failure(
+                "attachment_required",
+                "Attachment is required when creating a paid or partial gift record.");
+        }
+
+        if (attachments.Count > 0)
+        {
+            var attachmentValidation = _fileAttachmentService.ValidateFiles(attachments);
+            if (!attachmentValidation.Succeeded)
+            {
+                return ServiceResult<GiftRecordDto>.Failure(
+                    attachmentValidation.ErrorCode ?? "invalid_attachment",
+                    attachmentValidation.ErrorMessage ?? "Invalid attachment.");
+            }
+        }
+
+        var giftName = await ResolveGiftNameAsync(request.ServiceItemId, request.GiftName);
+        var record = new GiftRecord
+        {
+            GiftDate = request.GiftDate,
+            BossUserId = request.BossUserId,
+            RecipientUserId = request.RecipientUserId,
+            ServiceItemId = request.ServiceItemId,
+            GiftName = giftName,
+            Amount = request.Amount,
+            Quantity = request.Quantity,
+            CustomerPaymentStatus = request.CustomerPaymentStatus,
+            Status = request.Status,
+            Remark = string.IsNullOrWhiteSpace(request.Remark) ? null : request.Remark.Trim()
+        };
+
+        _db.GiftRecords.Add(record);
+        await _db.SaveChangesAsync();
+
+        if (attachments.Count > 0)
+        {
+            var savedAttachments = await _fileAttachmentService.UploadManyAsync(
+                "gift_records",
+                record.Id,
+                attachments,
+                request.CustomerPaymentStatus is "paid" or "partial" ? "payment_proof" : "general",
+                request.Remark);
+
+            _db.AuditLogs.Add(AuditLogWriter.Create(
+                "bind_attachments",
+                "gift_records",
+                record.Id,
+                record.Uuid,
+                after: new
+                {
+                    attachmentIds = savedAttachments.Select(x => x.Id).ToList(),
+                    attachmentCount = savedAttachments.Count
+                }));
+            await _db.SaveChangesAsync();
+        }
+
+        var saved = await GetWithRelations(record.Id).FirstAsync();
+        var dto = GiftRecordMapper.ToDto(saved);
+        var audit = AuditLogWriter.Create(
+            action: "create",
+            targetType: "gift_records",
+            targetId: record.Id,
+            targetUuid: record.Uuid,
+            after: dto);
+        _db.AuditLogs.Add(audit);
+        await _db.SaveChangesAsync();
+
+        record.CreatedAuditLogId = audit.Id;
+        await _db.SaveChangesAsync();
+
+        if (record.Status == "completed")
+        {
+            await _moneyLogService.AddAsync(
+                record.RecipientUserId, "gift_income", record.Amount * record.Quantity,
+                "gift_records", record.Id, record.Uuid, record.GiftName);
+        }
+
+        return ServiceResult<GiftRecordDto>.Success(dto);
+    }
+
     public async Task<ServiceResult> UpdateAsync(int id, UpdateGiftRecordRequestDto request)
     {
         var record = await GetWithRelations(id).FirstOrDefaultAsync();
@@ -79,6 +186,18 @@ public sealed class GiftRecordService
         if (!validation.Succeeded)
         {
             return validation;
+        }
+        if (request.CustomerPaymentStatus is "paid" or "partial")
+        {
+            var attachmentValidation = await _attachmentRequirementService.RequireAsync(
+                "gift_records",
+                record.Id,
+                "attachment_required",
+                "Attachment is required when changing gift payment status to paid or partial.");
+            if (!attachmentValidation.Succeeded)
+            {
+                return attachmentValidation;
+            }
         }
 
         var before = GiftRecordMapper.ToDto(record);

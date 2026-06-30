@@ -115,9 +115,9 @@ public sealed class UsersController : ControllerBase
 
     [HttpPost("{id:int}/deactivate")]
     [RequirePermission("Member.Edit")]
-    public async Task<IActionResult> DeactivateUser(int id)
+    public async Task<IActionResult> DeactivateUser(int id, DeactivateUserRequestDto? request)
     {
-        var result = await _userService.DeactivateUserAsync(id);
+        var result = await _userService.DeactivateUserAsync(id, request ?? new DeactivateUserRequestDto());
         return result.Succeeded ? NoContent() : ToActionResult(result);
     }
 

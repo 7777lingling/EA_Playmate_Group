@@ -39,4 +39,10 @@ public sealed class UpdateUserRequestDto
 public sealed class LeaveUserRequestDto
 {
     public DateTime? LeftAt { get; set; }
+    public string? ReasonCategory { get; set; }
+}
+
+public sealed class DeactivateUserRequestDto
+{
+    public string? ReasonCategory { get; set; }
 }

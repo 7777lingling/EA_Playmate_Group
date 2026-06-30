@@ -1,4 +1,3 @@
-using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
@@ -11,44 +10,125 @@ public sealed class MoneyLogService
     private static readonly HashSet<string> Types =
     [
         "deposit", "deduction", "refund", "gift_income",
-        "monthly_settlement", "manual_adjustment"
+        "monthly_settlement", "manual_adjustment", "adjustment"
     ];
 
     private readonly EAPlaymateGroupDbContext _db;
+    private readonly FileAttachmentService _fileAttachmentService;
 
-    public MoneyLogService(EAPlaymateGroupDbContext db)
+    public MoneyLogService(EAPlaymateGroupDbContext db, FileAttachmentService fileAttachmentService)
     {
         _db = db;
+        _fileAttachmentService = fileAttachmentService;
     }
 
     public async Task<ServiceResult<MoneyLogDto>> AddManualAsync(CreateMoneyLogRequestDto request)
     {
         if (!Types.Contains(request.Type))
         {
-            return ServiceResult<MoneyLogDto>.Failure("invalid_money_type", "不支援的金流類型。");
+            return ServiceResult<MoneyLogDto>.Failure("invalid_money_type", "Unsupported money log type.");
         }
 
         if (request.Amount == 0)
         {
-            return ServiceResult<MoneyLogDto>.Failure("invalid_amount", "金額不可為 0。");
+            return ServiceResult<MoneyLogDto>.Failure("invalid_amount", "Amount cannot be zero.");
         }
 
-        var amount = request.Type switch
+        if (RequiresAttachment(request.Type))
         {
-            "deduction" or "monthly_settlement" => -Math.Abs(request.Amount),
-            "deposit" or "refund" or "gift_income" => Math.Abs(request.Amount),
-            _ => request.Amount
-        };
+            return ServiceResult<MoneyLogDto>.Failure(
+                "attachment_required",
+                "Attachment is required for manual deposit, refund, and adjustment money logs.");
+        }
 
+        var amount = NormalizeAmount(request.Type, request.Amount);
         var log = await AddAsync(
             request.UserId,
             request.Type,
             amount,
             sourceType: string.IsNullOrWhiteSpace(request.Source) ? "manual" : request.Source.Trim(),
             note: request.Note);
+
         return log is null
             ? ServiceResult<MoneyLogDto>.Missing()
             : ServiceResult<MoneyLogDto>.Success(ToDto(log));
+    }
+
+    public async Task<ServiceResult<MoneyLogDto>> AddManualWithAttachmentsAsync(
+        CreateMoneyLogRequestDto request,
+        IReadOnlyCollection<IFormFile> attachments)
+    {
+        if (!Types.Contains(request.Type))
+        {
+            return ServiceResult<MoneyLogDto>.Failure("invalid_money_type", "Unsupported money log type.");
+        }
+
+        if (request.Amount == 0)
+        {
+            return ServiceResult<MoneyLogDto>.Failure("invalid_amount", "Amount cannot be zero.");
+        }
+
+        if (RequiresAttachment(request.Type) && attachments.Count == 0)
+        {
+            return ServiceResult<MoneyLogDto>.Failure(
+                "attachment_required",
+                "Attachment is required for manual deposit, refund, and adjustment money logs.");
+        }
+
+        if (attachments.Count > 0)
+        {
+            var attachmentValidation = _fileAttachmentService.ValidateFiles(attachments);
+            if (!attachmentValidation.Succeeded)
+            {
+                return ServiceResult<MoneyLogDto>.Failure(
+                    attachmentValidation.ErrorCode ?? "invalid_attachment",
+                    attachmentValidation.ErrorMessage ?? "Invalid attachment.");
+            }
+        }
+
+        var log = await AddAsync(
+            request.UserId,
+            request.Type,
+            NormalizeAmount(request.Type, request.Amount),
+            sourceType: string.IsNullOrWhiteSpace(request.Source) ? "manual" : request.Source.Trim(),
+            note: request.Note);
+        if (log is null)
+        {
+            return ServiceResult<MoneyLogDto>.Missing();
+        }
+
+        if (attachments.Count > 0)
+        {
+            var targetId = ToNullableInt(log.Id);
+            if (!targetId.HasValue)
+            {
+                return ServiceResult<MoneyLogDto>.Failure("invalid_target", "Money log id is too large for attachments.");
+            }
+
+            var savedAttachments = await _fileAttachmentService.UploadManyAsync(
+                "money_logs",
+                targetId.Value,
+                attachments,
+                "money_proof",
+                request.Note);
+
+            _db.AuditLogs.Add(AuditLogWriter.Create(
+                "bind_attachments",
+                "money_logs",
+                targetId,
+                log.SourceUuid,
+                after: new
+                {
+                    moneyLogId = log.Id,
+                    attachmentIds = savedAttachments.Select(x => x.Id).ToList(),
+                    attachmentCount = savedAttachments.Count
+                },
+                userId: log.UserId,
+                correlationId: log.CorrelationId));
+            await _db.SaveChangesAsync();
+        }
+
+        return ServiceResult<MoneyLogDto>.Success(ToDto(log));
     }
 
     public async Task<ServiceResult<MoneyLogDto>> ReverseAsync(long id, ReverseMoneyLogRequestDto request)
@@ -65,7 +145,7 @@ public sealed class MoneyLogService
         {
             return ServiceResult<MoneyLogDto>.Failure(
                 "cannot_reverse_reversal",
-                "沖正紀錄不可再次沖正。");
+                "Reversal money logs cannot be reversed again.");
         }
 
         var alreadyReversed = await _db.MoneyLogs.AnyAsync(x => x.ReversedMoneyLogId == id);
@@ -73,11 +153,11 @@ public sealed class MoneyLogService
         {
             return ServiceResult<MoneyLogDto>.Failure(
                 "money_log_already_reversed",
-                "此金流紀錄已沖正。");
+                "This money log has already been reversed.");
         }
 
         var note = string.IsNullOrWhiteSpace(request.Note)
-            ? $"沖正金流紀錄 #{original.Id}"
+            ? $"Reverse money log #{original.Id}"
             : request.Note.Trim();
 
         var reversal = await AddAsync(
@@ -200,8 +280,17 @@ public sealed class MoneyLogService
         CreatedAt = log.CreatedAt
     };
 
-    private static int? ToNullableInt(long value)
-    {
-        return value <= int.MaxValue ? (int)value : null;
-    }
+    private static decimal NormalizeAmount(string type, decimal amount) =>
+        type switch
+        {
+            "deduction" or "monthly_settlement" => -Math.Abs(amount),
+            "deposit" or "refund" or "gift_income" => Math.Abs(amount),
+            _ => amount
+        };
+
+    private static bool RequiresAttachment(string type) =>
+        type is "deposit" or "refund" or "manual_adjustment" or "adjustment";
+
+    private static int? ToNullableInt(long value) =>
+        value <= int.MaxValue ? (int)value : null;
 }

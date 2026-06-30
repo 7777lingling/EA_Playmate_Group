@@ -235,7 +235,9 @@ public sealed class LoginUserService
 
         var resolvedOrganizationId = ResolveOrganizationId(organizationId);
         if (resolvedOrganizationId <= 0 ||
-            !await _db.Organizations.AnyAsync(x => x.Id == resolvedOrganizationId && x.IsActive))
+            !await _db.Organizations
+                .IgnoreQueryFilters()
+                .AnyAsync(x => x.Id == resolvedOrganizationId && x.IsActive))
         {
             errors["organizationId"] = ["請選擇有效的組織。"];
         }
@@ -271,7 +273,8 @@ public sealed class LoginUserService
     private int ResolveOrganizationId(int? requestedOrganizationId)
     {
         var role = _httpContextAccessor.HttpContext?.Session.GetString(AuthService.SessionSystemRole);
-        if (role == "admin" && requestedOrganizationId.HasValue)
+        var hasLoginUser = _httpContextAccessor.HttpContext?.Session.GetInt32(AuthService.SessionUserId).HasValue == true;
+        if ((role == "admin" || !hasLoginUser) && requestedOrganizationId.HasValue)
         {
             return requestedOrganizationId.Value;
         }

@@ -2,6 +2,7 @@ using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace EAPlaymateGroup.Services;
@@ -9,10 +10,17 @@ namespace EAPlaymateGroup.Services;
 public sealed class UserService
 {
     private readonly EAPlaymateGroupDbContext _db;
+    private readonly AttachmentRequirementService _attachmentRequirementService;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public UserService(EAPlaymateGroupDbContext db)
+    public UserService(
+        EAPlaymateGroupDbContext db,
+        AttachmentRequirementService attachmentRequirementService,
+        IHttpContextAccessor httpContextAccessor)
     {
         _db = db;
+        _attachmentRequirementService = attachmentRequirementService;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<ServiceResult<UserDto>> CreateUserAsync(CreateUserRequestDto request)
@@ -32,7 +40,11 @@ public sealed class UserService
         };
 
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        var saveResult = await SaveUserChangesAsync();
+        if (!saveResult.Succeeded)
+        {
+            return ToGenericResult<UserDto>(saveResult);
+        }
 
         var dto = UserMapper.ToDto(user);
 
@@ -71,7 +83,11 @@ public sealed class UserService
         user.LeftAt = request.LeftAt;
         user.UpdatedAt = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync();
+        var saveResult = await SaveUserChangesAsync();
+        if (!saveResult.Succeeded)
+        {
+            return saveResult;
+        }
 
         _db.AuditLogs.Add(AuditLogWriter.Create(
             action: "update",
@@ -85,12 +101,24 @@ public sealed class UserService
         return ServiceResult.Success();
     }
 
-    public async Task<ServiceResult> DeactivateUserAsync(int id)
+    public async Task<ServiceResult> DeactivateUserAsync(int id, DeactivateUserRequestDto request)
     {
         var user = await _db.Users.FirstOrDefaultAsync(x => x.Id == id);
         if (user is null)
         {
             return ServiceResult.Missing();
+        }
+        if (IsViolation(request.ReasonCategory))
+        {
+            var attachmentValidation = await _attachmentRequirementService.RequireAsync(
+                "users",
+                user.Id,
+                "attachment_required",
+                "Attachment is required when deactivating a member for violation.");
+            if (!attachmentValidation.Succeeded)
+            {
+                return attachmentValidation;
+            }
         }
 
         var before = UserMapper.ToDto(user);
@@ -119,7 +147,6 @@ public sealed class UserService
         {
             return ServiceResult.Missing();
         }
-
         var before = UserMapper.ToDto(user);
 
         user.IsActive = true;
@@ -146,6 +173,18 @@ public sealed class UserService
         if (user is null)
         {
             return ServiceResult.Missing();
+        }
+        if (IsViolation(request.ReasonCategory))
+        {
+            var attachmentValidation = await _attachmentRequirementService.RequireAsync(
+                "users",
+                user.Id,
+                "attachment_required",
+                "Attachment is required when marking a member leave for violation.");
+            if (!attachmentValidation.Succeeded)
+            {
+                return attachmentValidation;
+            }
         }
 
         var before = UserMapper.ToDto(user);
@@ -181,10 +220,18 @@ public sealed class UserService
         if (!string.IsNullOrWhiteSpace(nickname))
         {
             var normalizedNickname = nickname.Trim();
-            var excludedUserId = excludeUserId ?? 0;
-            var nicknameExists = await _db.Users.AnyAsync(x =>
-                x.Nickname == normalizedNickname &&
-                (!excludeUserId.HasValue || x.Id != excludedUserId));
+            var organizationId = _httpContextAccessor.HttpContext?.Session.GetInt32(AuthService.SessionOrganizationId) ?? 0;
+            var query = _db.Users
+                .IgnoreQueryFilters()
+                .Where(x => x.Nickname == normalizedNickname);
+
+            if (organizationId > 0)
+            {
+                query = query.Where(x => x.OrganizationId == organizationId);
+            }
+
+            var nicknameExists = await query.AnyAsync(x =>
+                !excludeUserId.HasValue || x.Id != excludeUserId.Value);
             if (nicknameExists)
             {
                 errors["nickname"] = ["此暱稱已存在，請換一個。"];
@@ -198,6 +245,34 @@ public sealed class UserService
 
         return ServiceResult.Success();
     }
+
+    private async Task<ServiceResult> SaveUserChangesAsync()
+    {
+        try
+        {
+            await _db.SaveChangesAsync();
+            return ServiceResult.Success();
+        }
+        catch (DbUpdateException ex) when (IsUniqueNicknameViolation(ex))
+        {
+            return ServiceResult.Validation(
+                new Dictionary<string, string[]>
+                {
+                    ["nickname"] = ["此暱稱已存在，請換一個。"]
+                });
+        }
+    }
+
+    private static bool IsUniqueNicknameViolation(DbUpdateException exception)
+    {
+        return exception.InnerException is SqlException sqlException &&
+               (sqlException.Number is 2601 or 2627) &&
+               (sqlException.Message.Contains("UQ_users_nickname", StringComparison.OrdinalIgnoreCase) ||
+                sqlException.Message.Contains("UQ_users_organization_nickname", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsViolation(string? reasonCategory) =>
+        string.Equals(reasonCategory, "violation", StringComparison.OrdinalIgnoreCase);
 
     private static ServiceResult<T> ToGenericResult<T>(ServiceResult result)
     {

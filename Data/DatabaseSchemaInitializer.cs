@@ -4,6 +4,26 @@ namespace EAPlaymateGroup.Data;
 
 public static class DatabaseSchemaInitializer
 {
+    public static async Task EnsureOrderColumnsAsync(EAPlaymateGroupDbContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync("""
+IF OBJECT_ID(N'dbo.orders', N'U') IS NOT NULL
+BEGIN
+    IF COL_LENGTH('dbo.orders', 'order_type') IS NULL
+        ALTER TABLE dbo.orders ADD order_type NVARCHAR(20) NOT NULL CONSTRAINT DF_orders_order_type DEFAULT N'boosting';
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.check_constraints
+        WHERE name = N'CK_orders_order_type'
+          AND parent_object_id = OBJECT_ID(N'dbo.orders')
+    )
+        EXEC(N'ALTER TABLE dbo.orders WITH CHECK ADD CONSTRAINT CK_orders_order_type CHECK (order_type IN (N''boosting'', N''farming'', N''companion'', N''prepaid''))');
+END;
+""");
+    }
+
     public static async Task ValidateOrganizationFiltersAsync(EAPlaymateGroupDbContext db)
     {
         await db.LoginUsers.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
@@ -334,13 +354,32 @@ BEGIN
         created_at DATETIME2 NOT NULL CONSTRAINT DF_service_items_created_at DEFAULT SYSUTCDATETIME(),
         updated_at DATETIME2 NULL,
         CONSTRAINT CK_service_items_default_price CHECK ([default_price] IS NULL OR [default_price] >= 0),
-        CONSTRAINT CK_service_items_category CHECK ([category] IN (N'boost', N'grind', N'play', N'gift', N'deposit_bonus', N'other'))
+        CONSTRAINT CK_service_items_category CHECK ([category] IN (N'boost', N'grind', N'play', N'special_companion', N'gift', N'deposit_bonus', N'other'))
     );
 
     CREATE UNIQUE INDEX UQ_service_items_uuid ON dbo.service_items(uuid);
     CREATE UNIQUE INDEX UQ_service_items_seed_key ON dbo.service_items(seed_key);
     CREATE INDEX IX_service_items_category_sort ON dbo.service_items(category, sort_order);
 END;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = N'CK_service_items_category'
+      AND parent_object_id = OBJECT_ID(N'dbo.service_items')
+      AND definition NOT LIKE N'%special_companion%'
+)
+    ALTER TABLE dbo.service_items DROP CONSTRAINT CK_service_items_category;
+
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = N'CK_service_items_category'
+      AND parent_object_id = OBJECT_ID(N'dbo.service_items')
+)
+    EXEC(N'ALTER TABLE dbo.service_items WITH CHECK ADD CONSTRAINT CK_service_items_category CHECK ([category] IN (N''boost'', N''grind'', N''play'', N''special_companion'', N''gift'', N''deposit_bonus'', N''other''))');
 
 WITH seed_items AS
 (
@@ -410,7 +449,8 @@ WHERE NOT EXISTS
     SELECT 1
     FROM dbo.service_items existing
     WHERE existing.seed_key = s.seed_key
-);
+)
+AND COL_LENGTH('dbo.service_items', 'organization_id') IS NULL;
 
 UPDATE dbo.service_items
 SET
@@ -486,7 +526,8 @@ WHERE NOT EXISTS
     SELECT 1
     FROM dbo.service_items existing
     WHERE existing.seed_key = s.seed_key
-);
+)
+AND COL_LENGTH('dbo.service_items', 'organization_id') IS NULL;
 """);
 
         await db.Database.ExecuteSqlRawAsync("""
@@ -607,7 +648,8 @@ WHERE NOT EXISTS
     SELECT 1
     FROM dbo.departments existing
     WHERE existing.name = s.name
-);
+)
+AND COL_LENGTH('dbo.departments', 'organization_id') IS NULL;
 """);
 
         await db.Database.ExecuteSqlRawAsync("""
@@ -712,6 +754,210 @@ ALTER TABLE dbo.service_items ALTER COLUMN organization_id INT NOT NULL;
 ALTER TABLE dbo.gift_records ALTER COLUMN organization_id INT NOT NULL;
 ALTER TABLE dbo.departments ALTER COLUMN organization_id INT NOT NULL;
 ALTER TABLE dbo.department_members ALTER COLUMN organization_id INT NOT NULL;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM sys.key_constraints
+    WHERE name = N'UQ_users_nickname'
+      AND parent_object_id = OBJECT_ID(N'dbo.users')
+)
+    ALTER TABLE dbo.users DROP CONSTRAINT UQ_users_nickname;
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UQ_users_nickname' AND object_id = OBJECT_ID(N'dbo.users'))
+    DROP INDEX UQ_users_nickname ON dbo.users;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UQ_users_organization_nickname' AND object_id = OBJECT_ID(N'dbo.users'))
+    CREATE UNIQUE INDEX UQ_users_organization_nickname ON dbo.users(organization_id, nickname);
+
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UQ_service_items_seed_key' AND object_id = OBJECT_ID(N'dbo.service_items'))
+    DROP INDEX UQ_service_items_seed_key ON dbo.service_items;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UQ_service_items_organization_seed_key' AND object_id = OBJECT_ID(N'dbo.service_items'))
+    CREATE UNIQUE INDEX UQ_service_items_organization_seed_key ON dbo.service_items(organization_id, seed_key);
+
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UQ_departments_name' AND object_id = OBJECT_ID(N'dbo.departments'))
+    DROP INDEX UQ_departments_name ON dbo.departments;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UQ_departments_organization_name' AND object_id = OBJECT_ID(N'dbo.departments'))
+    CREATE UNIQUE INDEX UQ_departments_organization_name ON dbo.departments(organization_id, name);
+""");
+
+        await db.Database.ExecuteSqlRawAsync("""
+DECLARE @default_organization_id INT = (SELECT TOP (1) id FROM dbo.organizations ORDER BY id);
+
+WITH restore_departments AS
+(
+    SELECT *
+    FROM (VALUES
+        (N'管理層', N'Management', N'制定營運方向；價格策略與財務審核；主管招募與危機處理；對外合作決策。', 100),
+        (N'營運部', N'Operations', N'訂單管理；排班調度；加單、取消訂單處理；服務品質控管；客訴與黑名單管理。', 200),
+        (N'人資部', N'HR', N'招募與面試；新人培訓；停權、退團管理。', 300),
+        (N'客服部', N'Customer Service', N'售前報價與推薦；售中協調時間與更換人員；售後聯絡、退款、補單處理。', 400),
+        (N'陪玩部', N'Playmate', N'接單與陪玩服務；客戶互動維護；服務回報。', 500),
+        (N'財務部', N'Finance', N'收款與匯款；薪資結算；抽成計算。', 600),
+        (N'行銷部', N'Marketing', N'社群經營；公告投放；活動企劃；短影音製作；數據追蹤分析。', 700),
+        (N'美術設計部', N'Design', N'品牌視覺設計；陪玩介紹卡；海報與宣傳素材；影片剪輯；LOGO 與吉祥物設計。', 800),
+        (N'資訊部', N'IT', N'ERP 系統開發；Discord Bot 開發；官網維護；資料庫管理；伺服器與備份；流程自動化。', 900),
+        (N'品管部', N'QA', N'服務品質稽核；抽查語音與聊天紀錄；客戶評價追蹤；違規管理。', 1000),
+        (N'商務部', N'Business Development', N'實況主合作；VTuber 合作；公會、戰隊合作；聯名活動；分潤方案；推薦碼規劃。', 1100),
+        (N'數據分析部', N'BI', N'客戶數量、回購率、客單價、留存率分析；陪玩師接單率、好評率、平均時薪、熱門角色排行分析。', 1200)
+    ) AS v(name, english_name, description, sort_order)
+)
+INSERT INTO dbo.departments
+(
+    organization_id,
+    name,
+    english_name,
+    description,
+    sort_order,
+    is_active,
+    created_at
+)
+SELECT
+    @default_organization_id,
+    s.name,
+    s.english_name,
+    s.description,
+    s.sort_order,
+    1,
+    SYSUTCDATETIME()
+FROM restore_departments s
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.departments existing
+    WHERE existing.name = s.name
+);
+""");
+
+        await db.Database.ExecuteSqlRawAsync("""
+DECLARE @default_organization_id INT = (SELECT TOP (1) id FROM dbo.organizations ORDER BY id);
+
+WITH restore_service_items AS
+(
+    SELECT *
+    FROM (VALUES
+        (N'boost-rank', N'boost', N'代打', N'代打 - 段位', N'custom', CAST(NULL AS DECIMAL(12,2)), N'另議', N'已改用分階段位代打價目。', 100, CAST(0 AS BIT)),
+        (N'boost-badge', N'boost', N'角色代打', N'代打 - 角色代打 / 牌子', N'custom', CAST(NULL AS DECIMAL(12,2)), N'另議', N'由打手開價；若覺得價格不合可自行溝通。', 160, CAST(1 AS BIT)),
+
+        (N'boost-rank-tier-1-3', N'boost', N'段位', N'代打 - 段位 1-3 階', N'star', CAST(20 AS DECIMAL(12,2)), N'20 / 星', N'求生 / 監管代打。', 120, CAST(1 AS BIT)),
+        (N'boost-rank-tier-3-4', N'boost', N'段位', N'代打 - 段位 3-4 階', N'star', CAST(40 AS DECIMAL(12,2)), N'40 / 星', N'求生 / 監管代打。', 130, CAST(1 AS BIT)),
+        (N'boost-rank-tier-4-5', N'boost', N'段位', N'代打 - 段位 4-5 階', N'star', CAST(60 AS DECIMAL(12,2)), N'60 / 星', N'求生 / 監管代打。', 140, CAST(1 AS BIT)),
+        (N'boost-rank-tier-5-6', N'boost', N'段位', N'代打 - 段位 5-6 階', N'star', CAST(100 AS DECIMAL(12,2)), N'100 / 星', N'求生 / 監管代打。', 150, CAST(1 AS BIT)),
+        (N'boost-rank-tier-7', N'boost', N'段位', N'代打 - 段位 7 階', N'star', CAST(110 AS DECIMAL(12,2)), N'110 / 星', N'求生 / 監管代打。', 155, CAST(1 AS BIT)),
+
+        (N'grind-weekly-1w', N'grind', N'週上限', N'代肝 - 每 1w', N'week', CAST(50 AS DECIMAL(12,2)), N'50 / 週', N'週末單改每 1w +150。', 200, CAST(1 AS BIT)),
+        (N'grind-weekly-42w', N'grind', N'週上限', N'代肝 - 4.2w 打滿', N'week', CAST(200 AS DECIMAL(12,2)), N'200 / 週', N'不接週末單。', 210, CAST(1 AS BIT)),
+        (N'grind-weekly-54w', N'grind', N'週上限', N'代肝 - 5.4w 季末倒數打滿', N'week', CAST(250 AS DECIMAL(12,2)), N'250 / 週', N'季末週末單 +500；不接週日單。', 220, CAST(1 AS BIT)),
+        (N'grind-rank-daily', N'grind', N'低保', N'代肝 - 排位低保 3 場', N'day', CAST(25 AS DECIMAL(12,2)), N'25 / 日', NULL, 230, CAST(1 AS BIT)),
+        (N'grind-team-daily', N'grind', N'低保', N'代肝 - 五排低保 3 場', N'day', CAST(20 AS DECIMAL(12,2)), N'20 / 日', N'記得提醒不包贏。', 240, CAST(1 AS BIT)),
+        (N'grind-weekly-treasures', N'grind', N'週常', N'代肝 - 娛樂週常三珍寶', N'week', CAST(20 AS DECIMAL(12,2)), N'20 / 週', NULL, 250, CAST(1 AS BIT)),
+        (N'grind-lose-match', N'grind', N'敗場', N'代肝 - 刷敗場', N'match', CAST(8 AS DECIMAL(12,2)), N'8 / 場', N'買 10 送 1。', 260, CAST(1 AS BIT)),
+
+        (N'play-entertainment', N'play', N'娛樂陪', N'陪玩 - 娛樂陪', N'hour_person', CAST(100 AS DECIMAL(12,2)), N'100 / 小時 / 人', N'指定陪玩 +10 / 人；帶一個朋友 +50。', 300, CAST(1 AS BIT)),
+        (N'play-technical-tier-1-3', N'play', N'技術陪', N'陪玩 - 技術陪 一至三階', N'hour_person', CAST(150 AS DECIMAL(12,2)), N'150 / 小時 / 人', N'指定陪玩 +10 / 人；帶一個朋友 +50。', 310, CAST(1 AS BIT)),
+        (N'play-technical-tier-4', N'play', N'技術陪', N'陪玩 - 技術陪 四階', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / 小時 / 人', N'指定陪玩 +10 / 人；帶一個朋友 +50。', 320, CAST(1 AS BIT)),
+        (N'play-technical-tier-5', N'play', N'技術陪', N'陪玩 - 技術陪 五階', N'hour_person', CAST(210 AS DECIMAL(12,2)), N'210 / 小時 / 人', N'指定陪玩 +10 / 人；帶一個朋友 +50。', 330, CAST(1 AS BIT)),
+        (N'play-technical-tier-6', N'play', N'技術陪', N'陪玩 - 技術陪 六階', N'hour_person', CAST(230 AS DECIMAL(12,2)), N'230 / 小時 / 人', N'指定陪玩 +10 / 人；帶一個朋友 +50。', 340, CAST(1 AS BIT)),
+        (N'play-technical-tier-7', N'play', N'技術陪', N'陪玩 - 技術陪 七階', N'hour_person', CAST(250 AS DECIMAL(12,2)), N'250 / 小時 / 人', N'指定陪玩 +10 / 人；帶一個朋友 +50。', 350, CAST(1 AS BIT)),
+        (N'play-technical-tier-peak7', N'play', N'技術陪', N'陪玩 - 技術陪 巔七以上', N'hour_person', CAST(300 AS DECIMAL(12,2)), N'300 / 小時 / 人', N'指定陪玩 +10 / 人；帶一個朋友 +50；70 以上暫不接。', 360, CAST(1 AS BIT)),
+        (N'play-teaching', N'play', N'教學陪', N'陪玩 - 教學陪', N'hour_person', CAST(100 AS DECIMAL(12,2)), N'100 / 小時 / 人', N'指定陪玩 +10 / 人；帶一個朋友 +50。', 370, CAST(1 AS BIT)),
+
+        (N'gift-candle', N'gift', N'禮物', N'香氛蠟燭', N'item', CAST(40 AS DECIMAL(12,2)), N'40', NULL, 400, CAST(1 AS BIT)),
+        (N'gift-star-bottle', N'gift', N'禮物', N'星空瓶', N'item', CAST(100 AS DECIMAL(12,2)), N'100', N'冠名顯示一天；可設定專屬稱呼，禁止奇怪暱稱。', 410, CAST(1 AS BIT)),
+        (N'gift-candy-jar', N'gift', N'禮物', N'糖果罐', N'item', CAST(250 AS DECIMAL(12,2)), N'250', N'冠名顯示三天；專屬稱呼。', 420, CAST(1 AS BIT)),
+        (N'gift-love-breakfast', N'gift', N'禮物', N'愛心早餐', N'item', CAST(520 AS DECIMAL(12,2)), N'520', N'冠名顯示七天；專屬頭像；專屬稱呼；一張限時一週 95 折卡。', 430, CAST(1 AS BIT)),
+        (N'gift-deer-pillow', N'gift', N'禮物', N'小鹿抱枕', N'item', CAST(888 AS DECIMAL(12,2)), N'888', N'冠名顯示十天；專屬稱呼；一張限時一週 9 折卡；專屬頭像；可指定專屬小互動。', 440, CAST(1 AS BIT)),
+        (N'gift-basque-cake', N'gift', N'禮物', N'巴斯克蛋糕', N'item', CAST(1314 AS DECIMAL(12,2)), N'1314', N'冠名顯示十五天；專屬頭像；專屬稱呼；一張限時一週 9 折卡；專屬個人身分組；可指定專屬小互動；專屬語音條 30 秒以內。', 450, CAST(1 AS BIT)),
+
+        (N'deposit-bonus-1000', N'deposit_bonus', N'預存', N'預存滿 1000 加贈 100', N'amount', CAST(100 AS DECIMAL(12,2)), N'存 1000 得 1100', N'第一次預存滿 1000 即可享下單九折；每滿 1000 加贈 100 贈物金。', 500, CAST(1 AS BIT)),
+        (N'deposit-bonus-5000', N'deposit_bonus', N'預存', N'預存滿 5000 加贈金額 x2', N'amount', CAST(NULL AS DECIMAL(12,2)), N'存 5000 得 6000', N'預存 5000 以上加贈金額直接 x2。', 510, CAST(1 AS BIT)),
+        (N'deposit-bonus-10000', N'deposit_bonus', N'預存', N'預存滿 10000 以上福利另議', N'amount', CAST(NULL AS DECIMAL(12,2)), N'另議', N'預存滿 10000 以上另有額外福利可私訊討論。', 520, CAST(1 AS BIT))
+    ) AS v(seed_key, category, subcategory, name, unit_type, default_price, price_note, remark, sort_order, is_active)
+)
+INSERT INTO dbo.service_items
+(
+    organization_id,
+    seed_key,
+    category,
+    subcategory,
+    name,
+    unit_type,
+    default_price,
+    price_note,
+    remark,
+    sort_order,
+    is_active,
+    created_at
+)
+SELECT
+    @default_organization_id,
+    s.seed_key,
+    s.category,
+    s.subcategory,
+    s.name,
+    s.unit_type,
+    s.default_price,
+    s.price_note,
+    s.remark,
+    s.sort_order,
+    s.is_active,
+    SYSUTCDATETIME()
+FROM restore_service_items s
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.service_items existing
+    WHERE existing.seed_key = s.seed_key
+);
+""");
+
+        await db.Database.ExecuteSqlRawAsync("""
+DECLARE @default_organization_id INT = (SELECT TOP (1) id FROM dbo.organizations ORDER BY id);
+
+WITH special_companion_items AS
+(
+    SELECT *
+    FROM (VALUES
+        (N'special-companion-singing', N'special_companion', N'特殊陪', N'特殊陪 - 唱歌陪', N'hour_person', CAST(150 AS DECIMAL(12,2)), N'150 / 小時 / 人', NULL, 600),
+        (N'special-companion-text', N'special_companion', N'特殊陪', N'特殊陪 - 文字陪', N'hour_person', CAST(100 AS DECIMAL(12,2)), N'100 / 小時 / 人', NULL, 610),
+        (N'special-companion-punching-bag', N'special_companion', N'特殊陪', N'特殊陪 - 受氣包', N'hour_person', CAST(150 AS DECIMAL(12,2)), N'150 / 小時 / 人', NULL, 620),
+        (N'special-companion-voice', N'special_companion', N'特殊陪', N'特殊陪 - 語音陪', N'hour_person', CAST(120 AS DECIMAL(12,2)), N'120 / 小時 / 人', NULL, 630),
+        (N'special-companion-sleep', N'special_companion', N'特殊陪', N'特殊陪 - 哄睡陪', N'hour_person', CAST(150 AS DECIMAL(12,2)), N'150 / 小時 / 人', NULL, 640)
+    ) AS v(seed_key, category, subcategory, name, unit_type, default_price, price_note, remark, sort_order)
+)
+INSERT INTO dbo.service_items
+(
+    organization_id,
+    seed_key,
+    category,
+    subcategory,
+    name,
+    unit_type,
+    default_price,
+    price_note,
+    remark,
+    sort_order,
+    is_active,
+    created_at
+)
+SELECT
+    @default_organization_id,
+    s.seed_key,
+    s.category,
+    s.subcategory,
+    s.name,
+    s.unit_type,
+    s.default_price,
+    s.price_note,
+    s.remark,
+    s.sort_order,
+    1,
+    SYSUTCDATETIME()
+FROM special_companion_items s
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.service_items existing
+    WHERE existing.seed_key = s.seed_key
+);
 """);
 
         await db.Database.ExecuteSqlRawAsync("""
@@ -843,8 +1089,12 @@ IF EXISTS
         await db.Database.ExecuteSqlRawAsync("""
 IF COL_LENGTH('dbo.orders', 'created_audit_log_id') IS NULL
     ALTER TABLE dbo.orders ADD created_audit_log_id BIGINT NULL;
+IF COL_LENGTH('dbo.orders', 'order_type') IS NULL
+    ALTER TABLE dbo.orders ADD order_type NVARCHAR(20) NOT NULL CONSTRAINT DF_orders_order_type DEFAULT N'boosting';
 IF COL_LENGTH('dbo.orders', 'cancelled_audit_log_id') IS NULL
     ALTER TABLE dbo.orders ADD cancelled_audit_log_id BIGINT NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_orders_order_type')
+    EXEC(N'ALTER TABLE dbo.orders WITH CHECK ADD CONSTRAINT CK_orders_order_type CHECK (order_type IN (N''boosting'', N''farming'', N''companion'', N''prepaid''))');
 IF COL_LENGTH('dbo.payments', 'generated_audit_log_id') IS NULL
     ALTER TABLE dbo.payments ADD generated_audit_log_id BIGINT NULL;
 IF COL_LENGTH('dbo.payments', 'paid_audit_log_id') IS NULL
@@ -1080,19 +1330,61 @@ BEGIN
         target_type NVARCHAR(50) NOT NULL,
         target_id INT NOT NULL,
         target_uuid UNIQUEIDENTIFIER NULL,
+        attachment_kind NVARCHAR(30) NULL,
         original_file_name NVARCHAR(255) NOT NULL,
         stored_file_name NVARCHAR(120) NOT NULL,
         storage_path NVARCHAR(500) NOT NULL,
         content_type NVARCHAR(120) NOT NULL,
+        file_extension NVARCHAR(20) NULL,
         file_size BIGINT NOT NULL,
+        sha256_hash CHAR(64) NULL,
         uploaded_by_login_user_id INT NULL,
         note NVARCHAR(500) NULL,
+        is_deleted BIT NOT NULL CONSTRAINT DF_file_attachments_is_deleted DEFAULT 0,
+        deleted_at DATETIME2 NULL,
+        deleted_by_login_user_id INT NULL,
         created_at DATETIME2 NOT NULL CONSTRAINT DF_file_attachments_created_at DEFAULT SYSUTCDATETIME(),
         CONSTRAINT FK_file_attachments_organization FOREIGN KEY (organization_id) REFERENCES dbo.organizations(id),
-        CONSTRAINT FK_file_attachments_uploaded_by FOREIGN KEY (uploaded_by_login_user_id) REFERENCES dbo.login_users(id)
+        CONSTRAINT FK_file_attachments_uploaded_by FOREIGN KEY (uploaded_by_login_user_id) REFERENCES dbo.login_users(id),
+        CONSTRAINT FK_file_attachments_deleted_by FOREIGN KEY (deleted_by_login_user_id) REFERENCES dbo.login_users(id)
     );
-    CREATE INDEX IX_file_attachments_target ON dbo.file_attachments(target_type, target_id, created_at);
+    CREATE INDEX IX_file_attachments_target ON dbo.file_attachments(organization_id, target_type, target_id, is_deleted, created_at);
+    CREATE INDEX IX_file_attachments_target_uuid ON dbo.file_attachments(organization_id, target_type, target_uuid);
     CREATE INDEX IX_file_attachments_uploaded_by ON dbo.file_attachments(uploaded_by_login_user_id);
+END;
+
+IF COL_LENGTH('dbo.file_attachments', 'attachment_kind') IS NULL
+BEGIN
+    ALTER TABLE dbo.file_attachments ADD attachment_kind NVARCHAR(30) NULL;
+END;
+IF COL_LENGTH('dbo.file_attachments', 'file_extension') IS NULL
+BEGIN
+    ALTER TABLE dbo.file_attachments ADD file_extension NVARCHAR(20) NULL;
+END;
+IF COL_LENGTH('dbo.file_attachments', 'sha256_hash') IS NULL
+BEGIN
+    ALTER TABLE dbo.file_attachments ADD sha256_hash CHAR(64) NULL;
+END;
+IF COL_LENGTH('dbo.file_attachments', 'is_deleted') IS NULL
+BEGIN
+    ALTER TABLE dbo.file_attachments ADD is_deleted BIT NOT NULL CONSTRAINT DF_file_attachments_is_deleted DEFAULT 0;
+END;
+IF COL_LENGTH('dbo.file_attachments', 'deleted_at') IS NULL
+BEGIN
+    ALTER TABLE dbo.file_attachments ADD deleted_at DATETIME2 NULL;
+END;
+IF COL_LENGTH('dbo.file_attachments', 'deleted_by_login_user_id') IS NULL
+BEGIN
+    ALTER TABLE dbo.file_attachments ADD deleted_by_login_user_id INT NULL;
+END;
+IF OBJECT_ID(N'dbo.FK_file_attachments_deleted_by', N'F') IS NULL
+BEGIN
+    ALTER TABLE dbo.file_attachments
+    ADD CONSTRAINT FK_file_attachments_deleted_by FOREIGN KEY (deleted_by_login_user_id) REFERENCES dbo.login_users(id);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_file_attachments_target_uuid' AND object_id = OBJECT_ID(N'dbo.file_attachments'))
+BEGIN
+    CREATE INDEX IX_file_attachments_target_uuid ON dbo.file_attachments(organization_id, target_type, target_uuid);
 END;
 """);
 

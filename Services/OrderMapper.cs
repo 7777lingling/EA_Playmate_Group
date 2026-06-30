@@ -12,6 +12,7 @@ public static class OrderMapper
             Id = order.Id,
             Uuid = order.Uuid,
             OrderNo = order.OrderNo,
+            OrderType = order.OrderType,
             OrderDate = order.OrderDate,
             OwnerUserId = order.OwnerUserId,
             OwnerNickname = order.OwnerUser?.Nickname,

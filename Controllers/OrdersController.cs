@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
@@ -52,6 +53,7 @@ public sealed class OrdersController : ControllerBase
                 Id = x.Id,
                 Uuid = x.Uuid,
                 OrderNo = x.OrderNo,
+                OrderType = x.OrderType,
                 OrderDate = x.OrderDate,
                 OwnerNickname = x.OwnerUser == null ? null : x.OwnerUser.Nickname,
                 Amount = x.Amount,
@@ -81,10 +83,66 @@ public sealed class OrdersController : ControllerBase
     }
 
     [HttpPost]
+    [Consumes("application/json")]
     [RequirePermission("Order.Create")]
     public async Task<ActionResult<OrderDto>> CreateOrder(CreateOrderRequestDto request)
     {
         var result = await _orderService.CreateOrderAsync(request);
+        if (result.Succeeded)
+        {
+            return CreatedAtAction(nameof(GetOrder), new { id = result.Value!.Id }, result.Value);
+        }
+
+        return ToActionResult(result);
+    }
+
+    [HttpPost]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(FileAttachmentService.MaxFileSize * 10)]
+    [RequirePermission("Order.Create")]
+    public async Task<ActionResult<OrderDto>> CreateOrderMultipart(
+        [FromForm] string? orderNo,
+        [FromForm] string? orderType,
+        [FromForm] DateOnly orderDate,
+        [FromForm] int? ownerUserId,
+        [FromForm] decimal amount,
+        [FromForm] decimal commissionRate,
+        [FromForm] decimal? commissionAmount,
+        [FromForm] string status,
+        [FromForm] string customerPaymentStatus,
+        [FromForm] string? remark,
+        [FromForm] string membersJson,
+        [FromForm] List<IFormFile> attachments)
+    {
+        List<CreateOrderMemberRequestDto> members;
+        try
+        {
+            members = JsonSerializer.Deserialize<List<CreateOrderMemberRequestDto>>(
+                membersJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+        }
+        catch (JsonException)
+        {
+            return ApiErrors.BadRequest("invalid_members", "MembersJson must be a valid members array.");
+        }
+
+        var result = await _orderService.CreateOrderWithAttachmentsAsync(
+            new CreateOrderRequestDto
+            {
+                OrderNo = orderNo,
+                OrderType = string.IsNullOrWhiteSpace(orderType) ? "boosting" : orderType,
+                OrderDate = orderDate,
+                OwnerUserId = ownerUserId,
+                Amount = amount,
+                CommissionRate = commissionRate == 0 ? 0.1000m : commissionRate,
+                CommissionAmount = commissionAmount,
+                Status = string.IsNullOrWhiteSpace(status) ? "completed" : status,
+                CustomerPaymentStatus = string.IsNullOrWhiteSpace(customerPaymentStatus) ? "unpaid" : customerPaymentStatus,
+                Remark = remark,
+                Members = members
+            },
+            attachments ?? []);
+
         if (result.Succeeded)
         {
             return CreatedAtAction(nameof(GetOrder), new { id = result.Value!.Id }, result.Value);

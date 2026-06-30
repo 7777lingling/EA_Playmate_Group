@@ -21,6 +21,8 @@ const state = {
   organizations: [],
   activeDepartmentId: null,
   activeMemberPicker: null,
+  giftRecordAttachmentFiles: [],
+  orderAttachmentFiles: [],
   view: "dashboard",
   serviceCategory: "boost",
   auth: null
@@ -65,6 +67,12 @@ const labels = {
     partial: "部分收款",
     paid: "已收款",
     refunded: "已退款"
+  },
+  orderType: {
+    boosting: "代打",
+    farming: "代肝",
+    companion: "陪玩",
+    prepaid: "預存"
   },
   memberRole: {
     player: "團員",
@@ -443,9 +451,11 @@ function bindForms() {
   document.getElementById("departmentMemberForm").addEventListener("submit", submitDepartmentMember);
   document.getElementById("cancelDepartmentMemberEditBtn").addEventListener("click", resetDepartmentMemberForm);
   document.getElementById("orderForm").addEventListener("submit", submitOrder);
+  document.getElementById("orderAttachmentInput").addEventListener("change", handleOrderAttachmentChange);
   document.getElementById("copyOrderBtn").addEventListener("click", copyOrderAsNew);
   document.getElementById("cancelOrderEditBtn").addEventListener("click", resetOrderForm);
   document.getElementById("giftRecordForm").addEventListener("submit", submitGiftRecord);
+  document.getElementById("giftRecordAttachmentInput").addEventListener("change", handleGiftRecordAttachmentChange);
   document.getElementById("cancelGiftRecordEditBtn").addEventListener("click", resetGiftRecordForm);
   bindGiftPicker();
   document.getElementById("paymentForm").addEventListener("submit", submitPaymentGeneration);
@@ -455,6 +465,7 @@ function bindForms() {
   document.getElementById("orderForm").addEventListener("input", handleOrderInput);
   bindMemberPicker();
   bindRecordModal();
+  bindAttachmentModal();
   setupLogExperience();
 }
 
@@ -617,6 +628,21 @@ function bindRecordModal() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !modal.hidden) {
       closeRecordModal();
+    }
+  });
+}
+
+function bindAttachmentModal() {
+  const modal = document.getElementById("attachmentModal");
+  document.getElementById("attachmentModalClose").addEventListener("click", closeAttachmentModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeAttachmentModal();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modal.hidden) {
+      closeAttachmentModal();
     }
   });
 }
@@ -931,6 +957,112 @@ function openRecordModal({ title, eyebrow, content }) {
   document.getElementById("recordModalEyebrow").textContent = eyebrow;
   document.getElementById("recordModalBody").innerHTML = content;
   document.getElementById("recordModal").hidden = false;
+}
+
+function closeAttachmentModal() {
+  document.getElementById("attachmentModal").hidden = true;
+}
+
+async function openAttachmentModal(title, targetType, targetId, options = {}) {
+  document.getElementById("attachmentModalTitle").textContent = title;
+  document.getElementById("attachmentModalEyebrow").textContent = label("targetType", targetType) || targetType;
+  document.getElementById("attachmentModal").hidden = false;
+  await renderAttachmentModalBody(targetType, targetId, options);
+}
+
+async function renderAttachmentModalBody(targetType, targetId, options = {}) {
+  const body = document.getElementById("attachmentModalBody");
+  const canEdit = options.canEdit ?? canEditAttachmentTarget(targetType);
+  body.innerHTML = `<div class="attachment-body"><p class="muted">附件載入中...</p></div>`;
+
+  let rows = [];
+  try {
+    rows = await api(`/api/fileattachments?targetType=${encodeURIComponent(targetType)}&targetId=${encodeURIComponent(targetId)}`);
+  } catch (error) {
+    body.innerHTML = `<div class="attachment-body"><p class="muted">${escapeHtml(error.message)}</p></div>`;
+    return;
+  }
+
+  const uploadId = `attachmentUpload_${targetType}_${targetId}`;
+  body.innerHTML = `
+    <div class="attachment-body">
+      <div class="attachment-list">
+        ${rows.length ? rows.map((file) => `
+          <div class="attachment-row">
+            <div>
+              <strong>${escapeHtml(file.originalFileName)}</strong>
+              <small>${escapeHtml(file.attachmentKind || file.fileExtension || file.contentType)} · ${formatFileSize(file.fileSize)} · ${formatDateTime(file.createdAt)}</small>
+            </div>
+            <div class="table-actions">
+              <a class="ghost small attachment-link" href="/api/fileattachments/${file.id}/preview" target="_blank" rel="noopener">預覽</a>
+              <a class="ghost small attachment-link" href="/api/fileattachments/${file.id}/download" target="_blank" rel="noopener">下載</a>
+              ${canEdit ? `<button class="ghost small danger-action" type="button" data-attachment-delete="${file.id}">刪除</button>` : ""}
+            </div>
+          </div>
+        `).join("") : `<p class="muted">尚未上傳附件。</p>`}
+      </div>
+      ${canEdit ? `
+        <label class="ghost attachment-trigger attachment-modal-upload" for="${uploadId}">
+          <input id="${uploadId}" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.xlsx,.pptx,.csv,.txt,.log,.mp4,.mov">
+          <span data-attachment-label>${escapeHtml(options.uploadLabel || "新增附件")}</span>
+        </label>
+      ` : ""}
+    </div>
+  `;
+
+  body.querySelector(`#${uploadId}`)?.addEventListener("change", async (event) => {
+    const files = [...(event.currentTarget.files || [])];
+    if (files.length === 0) {
+      return;
+    }
+
+    await runAction(async () => {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("targetType", targetType);
+        formData.append("targetId", String(targetId));
+        formData.append("attachmentKind", options.attachmentKind || "general");
+        formData.append("note", options.note || "");
+        formData.append("file", file);
+        await api("/api/fileattachments", { method: "POST", body: formData });
+      }
+      await renderAttachmentModalBody(targetType, targetId, options);
+    });
+  });
+
+  body.querySelectorAll("[data-attachment-delete]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!window.confirm("確定刪除此附件？")) {
+        return;
+      }
+
+      await runAction(async () => {
+        await api(`/api/fileattachments/${button.dataset.attachmentDelete}`, { method: "DELETE" });
+        await renderAttachmentModalBody(targetType, targetId, options);
+      });
+    });
+  });
+}
+
+function canEditAttachmentTarget(targetType) {
+  return {
+    orders: hasPermission("Order.Edit"),
+    gift_records: hasPermission("Gift.Edit"),
+    payments: hasPermission("Settlement.Close"),
+    money_logs: hasAnyPermission(["Settlement.Close", "Account.Manage"]),
+    audit_logs: hasAnyPermission(["Account.Manage", "Settlement.Close"])
+  }[targetType] ?? false;
+}
+
+function formatFileSize(bytes) {
+  const value = Number(bytes || 0);
+  if (value >= 1024 * 1024) {
+    return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  }
+  if (value >= 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${value} B`;
 }
 
 function recordDetail(labelText, value) {
@@ -1397,6 +1529,10 @@ function hasPermission(code) {
     currentPermissions().has(code);
 }
 
+function isBootstrapMode() {
+  return state.auth?.authRequired === false;
+}
+
 function hasAnyPermission(codes) {
   return codes.some((code) => hasPermission(code));
 }
@@ -1457,8 +1593,9 @@ function applyActionPermissions() {
 
 async function api(path, options = {}) {
   const { skipAuthRedirect, ...fetchOptions } = options;
+  const isFormData = fetchOptions.body instanceof FormData;
   const response = await fetch(path, {
-    headers: {
+    headers: isFormData ? { ...(options.headers || {}) } : {
       "Content-Type": "application/json",
       ...(options.headers || {})
     },
@@ -1473,6 +1610,12 @@ async function api(path, options = {}) {
     let message = `${response.status} ${response.statusText}`;
     try {
       const error = await response.json();
+      console.error("API request failed", {
+        path,
+        status: response.status,
+        statusText: response.statusText,
+        error
+      });
       message = error.detail || error.message || message;
       if (error.errors) {
         message += ` ${Object.values(error.errors).flat().join(" ")}`;
@@ -1602,10 +1745,13 @@ async function refreshAll() {
       await loadUsers();
     }
     if (state.view === "organization") {
+      if (state.auth?.user?.systemRole === "admin" || isBootstrapMode()) {
+        await loadOrganizations();
+      }
       await loadDepartments();
     }
     if (state.view === "loginUsers") {
-      if (state.auth?.user?.systemRole === "admin") {
+      if (state.auth?.user?.systemRole === "admin" || isBootstrapMode()) {
         await loadOrganizations();
       }
       await loadLoginUsers();
@@ -1742,7 +1888,7 @@ function renderOrganizationSelect() {
     return;
   }
 
-  field.hidden = state.auth?.user?.systemRole !== "admin";
+  field.hidden = state.auth?.user?.systemRole !== "admin" && !isBootstrapMode();
   select.innerHTML = state.organizations
     .filter((organization) => organization.isActive)
     .map((organization) => `<option value="${organization.id}">${escapeHtml(organization.name)}</option>`)
@@ -2012,7 +2158,9 @@ function renderServiceItems() {
       <td>${escapeHtml(unitTypeText(item.unitType))}</td>
       <td>${escapeHtml(item.remark || "")}</td>
       <td class="service-order-action">
-        <button class="primary small" type="button" data-service-order="${item.id}">點單</button>
+        ${item.category === "gift"
+          ? `<button class="primary small" type="button" data-service-gift="${item.id}">贈送</button>`
+          : `<button class="primary small" type="button" data-service-order="${item.id}">點單</button>`}
       </td>
     </tr>
   `).join("") : emptyRow(6);
@@ -2022,6 +2170,15 @@ function renderServiceItems() {
       const item = state.serviceItems.find((serviceItem) => serviceItem.id === Number(button.dataset.serviceOrder));
       if (item) {
         startOrderFromService(item);
+      }
+    });
+  });
+
+  body.querySelectorAll("[data-service-gift]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = state.serviceItems.find((serviceItem) => serviceItem.id === Number(button.dataset.serviceGift));
+      if (item) {
+        startGiftRecordFromService(item);
       }
     });
   });
@@ -2045,6 +2202,7 @@ function renderGiftRecords() {
       <td>${escapeHtml(record.remark || "—")}</td>
       <td>
         <button class="ghost small" data-gift-edit="${record.id}">編輯</button>
+        <button class="ghost small" data-gift-attachments="${record.id}">附件</button>
         <button class="ghost small danger-action" data-gift-delete="${record.id}">刪除</button>
       </td>
     </tr>
@@ -2056,6 +2214,17 @@ function renderGiftRecords() {
       if (record) {
         startGiftRecordEdit(record);
       }
+    });
+  });
+
+  body.querySelectorAll("[data-gift-attachments]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const record = state.giftRecords.find((item) => item.id === Number(button.dataset.giftAttachments));
+      openAttachmentModal("送禮紀錄附件", "gift_records", Number(button.dataset.giftAttachments), {
+        attachmentKind: record?.customerPaymentStatus === "paid" || record?.customerPaymentStatus === "partial" ? "payment_proof" : "general",
+        uploadLabel: "新增付款證明/送禮截圖",
+        canEdit: hasPermission("Gift.Edit")
+      });
     });
   });
 
@@ -2235,6 +2404,7 @@ function renderServiceCategoryTabs() {
     ["boost", "代打"],
     ["grind", "代肝"],
     ["play", "陪玩"],
+    ["special_companion", "特殊陪"],
     ["gift", "禮物"],
     ["deposit_bonus", "預存"],
     ["other", "其他"]
@@ -2312,6 +2482,7 @@ function renderOrders() {
       <td>${order.id}</td>
       <td>${order.orderDate}</td>
       <td>${escapeHtml(order.orderNo || "")}</td>
+      <td>${escapeHtml(orderTypeText(order.orderType))}</td>
       <td>${money.format(order.amount)}</td>
       <td>${money.format(order.commissionAmount)}</td>
       <td>${statusPill(order.status)}</td>
@@ -2319,17 +2490,33 @@ function renderOrders() {
       <td>
         <div class="table-actions">
           <button class="ghost small" data-order-edit="${order.id}">編輯</button>
+          <button class="ghost small" data-order-attachments="${order.id}">附件</button>
           <button class="ghost small danger-action" data-order-delete="${order.id}">刪除</button>
         </div>
       </td>
     </tr>
-  `).join("") : emptyRow(8);
+  `).join("") : emptyRow(9);
 
   body.querySelectorAll("[data-order-edit]").forEach((button) => {
     button.addEventListener("click", async () => {
       await runAction(async () => {
         const order = await api(`/api/orders/${button.dataset.orderEdit}`);
         startOrderEdit(order);
+      });
+    });
+  });
+
+  body.querySelectorAll("[data-order-attachments]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const order = state.orders.find((item) => item.id === Number(button.dataset.orderAttachments));
+      openAttachmentModal("訂單附件", "orders", Number(button.dataset.orderAttachments), {
+        attachmentKind: order?.customerPaymentStatus === "paid" || order?.customerPaymentStatus === "partial"
+          ? "payment_proof"
+          : order?.status === "disputed"
+            ? "evidence"
+            : "general",
+        uploadLabel: "新增收款證明/爭議依據",
+        canEdit: hasPermission("Order.Edit")
       });
     });
   });
@@ -2361,6 +2548,7 @@ function renderPayments() {
           ${payment.paymentStatus === "paid"
             ? plainText("已發薪", "good")
             : `<button class="ghost small" data-payment-paid="${payment.id}">標記已發</button>`}
+          <button class="ghost small" data-payment-attachments="${payment.id}">附件</button>
         </div>
       </td>
     </tr>
@@ -2370,6 +2558,16 @@ function renderPayments() {
     button.addEventListener("click", async () => {
       await api(`/api/payments/${button.dataset.paymentPaid}/mark-paid`, { method: "POST", body: "{}" });
       await loadPayments();
+    });
+  });
+
+  body.querySelectorAll("[data-payment-attachments]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openAttachmentModal("月結附件", "payments", Number(button.dataset.paymentAttachments), {
+        attachmentKind: "payment_proof",
+        uploadLabel: "新增付款證明",
+        canEdit: hasPermission("Settlement.Close")
+      });
     });
   });
 
@@ -2634,11 +2832,27 @@ function renderAuditLogs(rows) {
       <td>${escapeHtml(auditTargetText(log))}</td>
       <td>${escapeHtml(auditNote(log) || auditSummary(log))}</td>
       <td>${escapeHtml(log.ipAddress || "")}</td>
-      <td><button class="ghost small" data-audit-detail-new="${log.id}" type="button">詳情</button></td>
+      <td>
+        <div class="table-actions">
+          <button class="ghost small" data-audit-detail-new="${log.id}" type="button">詳情</button>
+          <button class="ghost small" data-audit-attachments="${log.id}" type="button">附件</button>
+        </div>
+      </td>
     </tr>
   `).join("") : emptyRow(8);
 
   bindLogRowDetails(body, filteredRows, "audit", openAuditLogDetail);
+
+  body.querySelectorAll("[data-audit-attachments]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openAttachmentModal("操作紀錄附件", "audit_logs", Number(button.dataset.auditAttachments), {
+        attachmentKind: "audit_evidence",
+        uploadLabel: "新增稽核附件",
+        canEdit: hasAnyPermission(["Account.Manage", "Settlement.Close"])
+      });
+    });
+  });
 }
 
 function renderMoneyLogs(rows) {
@@ -2673,6 +2887,7 @@ function renderMoneyLogs(rows) {
       <td>
         <div class="table-actions">
           <button class="ghost small" data-money-detail-new="${log.id}" type="button">詳情</button>
+          <button class="ghost small" data-money-attachments="${log.id}" type="button">附件</button>
           ${canReverse && !log.isReversal && !rows.some((item) => item.reversedMoneyLogId === log.id)
             ? `<button class="ghost small danger" data-money-reverse="${log.id}" type="button">沖正</button>`
             : ""}
@@ -2682,6 +2897,17 @@ function renderMoneyLogs(rows) {
   `).join("") : emptyRow(8);
   applyActionPermissions();
   bindLogRowDetails(body, filteredRows, "money", openMoneyLogDetail);
+
+  body.querySelectorAll("[data-money-attachments]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openAttachmentModal("金流紀錄附件", "money_logs", Number(button.dataset.moneyAttachments), {
+        attachmentKind: "money_proof",
+        uploadLabel: "新增金流依據",
+        canEdit: hasAnyPermission(["Settlement.Close", "Account.Manage"])
+      });
+    });
+  });
 
   body.querySelectorAll("[data-money-reverse]").forEach((button) => {
     button.addEventListener("click", async (event) => {
@@ -3079,11 +3305,24 @@ async function submitLoginUser(event) {
   }
 
   await runAction(async () => {
+    if ((state.auth?.user?.systemRole === "admin" || isBootstrapMode()) && state.organizations.length === 0) {
+      await loadOrganizations();
+    }
+
+    const selectedOrganizationId = Number(form.elements.organizationId?.value) ||
+      existingLoginUser?.organizationId ||
+      state.auth?.user?.organizationId;
+
+    if (!selectedOrganizationId) {
+      showAlert("請先建立或選擇有效的組織。");
+      return;
+    }
+
     const payload = {
       displayName: data.get("nickname"),
       loginAccount: data.get("loginAccount"),
       systemRole: data.get("systemRole"),
-      organizationId: Number(data.get("organizationId")) || existingLoginUser?.organizationId || state.auth?.user?.organizationId,
+      organizationId: selectedOrganizationId,
       userId: Number(data.get("userId")) || null
     };
 
@@ -3293,6 +3532,36 @@ function resetDepartmentForm() {
   document.getElementById("cancelDepartmentEditBtn").hidden = true;
 }
 
+function handleGiftRecordAttachmentChange(event) {
+  state.giftRecordAttachmentFiles = [...(event.currentTarget.files || [])];
+  renderGiftRecordAttachmentButton();
+}
+
+function renderGiftRecordAttachmentButton() {
+  const button = document.getElementById("giftRecordAttachmentBtn");
+  if (!button) {
+    return;
+  }
+
+  const count = state.giftRecordAttachmentFiles.length;
+  const label = button.querySelector("[data-attachment-label]");
+  if (label) {
+    label.textContent = count ? `附件 (${count})：付款證明/送禮截圖` : "附件：付款證明/送禮截圖";
+  }
+  button.title = count
+    ? state.giftRecordAttachmentFiles.map((file) => file.name).join("\n")
+    : "用途：付款證明、送禮截圖、交易紀錄";
+}
+
+function clearGiftRecordAttachmentDraft() {
+  state.giftRecordAttachmentFiles = [];
+  const input = document.getElementById("giftRecordAttachmentInput");
+  if (input) {
+    input.value = "";
+  }
+  renderGiftRecordAttachmentButton();
+}
+
 async function submitGiftRecord(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -3317,10 +3586,46 @@ async function submitGiftRecord(event) {
       remark: emptyToNull(data.get("remark"))
     };
 
-    await api(isEdit ? `/api/giftrecords/${giftRecordId}` : "/api/giftrecords", {
-      method: isEdit ? "PUT" : "POST",
-      body: JSON.stringify(payload)
-    });
+    if (isEdit) {
+      await api(`/api/giftrecords/${giftRecordId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+    } else {
+      const requiresAttachment = payload.customerPaymentStatus === "paid"
+        || payload.customerPaymentStatus === "partial";
+      if (requiresAttachment && state.giftRecordAttachmentFiles.length === 0) {
+        showAlert("此送禮收款狀態需要附件，請先選取付款證明或截圖。");
+        return;
+      }
+
+      if (state.giftRecordAttachmentFiles.length > 0) {
+        const createData = new FormData();
+        createData.append("giftDate", payload.giftDate);
+        createData.append("bossUserId", String(payload.bossUserId));
+        createData.append("recipientUserId", String(payload.recipientUserId));
+        createData.append("serviceItemId", payload.serviceItemId == null ? "" : String(payload.serviceItemId));
+        createData.append("giftName", payload.giftName || "");
+        createData.append("amount", String(payload.amount));
+        createData.append("quantity", String(payload.quantity));
+        createData.append("customerPaymentStatus", payload.customerPaymentStatus);
+        createData.append("status", payload.status);
+        createData.append("remark", payload.remark || "");
+        state.giftRecordAttachmentFiles.forEach((file) => {
+          createData.append("attachments", file);
+        });
+
+        await api("/api/giftrecords", {
+          method: "POST",
+          body: createData
+        });
+      } else {
+        await api("/api/giftrecords", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+      }
+    }
 
     resetGiftRecordForm();
     await loadGiftRecords();
@@ -3346,7 +3651,14 @@ function startGiftRecordEdit(record) {
   document.getElementById("giftRecordFormTitle").textContent = "編輯送禮紀錄";
   document.getElementById("giftRecordSubmitBtn").textContent = "更新紀錄";
   document.getElementById("cancelGiftRecordEditBtn").hidden = false;
+  clearGiftRecordAttachmentDraft();
+  document.getElementById("giftRecordAttachmentBtn").hidden = true;
   form.scrollIntoView({ behavior: "smooth", block: "start" });
+  void openAttachmentModal("送禮紀錄附件", "gift_records", record.id, {
+    attachmentKind: record.customerPaymentStatus === "paid" || record.customerPaymentStatus === "partial" ? "payment_proof" : "general",
+    uploadLabel: "新增付款證明/送禮截圖",
+    canEdit: hasPermission("Gift.Edit")
+  });
 }
 
 function resetGiftRecordForm() {
@@ -3361,6 +3673,8 @@ function resetGiftRecordForm() {
   document.getElementById("giftRecordFormTitle").textContent = "新增送禮紀錄";
   document.getElementById("giftRecordSubmitBtn").textContent = "新增紀錄";
   document.getElementById("cancelGiftRecordEditBtn").hidden = true;
+  clearGiftRecordAttachmentDraft();
+  document.getElementById("giftRecordAttachmentBtn").hidden = false;
   setDefaultDates();
   renderSelects();
 }
@@ -3377,6 +3691,7 @@ async function startOrderFromService(item) {
   const form = document.getElementById("orderForm");
   const price = item.defaultPrice ?? 0;
   const unitText = unitTypeText(item.unitType);
+  form.elements.orderType.value = orderTypeFromServiceCategory(item.category);
   form.elements.serviceName.value = item.name;
   form.elements.serviceUnitPrice.value = item.defaultPrice ?? "";
   form.elements.serviceUnitType.value = item.unitType || "";
@@ -3390,6 +3705,51 @@ async function startOrderFromService(item) {
   updateOrderCalc();
   showAlert(`已帶入「${item.name}」到新增訂單。`, false);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function startGiftRecordFromService(item) {
+  const navButton = document.querySelector('.nav-tabs button[data-view="giftRecords"]');
+  if (navButton) {
+    navButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  resetGiftRecordForm();
+  setGiftPickerValue(item.id);
+
+  const form = document.getElementById("giftRecordForm");
+  showAlert(`已帶入「${item.name}」到送禮紀錄。`, false);
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function handleOrderAttachmentChange(event) {
+  state.orderAttachmentFiles = [...(event.currentTarget.files || [])];
+  renderOrderAttachmentButton();
+}
+
+function renderOrderAttachmentButton() {
+  const button = document.getElementById("orderAttachmentBtn");
+  if (!button) {
+    return;
+  }
+
+  const count = state.orderAttachmentFiles.length;
+  const label = button.querySelector("[data-attachment-label]");
+  if (label) {
+    label.textContent = count ? `附件 (${count})：收款證明/爭議依據` : "附件：收款證明/爭議依據";
+  }
+  button.title = count
+    ? state.orderAttachmentFiles.map((file) => file.name).join("\n")
+    : "用途：收款證明、付款截圖、爭議依據";
+}
+
+function clearOrderAttachmentDraft() {
+  state.orderAttachmentFiles = [];
+  const input = document.getElementById("orderAttachmentInput");
+  if (input) {
+    input.value = "";
+  }
+  renderOrderAttachmentButton();
 }
 
 async function submitOrder(event) {
@@ -3428,6 +3788,7 @@ async function submitOrder(event) {
   await runAction(async () => {
     const payload = {
       orderNo: emptyToNull(data.get("orderNo")),
+      orderType: data.get("orderType") || "boosting",
       orderDate: data.get("orderDate"),
       ownerUserId: data.get("ownerUserId") ? Number(data.get("ownerUserId")) : null,
       amount,
@@ -3439,10 +3800,48 @@ async function submitOrder(event) {
       members
     };
 
-    await api(isEdit ? `/api/orders/${orderId}` : "/api/orders", {
-      method: isEdit ? "PUT" : "POST",
-      body: JSON.stringify(payload)
-    });
+    if (isEdit) {
+      await api(`/api/orders/${orderId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+    } else {
+      const requiresAttachment = payload.status === "disputed"
+        || payload.customerPaymentStatus === "paid"
+        || payload.customerPaymentStatus === "partial";
+      if (requiresAttachment && state.orderAttachmentFiles.length === 0) {
+        showAlert("此訂單狀態需要附件，請先選取付款證明或依據。");
+        return;
+      }
+
+      if (state.orderAttachmentFiles.length > 0) {
+        const createData = new FormData();
+        createData.append("orderNo", payload.orderNo || "");
+        createData.append("orderType", payload.orderType);
+        createData.append("orderDate", payload.orderDate);
+        createData.append("ownerUserId", payload.ownerUserId == null ? "" : String(payload.ownerUserId));
+        createData.append("amount", String(payload.amount));
+        createData.append("commissionRate", String(payload.commissionRate));
+        createData.append("commissionAmount", String(payload.commissionAmount));
+        createData.append("status", payload.status);
+        createData.append("customerPaymentStatus", payload.customerPaymentStatus);
+        createData.append("remark", payload.remark || "");
+        createData.append("membersJson", JSON.stringify(payload.members));
+        state.orderAttachmentFiles.forEach((file) => {
+          createData.append("attachments", file);
+        });
+
+        await api("/api/orders", {
+          method: "POST",
+          body: createData
+        });
+      } else {
+        await api("/api/orders", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+      }
+    }
     resetOrderForm();
     await loadOrders();
     await loadDashboard();
@@ -3456,6 +3855,7 @@ function startOrderEdit(order) {
   form.elements.orderId.value = order.id;
   form.elements.orderDate.value = order.orderDate;
   form.elements.orderNo.value = order.orderNo || "";
+  form.elements.orderType.value = order.orderType || "boosting";
   form.elements.ownerUserId.value = order.ownerUserId || "";
   refreshMemberPickerFields(form);
   form.elements.amount.value = order.amount;
@@ -3477,13 +3877,27 @@ function startOrderEdit(order) {
   document.getElementById("orderSubmitBtn").textContent = "更新此訂單";
   document.getElementById("copyOrderBtn").hidden = false;
   document.getElementById("cancelOrderEditBtn").hidden = false;
+  clearOrderAttachmentDraft();
+  document.getElementById("orderAttachmentBtn").hidden = true;
   updateOrderCalc();
   form.scrollIntoView({ behavior: "smooth", block: "start" });
+  void openAttachmentModal("訂單附件", "orders", order.id, {
+    attachmentKind: order.customerPaymentStatus === "paid" || order.customerPaymentStatus === "partial"
+      ? "payment_proof"
+      : order.status === "disputed"
+        ? "evidence"
+        : "general",
+    uploadLabel: "新增收款證明/爭議依據",
+    canEdit: hasPermission("Order.Edit")
+  });
 }
 
 function copyOrderAsNew() {
   const form = document.getElementById("orderForm");
   form.elements.orderId.value = "";
+  form.elements.orderType.value = form.elements.orderType.value || "boosting";
+  clearOrderAttachmentDraft();
+  document.getElementById("orderAttachmentBtn").hidden = false;
   document.getElementById("orderFormTitle").textContent = "新增訂單";
   document.getElementById("orderSubmitBtn").textContent = "新增訂單";
   document.getElementById("copyOrderBtn").hidden = true;
@@ -3495,6 +3909,7 @@ function resetOrderForm() {
   const form = document.getElementById("orderForm");
   form.reset();
   form.elements.orderId.value = "";
+  form.elements.orderType.value = "boosting";
   form.elements.serviceName.value = "";
   form.elements.serviceUnitPrice.value = "";
   form.elements.serviceUnitType.value = "";
@@ -3508,6 +3923,8 @@ function resetOrderForm() {
   document.getElementById("orderSubmitBtn").textContent = "新增訂單";
   document.getElementById("copyOrderBtn").hidden = true;
   document.getElementById("cancelOrderEditBtn").hidden = true;
+  clearOrderAttachmentDraft();
+  document.getElementById("orderAttachmentBtn").hidden = false;
   updateOrderCalc();
 }
 
@@ -3630,10 +4047,25 @@ function serviceCategoryText(category) {
     boost: "代打",
     grind: "代肝",
     play: "陪玩",
+    special_companion: "特殊陪",
     gift: "禮物",
     deposit_bonus: "預存",
     other: "其他"
   }[category] || category;
+}
+
+function orderTypeFromServiceCategory(category) {
+  return {
+    boost: "boosting",
+    grind: "farming",
+    play: "companion",
+    special_companion: "companion",
+    deposit_bonus: "prepaid"
+  }[category] || "boosting";
+}
+
+function orderTypeText(orderType) {
+  return label("orderType", orderType || "boosting");
 }
 
 function servicePriceText(item) {

@@ -22,7 +22,7 @@ public sealed class ServiceItemsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<ServiceItemDto>>> GetServiceItems([FromQuery] bool activeOnly = false)
     {
-        var query = _db.ServiceItems.AsNoTracking();
+        var query = _db.ServiceItems.IgnoreQueryFilters().AsNoTracking();
         if (activeOnly)
         {
             query = query.Where(x => x.IsActive);
@@ -39,7 +39,7 @@ public sealed class ServiceItemsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ServiceItemDto>> GetServiceItem(int id)
     {
-        var item = await _db.ServiceItems.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+        var item = await _db.ServiceItems.IgnoreQueryFilters().AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
         return item is null ? NotFound() : Ok(ServiceItemMapper.ToDto(item));
     }
 

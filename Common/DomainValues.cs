@@ -3,6 +3,7 @@ namespace EAPlaymateGroup.Common;
 public static class DomainValues
 {
     public static readonly string[] SystemRoles = ["admin", "staff", "viewer"];
+    public static readonly string[] OrderTypes = ["boosting", "farming", "companion", "prepaid"];
     public static readonly string[] OrderStatuses = ["draft", "completed", "cancelled", "disputed"];
     public static readonly string[] CustomerPaymentStatuses = ["unpaid", "partial", "paid", "refunded"];
     public static readonly string[] OrderMemberRoles = ["player", "leader", "trainer", "bonus"];
@@ -10,6 +11,7 @@ public static class DomainValues
     public static readonly string[] GiftRecordStatuses = ["completed", "cancelled"];
 
     public static bool IsSystemRole(string value) => Contains(SystemRoles, value);
+    public static bool IsOrderType(string value) => Contains(OrderTypes, value);
     public static bool IsOrderStatus(string value) => Contains(OrderStatuses, value);
     public static bool IsCustomerPaymentStatus(string value) => Contains(CustomerPaymentStatuses, value);
     public static bool IsOrderMemberRole(string value) => Contains(OrderMemberRoles, value);

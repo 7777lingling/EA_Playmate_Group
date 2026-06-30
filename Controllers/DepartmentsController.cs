@@ -24,7 +24,11 @@ public sealed class DepartmentsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<DepartmentDto>>> GetDepartments([FromQuery] bool activeOnly = true)
     {
-        var query = _db.Departments.AsNoTracking()
+        var organizationId = await ResolveDepartmentReadOrganizationIdAsync();
+        var query = _db.Departments
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => organizationId <= 0 || x.OrganizationId == organizationId)
             .Include(x => x.Members)
             .ThenInclude(x => x.User)
             .AsQueryable();
@@ -45,9 +49,12 @@ public sealed class DepartmentsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<DepartmentDto>> GetDepartment(int id)
     {
-        var department = await _db.Departments.AsNoTracking()
+        var organizationId = await ResolveDepartmentReadOrganizationIdAsync();
+        var department = await _db.Departments
+            .IgnoreQueryFilters()
+            .AsNoTracking()
             .Include(x => x.Members).ThenInclude(x => x.User)
-            .FirstOrDefaultAsync(x => x.Id == id);
+            .FirstOrDefaultAsync(x => x.Id == id && (organizationId <= 0 || x.OrganizationId == organizationId));
         return department is null ? NotFound() : Ok(DepartmentMapper.ToDto(department));
     }
 
@@ -188,5 +195,20 @@ public sealed class DepartmentsController : ControllerBase
             ErrorMessage = result.ErrorMessage,
             ValidationErrors = result.ValidationErrors
         });
+    }
+
+    private async Task<int> ResolveDepartmentReadOrganizationIdAsync()
+    {
+        var sessionOrganizationId = HttpContext.Session.GetInt32(AuthService.SessionOrganizationId) ?? 0;
+        if (sessionOrganizationId > 0)
+        {
+            return sessionOrganizationId;
+        }
+
+        return await _db.Organizations
+            .IgnoreQueryFilters()
+            .OrderBy(x => x.Id)
+            .Select(x => x.Id)
+            .FirstOrDefaultAsync();
     }
 }

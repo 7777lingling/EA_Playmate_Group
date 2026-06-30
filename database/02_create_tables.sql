@@ -37,6 +37,7 @@ CREATE TABLE dbo.orders (
     uuid UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_orders_uuid DEFAULT NEWID(),
 
     order_no NVARCHAR(30) NULL,
+    order_type NVARCHAR(20) NOT NULL CONSTRAINT DF_orders_order_type DEFAULT N'boosting',
     order_date DATE NOT NULL,
 
     owner_user_id INT NULL,
@@ -59,6 +60,7 @@ CREATE TABLE dbo.orders (
     CONSTRAINT CK_orders_amount CHECK (amount >= 0),
     CONSTRAINT CK_orders_commission_rate CHECK (commission_rate >= 0 AND commission_rate <= 1),
     CONSTRAINT CK_orders_commission_amount CHECK (commission_amount >= 0),
+    CONSTRAINT CK_orders_order_type CHECK (order_type IN (N'boosting', N'farming', N'companion', N'prepaid')),
     CONSTRAINT CK_orders_status CHECK (status IN (N'draft', N'completed', N'cancelled', N'disputed')),
     CONSTRAINT CK_orders_customer_payment_status CHECK (customer_payment_status IN (N'unpaid', N'partial', N'paid', N'refunded'))
 );
@@ -158,4 +160,44 @@ GO
 
 CREATE INDEX IX_audit_logs_login_user
 ON dbo.audit_logs (login_user_id, created_at);
+GO
+
+CREATE TABLE dbo.file_attachments (
+    id BIGINT IDENTITY(1,1) NOT NULL,
+    organization_id INT NOT NULL,
+
+    target_type NVARCHAR(50) NOT NULL,
+    target_id INT NOT NULL,
+    target_uuid UNIQUEIDENTIFIER NULL,
+
+    attachment_kind NVARCHAR(30) NULL,
+    original_file_name NVARCHAR(255) NOT NULL,
+    stored_file_name NVARCHAR(120) NOT NULL,
+    storage_path NVARCHAR(500) NOT NULL,
+    content_type NVARCHAR(120) NOT NULL,
+    file_extension NVARCHAR(20) NULL,
+    file_size BIGINT NOT NULL,
+    sha256_hash CHAR(64) NULL,
+
+    uploaded_by_login_user_id INT NULL,
+    note NVARCHAR(500) NULL,
+    is_deleted BIT NOT NULL CONSTRAINT DF_file_attachments_is_deleted DEFAULT 0,
+    deleted_at DATETIME2 NULL,
+    deleted_by_login_user_id INT NULL,
+    created_at DATETIME2 NOT NULL CONSTRAINT DF_file_attachments_created_at DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_file_attachments PRIMARY KEY CLUSTERED (id)
+);
+GO
+
+CREATE INDEX IX_file_attachments_target
+ON dbo.file_attachments (organization_id, target_type, target_id, is_deleted, created_at);
+GO
+
+CREATE INDEX IX_file_attachments_target_uuid
+ON dbo.file_attachments (organization_id, target_type, target_uuid);
+GO
+
+CREATE INDEX IX_file_attachments_uploaded_by
+ON dbo.file_attachments (uploaded_by_login_user_id);
 GO

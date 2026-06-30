@@ -3,6 +3,7 @@ using EAPlaymateGroup.Common;
 using EAPlaymateGroup.Data;
 using EAPlaymateGroup.Models.DTO;
 using EAPlaymateGroup.Models.Entities;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace EAPlaymateGroup.Services;
@@ -11,11 +12,19 @@ public sealed class PaymentService
 {
     private readonly EAPlaymateGroupDbContext _db;
     private readonly MoneyLogService _moneyLogService;
+    private readonly AttachmentRequirementService _attachmentRequirementService;
+    private readonly FileAttachmentService _fileAttachmentService;
 
-    public PaymentService(EAPlaymateGroupDbContext db, MoneyLogService moneyLogService)
+    public PaymentService(
+        EAPlaymateGroupDbContext db,
+        MoneyLogService moneyLogService,
+        AttachmentRequirementService attachmentRequirementService,
+        FileAttachmentService fileAttachmentService)
     {
         _db = db;
         _moneyLogService = moneyLogService;
+        _attachmentRequirementService = attachmentRequirementService;
+        _fileAttachmentService = fileAttachmentService;
     }
 
     public async Task<ServiceResult<List<PaymentDto>>> GenerateMonthlyPaymentsAsync(GenerateMonthlyPaymentsRequestDto request)
@@ -215,6 +224,15 @@ public sealed class PaymentService
         {
             return ServiceResult.Missing();
         }
+        var attachmentValidation = await _attachmentRequirementService.RequireAsync(
+            "payments",
+            payment.Id,
+            "attachment_required",
+            "Attachment is required before marking a payment as paid.");
+        if (!attachmentValidation.Succeeded)
+        {
+            return attachmentValidation;
+        }
 
         var before = new
         {
@@ -261,6 +279,52 @@ public sealed class PaymentService
             string.IsNullOrWhiteSpace(payment.Note) ? $"{payment.PayMonth} 月結" : payment.Note);
 
         return ServiceResult.Success();
+    }
+
+    public async Task<ServiceResult> MarkPaidWithAttachmentsAsync(
+        int id,
+        MarkPaymentPaidRequestDto request,
+        IReadOnlyCollection<IFormFile> attachments)
+    {
+        var payment = await _db.Payments.FirstOrDefaultAsync(x => x.Id == id);
+        if (payment is null)
+        {
+            return ServiceResult.Missing();
+        }
+
+        if (attachments.Count == 0)
+        {
+            return await MarkPaidAsync(id, request);
+        }
+
+        var attachmentValidation = _fileAttachmentService.ValidateFiles(attachments);
+        if (!attachmentValidation.Succeeded)
+        {
+            return ServiceResult.Failure(
+                attachmentValidation.ErrorCode ?? "invalid_attachment",
+                attachmentValidation.ErrorMessage ?? "Invalid attachment.");
+        }
+
+        var savedAttachments = await _fileAttachmentService.UploadManyAsync(
+            "payments",
+            payment.Id,
+            attachments,
+            "payment_proof",
+            request.Note);
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            "bind_attachments",
+            "payments",
+            payment.Id,
+            payment.Uuid,
+            after: new
+            {
+                attachmentIds = savedAttachments.Select(x => x.Id).ToList(),
+                attachmentCount = savedAttachments.Count
+            }));
+        await _db.SaveChangesAsync();
+
+        return await MarkPaidAsync(id, request);
     }
 
     private static bool TryParsePayMonth(string payMonth, out DateOnly monthStart)

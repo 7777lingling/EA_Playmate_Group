@@ -7,6 +7,7 @@ public sealed class Order : IOrganizationScoped
     public Guid Uuid { get; set; }
 
     public string? OrderNo { get; set; }
+    public string OrderType { get; set; } = "boosting";
     public DateOnly OrderDate { get; set; }
 
     public int? OwnerUserId { get; set; }
