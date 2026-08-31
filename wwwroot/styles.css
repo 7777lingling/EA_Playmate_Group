@@ -1895,6 +1895,10 @@ th:last-child {
   display: none;
 }
 
+#memberPickerModal {
+  z-index: 120;
+}
+
 .modal-panel {
   width: min(760px, 100%);
   max-height: min(720px, calc(100dvh - 56px));

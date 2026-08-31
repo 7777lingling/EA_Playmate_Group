@@ -840,13 +840,18 @@ function openMemberPicker(field) {
   search.value = "";
   search.placeholder = field.dataset.searchPlaceholder || "搜尋暱稱、Discord 名稱或 ID";
   document.getElementById("memberPickerClear").hidden = field.dataset.required === "true";
-  document.getElementById("memberPickerModal").hidden = false;
+  const modal = document.getElementById("memberPickerModal");
+  document.body.appendChild(modal);
+  modal.style.zIndex = "220";
+  modal.hidden = false;
   renderMemberPickerOptions();
   search.focus();
 }
 
 function closeMemberPicker() {
-  document.getElementById("memberPickerModal").hidden = true;
+  const modal = document.getElementById("memberPickerModal");
+  modal.hidden = true;
+  modal.style.zIndex = "";
   state.activeMemberPicker = null;
 }
 
