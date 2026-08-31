@@ -1,0 +1,36 @@
+:root {
+  --bg: #f4f7f5;
+  --bg-soft: #edf3ef;
+  --panel: #ffffff;
+  --panel-subtle: #f8faf9;
+  --ink: #17211d;
+  --muted: #60716b;
+  --line: rgb(30 65 55 / 10%);
+  --line-strong: rgb(30 65 55 / 18%);
+  --accent: #1f7668;
+  --accent-dark: #15584d;
+  --accent-2: #2d6f91;
+  --accent-soft: rgb(31 118 104 / 10%);
+  --gold: #b9852c;
+  --gold-soft: rgb(185 133 44 / 12%);
+  --sidebar: #10231f;
+  --sidebar-soft: rgb(255 255 255 / 7%);
+  --sidebar-line: rgb(255 255 255 / 10%);
+  --warn: #b7791f;
+  --warn-soft: #fff7e8;
+  --danger: #c2413b;
+  --danger-soft: #fff1f1;
+  --success: #16845f;
+  --success-soft: #edf9f3;
+  --shadow: 0 22px 58px rgb(20 49 42 / 12%);
+  --shadow-soft: 0 8px 26px rgb(20 49 42 / 8%);
+  --primary-gradient: linear-gradient(135deg, #1f7668 0%, #2d6f91 100%);
+  --app-background:
+    linear-gradient(180deg, #eef4f0 0, #f7faf8 340px),
+    #f4f7f5;
+  --login-background:
+    linear-gradient(135deg, rgb(16 35 31 / 96%) 0%, rgb(31 118 104 / 86%) 100%),
+    #f4f7f5;
+  --glass: rgb(255 255 255 / 70%);
+  --glass-strong: rgb(255 255 255 / 90%);
+}

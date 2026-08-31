@@ -24,7 +24,7 @@ const state = {
   giftRecordAttachmentFiles: [],
   orderAttachmentFiles: [],
   view: "dashboard",
-  serviceCategory: "boost",
+  serviceCategory: "play",
   auth: null
 };
 
@@ -170,6 +170,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindPriceGallery();
   setDefaultDates();
   addMemberRow();
+  updateLateNightAddonAvailability(document.getElementById("orderForm"));
   await initializeAuth();
 });
 
@@ -240,6 +241,7 @@ function setupPersonalizationUI() {
           <h2>個人化配色</h2>
           <label>配色版本
             <select name="themeName">
+              <option value="internal-ops">Internal Ops｜營運工作台</option>
               <option value="purple-tech">Cyber Violet｜霓紫科技</option>
               <option value="blue-metal">Aurora Blue｜極光金屬</option>
               <option value="dopamine-candy">Dopamine Candy｜甜感多巴胺</option>
@@ -256,7 +258,7 @@ function setupPersonalizationUI() {
           <div class="panel-head"><h2>預覽</h2></div>
           <div class="theme-preview-card">
             <span>主色</span>
-            <strong id="themePreviewName">紫色科技</strong>
+            <strong id="themePreviewName">營運工作台</strong>
             <button class="primary" type="button">主要按鈕</button>
             <button class="ghost" type="button">次要按鈕</button>
           </div>
@@ -279,7 +281,7 @@ function readPreferenceForm() {
   const data = new FormData(form);
   const current = normalizePreference(state.preferences);
   return {
-    themeName: data.get("themeName") || "purple-tech",
+    themeName: data.get("themeName") || "internal-ops",
     accentColor: null,
     dashboardLayout: current.dashboardLayout,
     tablePageSize: current.tablePageSize,
@@ -306,6 +308,7 @@ function renderPreferencePreview(preference) {
   }
 
   const labels = {
+    "internal-ops": "Internal Ops｜營運工作台",
     "purple-tech": "Cyber Violet｜霓紫科技",
     "blue-metal": "Aurora Blue｜極光金屬",
     "dopamine-candy": "Dopamine Candy｜甜感多巴胺",
@@ -313,7 +316,7 @@ function renderPreferencePreview(preference) {
     "sunset-neon": "Sunset Neon｜落日霓虹",
     "light-clean": "Light Clean｜清透白"
   };
-  name.textContent = labels[preference.themeName] || "Cyber Violet｜霓紫科技";
+  name.textContent = labels[preference.themeName] || "Internal Ops｜營運工作台";
 }
 
 async function submitPreferences(event) {
@@ -335,14 +338,14 @@ function applyPreferences(preference) {
   const resolved = normalizePreference(preference);
   const link = document.getElementById("themeStylesheet");
   if (link) {
-    link.href = `${themePreset(resolved.themeName).href}?v=20260627-theme-bg-v1`;
+    link.href = `${themePreset(resolved.themeName).href}?v=20260830-internal-ops-v1`;
   }
   document.body.dataset.theme = resolved.themeName;
 }
 
 function normalizePreference(preference) {
   return {
-    themeName: preference?.themeName || "purple-tech",
+    themeName: preference?.themeName || "internal-ops",
     accentColor: preference?.accentColor || null,
     dashboardLayout: preference?.dashboardLayout || null,
     tablePageSize: Number(preference?.tablePageSize || 100),
@@ -353,6 +356,9 @@ function normalizePreference(preference) {
 
 function themePreset(name) {
   const presets = {
+    "internal-ops": {
+      href: "/themes/internal-ops.css"
+    },
     "purple-tech": {
       href: "/themes/purple-tech.css"
     },
@@ -372,7 +378,7 @@ function themePreset(name) {
       href: "/themes/light-clean.css"
     }
   };
-  return presets[name] || presets["purple-tech"];
+  return presets[name] || presets["internal-ops"];
 }
 
 function bindSidebar() {
@@ -414,6 +420,9 @@ function bindNavigation() {
 
   document.getElementById("refreshBtn").addEventListener("click", refreshAll);
   document.getElementById("personalizationBtn")?.addEventListener("click", () => navigateToView("settings"));
+  document.querySelectorAll("[data-view-jump]").forEach((button) => {
+    button.addEventListener("click", () => navigateToView(button.dataset.viewJump));
+  });
   document.getElementById("addMemberBtn").addEventListener("click", () => addMemberRow());
 }
 
@@ -463,6 +472,7 @@ function bindForms() {
   document.getElementById("organizationManagementForm").addEventListener("submit", submitOrganization);
   document.getElementById("cancelOrganizationManagementBtn").addEventListener("click", resetOrganizationManagementForm);
   document.getElementById("orderForm").addEventListener("input", handleOrderInput);
+  document.getElementById("orderForm").addEventListener("change", handleOrderInput);
   bindMemberPicker();
   bindRecordModal();
   bindAttachmentModal();
@@ -1756,7 +1766,7 @@ async function refreshAll() {
       }
       await loadLoginUsers();
     }
-    if (state.view === "services" || state.view === "giftRecords") {
+    if (state.view === "services" || state.view === "giftRecords" || state.view === "orders") {
       await loadServiceItems();
     }
     if (state.view === "giftRecords") {
@@ -1817,6 +1827,7 @@ async function loadLoginUsers() {
 async function loadServiceItems() {
   state.serviceItems = await api("/api/serviceitems");
   renderServiceItems();
+  renderOrderServiceShortcuts();
   renderSelects();
 }
 
@@ -2183,6 +2194,57 @@ function renderServiceItems() {
     });
   });
 
+}
+
+function renderOrderServiceShortcuts() {
+  const wrap = document.getElementById("orderServiceShortcuts");
+  if (!wrap) {
+    return;
+  }
+
+  const preferredCategories = ["play", "special_companion", "grind", "boost"];
+  const items = state.serviceItems
+    .filter((item) => item.isActive && preferredCategories.includes(item.category))
+    .sort((a, b) => {
+      const categoryDelta = preferredCategories.indexOf(a.category) - preferredCategories.indexOf(b.category);
+      return categoryDelta || (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name, "zh-Hant");
+    });
+
+  if (!items.length) {
+    wrap.innerHTML = `<p class="muted">尚未載入服務價目。</p>`;
+    return;
+  }
+
+  wrap.innerHTML = preferredCategories.map((category) => {
+    const categoryItems = items.filter((item) => item.category === category);
+    if (!categoryItems.length) {
+      return "";
+    }
+
+    return `
+      <section class="order-shortcut-group">
+        <h3>${serviceCategoryText(category)}</h3>
+        <div class="order-shortcut-list">
+          ${categoryItems.map((item) => `
+            <button class="order-shortcut-card" type="button" data-service-order="${item.id}">
+              <span>${escapeHtml(item.subcategory || serviceCategoryText(item.category))}</span>
+              <strong>${escapeHtml(item.name)}</strong>
+              <em>${escapeHtml(servicePriceText(item))} / ${escapeHtml(unitTypeText(item.unitType))}</em>
+            </button>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }).join("");
+
+  wrap.querySelectorAll("[data-service-order]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = state.serviceItems.find((serviceItem) => serviceItem.id === Number(button.dataset.serviceOrder));
+      if (item) {
+        applyServiceToOrderForm(item);
+      }
+    });
+  });
 }
 
 function renderGiftRecords() {
@@ -3686,6 +3748,13 @@ async function startOrderFromService(item) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
+  applyServiceToOrderForm(item);
+  showAlert(`已帶入「${item.name}」到新增訂單。`, false);
+  const form = document.getElementById("orderForm");
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function applyServiceToOrderForm(item) {
   resetOrderForm();
 
   const form = document.getElementById("orderForm");
@@ -3693,18 +3762,21 @@ async function startOrderFromService(item) {
   const unitText = unitTypeText(item.unitType);
   form.elements.orderType.value = orderTypeFromServiceCategory(item.category);
   form.elements.serviceName.value = item.name;
+  form.elements.serviceSeedKey.value = item.seedKey || "";
   form.elements.serviceUnitPrice.value = item.defaultPrice ?? "";
   form.elements.serviceUnitType.value = item.unitType || "";
   form.elements.serviceUnitLabel.value = item.defaultPrice == null
     ? `${servicePriceText(item)} / ${unitText}`
     : `${money.format(item.defaultPrice)} / ${unitText}`;
   form.elements.serviceQuantity.value = 1;
-  form.elements.amount.value = price || "";
+  form.elements.amount.value = calculateOrderQuotedAmount(form) || price || "";
+  form.elements.commissionAmount.value = calculateDefaultCommission(Number(form.elements.amount.value || 0));
+  form.elements.status.value = "draft";
+  form.elements.customerPaymentStatus.value = "unpaid";
   form.elements.remark.value = item.remark || "";
 
+  updateLateNightAddonAvailability(form, item);
   updateOrderCalc();
-  showAlert(`已帶入「${item.name}」到新增訂單。`, false);
-  form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function startGiftRecordFromService(item) {
@@ -3860,10 +3932,15 @@ function startOrderEdit(order) {
   refreshMemberPickerFields(form);
   form.elements.amount.value = order.amount;
   form.elements.serviceName.value = "";
+  form.elements.serviceSeedKey.value = "";
   form.elements.serviceUnitPrice.value = "";
   form.elements.serviceUnitType.value = "";
   form.elements.serviceUnitLabel.value = "";
   form.elements.serviceQuantity.value = 1;
+  form.elements.assignedPlayerCount.value = 0;
+  form.elements.friendCount.value = 0;
+  form.elements.isLateNight.checked = false;
+  form.elements.hasLateNightMapPick.value = "no";
   form.elements.commissionAmount.value = order.commissionAmount;
   form.elements.status.value = order.status || "completed";
   form.elements.customerPaymentStatus.value = order.customerPaymentStatus || "unpaid";
@@ -3909,12 +3986,17 @@ function resetOrderForm() {
   const form = document.getElementById("orderForm");
   form.reset();
   form.elements.orderId.value = "";
-  form.elements.orderType.value = "boosting";
+  form.elements.orderType.value = "companion";
   form.elements.serviceName.value = "";
+  form.elements.serviceSeedKey.value = "";
   form.elements.serviceUnitPrice.value = "";
   form.elements.serviceUnitType.value = "";
   form.elements.serviceUnitLabel.value = "";
   form.elements.serviceQuantity.value = 1;
+  form.elements.assignedPlayerCount.value = 0;
+  form.elements.friendCount.value = 0;
+  form.elements.isLateNight.checked = false;
+  form.elements.hasLateNightMapPick.value = "no";
   refreshMemberPickerFields(form);
   document.getElementById("memberRows").innerHTML = "";
   setDefaultDates();
@@ -3925,7 +4007,12 @@ function resetOrderForm() {
   document.getElementById("cancelOrderEditBtn").hidden = true;
   clearOrderAttachmentDraft();
   document.getElementById("orderAttachmentBtn").hidden = false;
+  updateLateNightAddonAvailability(form);
   updateOrderCalc();
+}
+
+function calculateDefaultCommission(amount) {
+  return amount > 0 ? roundMoney(amount * 0.1) : "";
 }
 
 function fillBlankMemberShares(rows, distributableAmount) {
@@ -3987,7 +4074,17 @@ async function runAction(action) {
 }
 
 function handleOrderInput(event) {
-  if (event.target?.name === "serviceQuantity") {
+  if ([
+    "serviceQuantity",
+    "assignedPlayerCount",
+    "friendCount",
+    "isLateNight",
+    "hasLateNightMapPick",
+    "orderType"
+  ].includes(event.target?.name)) {
+    if (event.target?.name === "orderType") {
+      updateLateNightAddonAvailability(event.currentTarget);
+    }
     updateOrderAmountFromService();
   }
 
@@ -3996,13 +4093,72 @@ function handleOrderInput(event) {
 
 function updateOrderAmountFromService() {
   const form = document.getElementById("orderForm");
-  const unitPrice = Number(form.elements.serviceUnitPrice.value || 0);
-  const quantity = Number(form.elements.serviceQuantity.value || 0);
-  if (unitPrice <= 0 || quantity <= 0) {
+  const amount = calculateOrderQuotedAmount(form);
+  if (amount <= 0) {
     return;
   }
 
-  form.elements.amount.value = roundMoney(unitPrice * quantity);
+  form.elements.amount.value = amount;
+  form.elements.commissionAmount.value = calculateDefaultCommission(amount);
+}
+
+function calculateOrderQuotedAmount(form) {
+  const unitPrice = Number(form.elements.serviceUnitPrice.value || 0);
+  const quantity = Number(form.elements.serviceQuantity.value || 0);
+  if (unitPrice <= 0 || quantity <= 0) {
+    return 0;
+  }
+
+  const assignedPlayerCount = nonNegativeInteger(form.elements.assignedPlayerCount.value);
+  const friendCount = nonNegativeInteger(form.elements.friendCount.value);
+  const lateNightCharge = form.elements.isLateNight.checked ? 30 : 0;
+  return roundMoney(
+    unitPrice * quantity
+    + assignedPlayerCount * 20
+    + friendCount * 20
+    + lateNightCharge
+  );
+}
+
+function nonNegativeInteger(value) {
+  return Math.max(0, Math.floor(Number(value || 0)));
+}
+
+function supportsLateNightAddon(item) {
+  if (!item) {
+    return false;
+  }
+
+  const text = `${item.seedKey || ""} ${item.name || ""} ${item.priceNote || ""} ${item.remark || ""}`;
+  return /深夜|00:00-06:00|00:00–06:00/.test(text);
+}
+
+function updateLateNightAddonAvailability(form, item = null) {
+  const selectedItem = item || state.serviceItems.find((serviceItem) => (
+    serviceItem.seedKey === form.elements.serviceSeedKey.value
+  ));
+  const enabled = supportsLateNightAddon(selectedItem) || (!selectedItem && form.elements.orderType.value === "companion");
+  toggleLateNightField(form, "lateNightField", "isLateNight", enabled, "此服務可套用深夜加價");
+  toggleLateNightField(form, "lateNightMapPickField", "hasLateNightMapPick", enabled, "此服務可標記深夜選地");
+}
+
+function toggleLateNightField(form, fieldId, inputName, enabled, enabledTitle) {
+  const field = document.getElementById(fieldId);
+  const input = form.elements[inputName];
+  if (!field || !input) {
+    return;
+  }
+
+  input.disabled = !enabled;
+  if (!enabled) {
+    if (input.type === "checkbox") {
+      input.checked = false;
+    } else {
+      input.value = "no";
+    }
+  }
+  field.classList.toggle("disabled", !enabled);
+  field.title = enabled ? enabledTitle : "只有有深夜加價規則的服務可勾選";
 }
 
 function buildOrderServiceRemark(form) {
@@ -4017,11 +4173,20 @@ function buildOrderServiceRemark(form) {
   const quantityText = quantity > 0
     ? `${money.format(quantity)} ${unitTypeText(unitType)}`
     : "";
+  const assignedPlayerCount = nonNegativeInteger(form.elements.assignedPlayerCount.value);
+  const friendCount = nonNegativeInteger(form.elements.friendCount.value);
+  const surcharges = [
+    assignedPlayerCount > 0 ? `指定陪陪 +20／位 × ${assignedPlayerCount}` : "",
+    friendCount > 0 ? `帶朋友 +20／位 × ${friendCount}` : "",
+    form.elements.isLateNight.checked ? "深夜 00:00-06:00 +30" : "",
+    form.elements.hasLateNightMapPick.value === "yes" ? "深夜選地：有" : ""
+  ].filter(Boolean);
 
   return [
     `服務項目：${serviceName}`,
     unitLabel ? `計價：${unitLabel}` : "",
-    quantityText ? `數量：${quantityText}` : ""
+    quantityText ? `數量：${quantityText}` : "",
+    surcharges.length ? `加價／標記：${surcharges.join("、")}` : ""
   ].filter(Boolean).join("；");
 }
 

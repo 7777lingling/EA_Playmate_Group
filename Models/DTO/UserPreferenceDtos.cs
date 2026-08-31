@@ -4,7 +4,7 @@ public sealed class UserPreferenceDto
 {
     public int Id { get; set; }
     public int LoginUserId { get; set; }
-    public string ThemeName { get; set; } = "purple-tech";
+    public string ThemeName { get; set; } = "internal-ops";
     public string? AccentColor { get; set; }
     public string? DashboardLayout { get; set; }
     public int TablePageSize { get; set; } = 100;
@@ -16,7 +16,7 @@ public sealed class UserPreferenceDto
 
 public sealed class UpdateUserPreferenceRequestDto
 {
-    public string ThemeName { get; set; } = "purple-tech";
+    public string ThemeName { get; set; } = "internal-ops";
     public string? AccentColor { get; set; }
     public string? DashboardLayout { get; set; }
     public int TablePageSize { get; set; } = 100;

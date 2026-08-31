@@ -11,6 +11,7 @@ public sealed class UserPreferenceService
     private static readonly Regex HexColorPattern = new("^#[0-9a-fA-F]{6}$", RegexOptions.Compiled);
     private static readonly HashSet<string> ThemeNames =
     [
+        "internal-ops",
         "purple-tech",
         "blue-metal",
         "dopamine-candy",
@@ -79,7 +80,7 @@ public sealed class UserPreferenceService
         preference = new UserPreference
         {
             LoginUserId = loginUser.Id,
-            ThemeName = "purple-tech",
+            ThemeName = "internal-ops",
             TablePageSize = 100
         };
         _db.UserPreferences.Add(preference);
@@ -91,7 +92,7 @@ public sealed class UserPreferenceService
     {
         var errors = new Dictionary<string, string[]>();
         var themeName = string.IsNullOrWhiteSpace(request.ThemeName)
-            ? "purple-tech"
+            ? "internal-ops"
             : request.ThemeName.Trim();
         if (!ThemeNames.Contains(themeName))
         {
@@ -115,9 +116,9 @@ public sealed class UserPreferenceService
     private static string NormalizeThemeName(string? value)
     {
         var normalized = string.IsNullOrWhiteSpace(value)
-            ? "purple-tech"
+            ? "internal-ops"
             : value.Trim();
-        return ThemeNames.Contains(normalized) ? normalized : "purple-tech";
+        return ThemeNames.Contains(normalized) ? normalized : "internal-ops";
     }
 
     private static string? NormalizeAccentColor(string? value) =>

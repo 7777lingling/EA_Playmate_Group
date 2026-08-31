@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>EA Playmate Group</title>
-  <link rel="stylesheet" href="/styles.css?v=20260627-theme-bg-v1">
-  <link rel="stylesheet" id="themeStylesheet" href="/themes/purple-tech.css?v=20260627-theme-bg-v1">
+  <title>陪玩團營運後台</title>
+  <link rel="stylesheet" href="/styles.css?v=20260830-internal-ops-v1">
+  <link rel="stylesheet" id="themeStylesheet" href="/themes/internal-ops.css?v=20260830-internal-ops-v1">
 </head>
 <body>
   <section class="login-view" id="loginView" hidden>
     <form class="panel form login-panel" id="loginForm">
       <div class="brand login-brand">
-        <div class="brand-mark">EA</div>
+        <div class="brand-mark">營</div>
         <div>
-          <strong>Playmate Group</strong>
+          <strong>陪玩團營運後台</strong>
           <span>管理後台登入</span>
         </div>
       </div>
@@ -28,10 +28,10 @@
 
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-mark">EA</div>
+      <div class="brand-mark">營</div>
       <div class="brand-copy">
-        <strong>Playmate Group</strong>
-        <span>管理後台</span>
+        <strong>陪玩團營運後台</strong>
+        <span>內部管理系統</span>
       </div>
       <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="收合側欄" aria-expanded="true">‹</button>
     </div>
@@ -96,6 +96,24 @@
           <strong id="unpaidCount">0</strong>
         </article>
       </div>
+
+      <section class="ops-home-strip">
+        <article>
+          <span>新版價目</span>
+          <strong>已套用到服務清單</strong>
+          <button class="ghost small" type="button" data-view-jump="services">查看服務</button>
+        </article>
+        <article>
+          <span>接待下單</span>
+          <strong>訂單頁已改成工作台</strong>
+          <button class="ghost small" type="button" data-view-jump="orders">建立訂單</button>
+        </article>
+        <article>
+          <span>內部規則</span>
+          <strong>報價確認放進訂單流程</strong>
+          <button class="ghost small" type="button" data-view-jump="audit">查看紀錄</button>
+        </article>
+      </section>
 
       <div class="grid two">
         <section class="panel">
@@ -328,31 +346,13 @@
     </section>
 
     <section class="view" id="servicesView">
-      <section class="price-gallery" aria-label="價目表圖片">
-        <a class="price-shot" href="/價目表/預存.jpg" data-price-preview>
-          <img src="/價目表/預存.jpg" alt="預存價目表">
-          <span>預存</span>
-        </a>
-        <a class="price-shot" href="/價目表/代打.jpg" data-price-preview>
-          <img src="/價目表/代打.jpg" alt="代打價目表">
-          <span>代打</span>
-        </a>
-        <a class="price-shot" href="/價目表/陪玩.png" data-price-preview>
-          <img src="/價目表/陪玩.png" alt="陪玩價目表">
-          <span>陪玩</span>
-        </a>
-        <a class="price-shot" href="/價目表/特殊陪.png" data-price-preview>
-          <img src="/價目表/特殊陪.png" alt="特殊陪價目表">
-          <span>特殊陪</span>
-        </a>
-        <a class="price-shot" href="/價目表/代肝.jpg" data-price-preview>
-          <img src="/價目表/代肝.jpg" alt="代肝價目表">
-          <span>代肝</span>
-        </a>
-        <a class="price-shot" href="/價目表/禮物.png" data-price-preview>
-          <img src="/價目表/禮物.png" alt="禮物價目表">
-          <span>禮物</span>
-        </a>
+      <section class="ops-workflow-banner">
+        <div>
+          <p class="eyebrow">Internal Pricing</p>
+          <h2>新版價目工作流</h2>
+          <p>服務清單已改用新版營運價。接待從這裡點單會直接帶入訂單類型、計價單位、金額與內部備註。</p>
+        </div>
+        <button class="primary" type="button" data-view-jump="orders">前往新增訂單</button>
       </section>
 
       <section class="panel">
@@ -466,82 +466,386 @@
       </div>
     </section>
 
+    <section class="view internal-pilot-archived" id="internalPilotView" hidden>
+      <div class="pilot-page pilot-v2">
+        <section class="pilot-cover">
+          <div class="pilot-cover-copy">
+            <p class="eyebrow">Internal Operations</p>
+            <h2>玉閣陪玩團內部試行</h2>
+            <p>新版價目、接待報價、派單、結單與人員確認集中在這一頁。現在只給內部測試，不當成對外公告。</p>
+          </div>
+          <div class="pilot-cover-actions" aria-label="試行狀態">
+            <span class="pilot-state-dot">試行中</span>
+            <strong>新版試行價</strong>
+            <small>原價目圖暫作比對，報價以本頁為準。</small>
+          </div>
+        </section>
+
+        <section class="pilot-summary-strip" aria-label="內部試行摘要">
+          <article><span>開放範圍</span><strong>管理、接待、面試官、陪陪</strong></article>
+          <article><span>報價依據</span><strong>新版試行價</strong></article>
+          <article><span>測試方式</span><strong>3-5 筆模擬單</strong></article>
+          <article><span>公開狀態</span><strong>暫不對外</strong></article>
+        </section>
+
+        <div class="pilot-content-grid">
+          <section class="pilot-board pilot-price-board">
+            <div class="pilot-section-head">
+              <div>
+                <span class="pilot-kicker">Price Board</span>
+                <h2>價目看板</h2>
+              </div>
+              <span class="pilot-chip">接待報價基準</span>
+            </div>
+
+            <div class="pilot-price-lanes">
+              <article class="pilot-lane">
+                <h3>遊戲陪玩</h3>
+                <div class="pilot-price-row"><span>娛樂陪</span><strong>160／h</strong><em>一般娛樂、陪打、放鬆互動</em></div>
+                <div class="pilot-price-row"><span>排位 1-4 階</span><strong>180／h</strong><em>低中階排位</em></div>
+                <div class="pilot-price-row"><span>排位 5-6 階</span><strong>210／h</strong><em>中高階排位</em></div>
+                <div class="pilot-price-row"><span>排位 7 階以上</span><strong>260／h</strong><em>高階排位</em></div>
+              </article>
+
+              <article class="pilot-lane">
+                <h3>摸金／加頁</h3>
+                <div class="pilot-price-row"><span>娛樂</span><strong>160／h</strong><em>輕鬆陪跑</em></div>
+                <div class="pilot-price-row"><span>技術</span><strong>170／h</strong><em>路線、判斷、撤離協助</em></div>
+                <div class="pilot-price-row featured"><span>魔王護</span><strong>360／h</strong><em>二陪一，提高撤離保障</em></div>
+              </article>
+
+              <article class="pilot-lane">
+                <h3>語音與特殊</h3>
+                <div class="pilot-price-row"><span>語聊</span><strong>130／h</strong><em>聊天陪伴</em></div>
+                <div class="pilot-price-row"><span>歌陪</span><strong>100／30min</strong><em>短時段</em></div>
+                <div class="pilot-price-row"><span>歌陪</span><strong>180／h</strong><em>一小時</em></div>
+                <div class="pilot-price-row"><span>小尬劇</span><strong>20／張</strong><em>以張計價</em></div>
+              </article>
+
+              <article class="pilot-lane">
+                <h3>加價規則</h3>
+                <div class="pilot-price-row"><span>指定陪陪</span><strong>+20／位</strong><em>指定人員</em></div>
+                <div class="pilot-price-row"><span>帶朋友</span><strong>+20／位</strong><em>每位計算</em></div>
+                <div class="pilot-price-row"><span>換人</span><strong>+5／位</strong><em>每位計算</em></div>
+                <div class="pilot-price-row"><span>深夜 00:00-06:00</span><strong>+30</strong><em>深夜時段加價</em></div>
+              </article>
+            </div>
+          </section>
+
+          <aside class="pilot-side-stack">
+            <section class="pilot-board">
+              <div class="pilot-section-head compact">
+                <div>
+                  <span class="pilot-kicker">Rule</span>
+                  <h2>接待報價順序</h2>
+                </div>
+              </div>
+              <ol class="pilot-number-list">
+                <li>確認項目、時數、人數。</li>
+                <li>確認是否指定、帶朋友、換人。</li>
+                <li>確認是否落在深夜時段。</li>
+                <li>遇到舊圖不一致，先回報管理。</li>
+              </ol>
+            </section>
+
+            <section class="pilot-board pilot-announcement-card">
+              <div class="pilot-section-head compact">
+                <div>
+                  <span class="pilot-kicker">Notice</span>
+                  <h2>內部公告草稿</h2>
+                </div>
+                <button class="ghost small" id="copyPilotAnnouncementBtn" type="button">複製</button>
+              </div>
+              <div class="pilot-announcement" id="pilotAnnouncementText">
+新的陪玩團方向先進入內部試行。
+
+目前只開放管理、接待、面試官、陪陪查看，不對外公開。
+價目改用新版試行價，這一輪主要測試分類、報價、下單、派單、結單與內部流程。
+
+請大家先確認自己能接的項目、可接時段，以及是否看得懂目前的價目分類。
+試行內容可能會調整，請不要截圖外傳或當正式公告使用。
+              </div>
+            </section>
+          </aside>
+        </div>
+
+        <section class="pilot-board pilot-service-board">
+          <div class="pilot-section-head">
+            <div>
+              <span class="pilot-kicker">Legacy Items</span>
+              <h2>代肝與代打暫用表</h2>
+            </div>
+            <span class="pilot-chip">接單前再確認</span>
+          </div>
+          <div class="pilot-service-columns">
+            <article class="pilot-lane">
+              <h3>代肝服務</h3>
+              <div class="pilot-price-row"><span>周上限</span><strong>250／周</strong><em>暫用舊基準</em></div>
+              <div class="pilot-price-row"><span>劇情</span><strong>60／個</strong><em>單項計算</em></div>
+              <div class="pilot-price-row"><span>公共地圖</span><strong>100／個</strong><em>單項計算</em></div>
+              <div class="pilot-price-row"><span>活動獎勵</span><strong>80／個</strong><em>單項計算</em></div>
+              <div class="pilot-price-row"><span>每日排位珍寶</span><strong>50／天</strong><em>每日計算</em></div>
+              <div class="pilot-price-row"><span>每日五排珍寶</span><strong>50／天</strong><em>每日計算</em></div>
+            </article>
+            <article class="pilot-lane">
+              <h3>代打服務</h3>
+              <div class="pilot-rank-grid">
+                <span>一階</span><strong>10 / 10</strong>
+                <span>二階</span><strong>20 / 20</strong>
+                <span>三階</span><strong>35 / 35</strong>
+                <span>四階</span><strong>50 / 50</strong>
+                <span>五階</span><strong>60 / 60</strong>
+                <span>六階</span><strong>80 / 75</strong>
+                <span>七階</span><strong>100 / 95</strong>
+                <span>巔七</span><strong>125 / 120</strong>
+              </div>
+              <p class="pilot-footnote">左為求生，右為監管；保勝價格依段位另外判定。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="pilot-board pilot-process-board">
+          <div class="pilot-section-head">
+            <div>
+              <span class="pilot-kicker">Flow</span>
+              <h2>試行流程</h2>
+            </div>
+            <span class="pilot-chip">先跑 3-5 筆模擬單</span>
+          </div>
+          <div class="pilot-flow-v2">
+            <span>提出需求</span>
+            <span>接待確認</span>
+            <span>報價</span>
+            <span>派單</span>
+            <span>陪陪確認</span>
+            <span>服務開始</span>
+            <span>結單</span>
+            <span>紀錄回饋</span>
+          </div>
+        </section>
+
+        <section class="pilot-check-grid">
+          <article class="pilot-board">
+            <div class="pilot-section-head compact">
+              <div>
+                <span class="pilot-kicker">Reception</span>
+                <h2>接待確認</h2>
+              </div>
+            </div>
+            <ul class="pilot-checklist">
+              <li>能找到暫用價目表</li>
+              <li>能正確報一般娛樂、排位、語聊與歌陪價格</li>
+              <li>能判斷指定、帶朋友、換人與深夜加價</li>
+              <li>能完成派單與結單紀錄</li>
+              <li>不確定價格時知道找管理確認</li>
+            </ul>
+          </article>
+
+          <article class="pilot-board">
+            <div class="pilot-section-head compact">
+              <div>
+                <span class="pilot-kicker">Companion</span>
+                <h2>陪陪確認</h2>
+              </div>
+            </div>
+            <ul class="pilot-checklist">
+              <li>已閱讀員工必看與接單規範</li>
+              <li>已確認可接項目與可接時段</li>
+              <li>已知道接單、結單、請假與回報方式</li>
+              <li>已知道薪資與抽成規則</li>
+              <li>已確認禁止私單、聊色與騷擾</li>
+            </ul>
+          </article>
+        </section>
+
+        <section class="pilot-board pilot-reference-section">
+          <div class="pilot-section-head">
+            <div>
+              <span class="pilot-kicker">Reference</span>
+              <h2>原價目圖片</h2>
+            </div>
+            <span class="pilot-chip">比對參考</span>
+          </div>
+          <section class="price-gallery pilot-gallery" aria-label="原價目表圖片">
+            <a class="price-shot" href="/價目表/陪玩.png" data-price-preview>
+              <img src="/價目表/陪玩.png" alt="陪玩價目表">
+              <span>陪玩</span>
+            </a>
+            <a class="price-shot" href="/價目表/特殊陪.png" data-price-preview>
+              <img src="/價目表/特殊陪.png" alt="特殊陪價目表">
+              <span>特殊陪</span>
+            </a>
+            <a class="price-shot" href="/價目表/代肝.jpg" data-price-preview>
+              <img src="/價目表/代肝.jpg" alt="代肝價目表">
+              <span>代肝</span>
+            </a>
+            <a class="price-shot" href="/價目表/代打.jpg" data-price-preview>
+              <img src="/價目表/代打.jpg" alt="代打價目表">
+              <span>代打</span>
+            </a>
+            <a class="price-shot" href="/價目表/禮物.png" data-price-preview>
+              <img src="/價目表/禮物.png" alt="禮物價目表">
+              <span>禮物</span>
+            </a>
+          </section>
+        </section>
+      </div>
+    </section>
+
     <section class="view" id="ordersView">
-      <div class="orders-layout">
-        <form class="panel form" id="orderForm">
-          <h2 id="orderFormTitle">新增訂單</h2>
-          <input type="hidden" name="orderId">
-          <div class="order-form-section">
-            <label>日期<input name="orderDate" type="date" required></label>
-            <label>單號<input name="orderNo" maxlength="30"></label>
-            <label>訂單類型
-              <select name="orderType" required>
-                <option value="boosting">代打</option>
-                <option value="farming">代肝</option>
-                <option value="companion">陪玩</option>
-                <option value="prepaid">預存</option>
-              </select>
-            </label>
-            <label>老闆
-              <span class="member-picker-field" data-member-picker data-source="bosses" data-title="選擇訂單老闆" data-empty-label="未指定">
-                <input name="ownerUserId" id="bossSelect" type="hidden">
-                <button class="member-picker-trigger" type="button" data-member-picker-trigger>未指定</button>
-              </span>
-            </label>
+      <div class="order-desk">
+        <section class="order-desk-hero">
+          <div>
+            <p class="eyebrow">Order Desk</p>
+            <h2>接待下單工作台</h2>
+            <p>先選新版價目，再填老闆、時數、人員與收款狀態。金額與團抽會跟著單價自動帶入。</p>
           </div>
-          <input type="hidden" name="serviceName">
-          <input type="hidden" name="serviceUnitPrice">
-          <input type="hidden" name="serviceUnitType">
-          <div class="order-pricing-grid">
-            <label>計價<input name="serviceUnitLabel" readonly placeholder="手動輸入"></label>
-            <label>分次<input name="serviceQuantity" type="number" step="0.01" min="0.01" value="1"></label>
-            <label>金額<input name="amount" type="number" step="0.01" min="0.01" required></label>
-            <label>團抽<input name="commissionAmount" type="number" step="0.01" min="0" required></label>
+          <div class="order-desk-steps" aria-label="接單流程">
+            <span>需求</span>
+            <span>報價</span>
+            <span>派單</span>
+            <span>結單</span>
           </div>
-          <div class="order-status-grid">
-            <label>狀態
-              <select name="status">
-                <option value="completed">已完成</option>
-                <option value="draft">草稿</option>
-                <option value="disputed">爭議中</option>
-                <option value="cancelled">已取消</option>
-              </select>
-            </label>
-            <label>客戶收款
-              <select name="customerPaymentStatus">
-                <option value="unpaid">未收款</option>
-                <option value="paid">已收款</option>
-                <option value="partial">部分收款</option>
-                <option value="refunded">已退款</option>
-              </select>
-            </label>
-            <label>備註<textarea name="remark" rows="2"></textarea></label>
-          </div>
+        </section>
 
-          <div class="member-editor">
-            <div class="panel-head compact">
-              <h3>分潤</h3>
-              <button class="ghost small" id="addMemberBtn" type="button">新增團員</button>
+        <section class="order-workbench">
+          <aside class="panel order-catalog-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Price Menu</p>
+                <h2>新版價目</h2>
+              </div>
             </div>
-            <div id="memberRows"></div>
-            <div class="calc-line">
-              <span>可分潤 <strong id="distributableAmount">0</strong></span>
-              <span>已分配 <strong id="allocatedAmount">0</strong></span>
+            <div class="order-service-shortcuts" id="orderServiceShortcuts"></div>
+          </aside>
+
+          <form class="panel form order-compose-panel" id="orderForm">
+            <div class="order-form-title">
+              <div>
+                <p class="eyebrow">Compose</p>
+                <h2 id="orderFormTitle">新增訂單</h2>
+              </div>
+              <span class="pilot-chip">陪玩優先</span>
             </div>
-          </div>
+            <input type="hidden" name="orderId">
+            <input type="hidden" name="serviceName">
+            <input type="hidden" name="serviceSeedKey">
+            <input type="hidden" name="serviceUnitPrice">
+            <input type="hidden" name="serviceUnitType">
 
-          <div class="form-actions">
-            <label class="ghost attachment-trigger" id="orderAttachmentBtn" title="用途：收款證明、付款截圖、爭議依據">
-              <input id="orderAttachmentInput" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.xlsx,.pptx,.csv,.txt,.log,.mp4,.mov">
-              <span data-attachment-label>附件：收款證明/爭議依據</span>
-            </label>
-            <button class="primary" id="orderSubmitBtn" type="submit">新增訂單</button>
-            <button class="ghost" id="copyOrderBtn" type="button" hidden>另存新訂單</button>
-            <button class="ghost" id="cancelOrderEditBtn" type="button" hidden>取消編輯</button>
-          </div>
-        </form>
+            <section class="order-form-block">
+              <h3>基本資料</h3>
+              <div class="order-form-section">
+                <label>日期<input name="orderDate" type="date" required></label>
+                <label>單號<input name="orderNo" maxlength="30"></label>
+                <label>訂單類型
+                  <select name="orderType" required>
+                    <option value="companion">陪玩</option>
+                    <option value="boosting">代打</option>
+                    <option value="farming">代肝</option>
+                    <option value="prepaid">預存</option>
+                  </select>
+                </label>
+                <label>老闆
+                  <span class="member-picker-field" data-member-picker data-source="bosses" data-title="選擇訂單老闆" data-empty-label="未指定">
+                    <input name="ownerUserId" id="bossSelect" type="hidden">
+                    <button class="member-picker-trigger" type="button" data-member-picker-trigger>未指定</button>
+                  </span>
+                </label>
+              </div>
+            </section>
 
-        <section class="panel">
+            <section class="order-form-block">
+              <h3>報價</h3>
+              <div class="order-pricing-grid">
+                <label>計價<input name="serviceUnitLabel" readonly placeholder="手動輸入"></label>
+                <label>時數 / 數量<input name="serviceQuantity" type="number" step="0.01" min="0.01" value="1"></label>
+                <label>金額<input name="amount" type="number" step="0.01" min="0.01" required></label>
+                <label>團抽<input name="commissionAmount" type="number" step="0.01" min="0" required></label>
+              </div>
+              <div class="order-surcharge-grid" aria-label="加價項目">
+                <label>指定陪陪
+                  <input name="assignedPlayerCount" type="number" step="1" min="0" value="0">
+                </label>
+                <label>帶朋友
+                  <input name="friendCount" type="number" step="1" min="0" value="0">
+                </label>
+                <label class="inline-check order-surcharge-check" id="lateNightField">
+                  <input name="isLateNight" type="checkbox">
+                  深夜 00:00-06:00 +30
+                </label>
+                <label id="lateNightMapPickField">深夜選地
+                  <select name="hasLateNightMapPick">
+                    <option value="no">無</option>
+                    <option value="yes">有</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section class="order-form-block">
+              <h3>狀態</h3>
+              <div class="order-status-grid">
+                <label>訂單狀態
+                  <select name="status">
+                    <option value="draft">草稿</option>
+                    <option value="completed">已完成</option>
+                    <option value="disputed">爭議中</option>
+                    <option value="cancelled">已取消</option>
+                  </select>
+                </label>
+                <label>客戶收款
+                  <select name="customerPaymentStatus">
+                    <option value="unpaid">未收款</option>
+                    <option value="paid">已收款</option>
+                    <option value="partial">部分收款</option>
+                    <option value="refunded">已退款</option>
+                  </select>
+                </label>
+                <label>備註<textarea name="remark" rows="2"></textarea></label>
+              </div>
+            </section>
+
+            <section class="member-editor">
+              <div class="panel-head compact">
+                <h3>分潤</h3>
+                <button class="ghost small" id="addMemberBtn" type="button">新增團員</button>
+              </div>
+              <div id="memberRows"></div>
+              <div class="calc-line">
+                <span>可分潤 <strong id="distributableAmount">0</strong></span>
+                <span>已分配 <strong id="allocatedAmount">0</strong></span>
+              </div>
+            </section>
+
+            <div class="form-actions">
+              <label class="ghost attachment-trigger" id="orderAttachmentBtn" title="用途：收款證明、付款截圖、爭議依據">
+                <input id="orderAttachmentInput" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.xlsx,.pptx,.csv,.txt,.log,.mp4,.mov">
+                <span data-attachment-label>附件：收款證明/爭議依據</span>
+              </label>
+              <button class="primary" id="orderSubmitBtn" type="submit">新增訂單</button>
+              <button class="ghost" id="copyOrderBtn" type="button" hidden>另存新訂單</button>
+              <button class="ghost" id="cancelOrderEditBtn" type="button" hidden>取消編輯</button>
+            </div>
+          </form>
+
+          <aside class="panel order-rule-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Checklist</p>
+                <h2>報價確認</h2>
+              </div>
+            </div>
+            <ul class="pilot-checklist">
+              <li>先以新版價目點單，不再依舊圖報價。</li>
+              <li>指定陪陪、帶朋友、換人、深夜加價要另外加上。</li>
+              <li>尚未收款先維持未收款，完成後再補附件。</li>
+              <li>不確定的代肝/代打細項，先開草稿再回報管理確認。</li>
+            </ul>
+          </aside>
+        </section>
+
+        <section class="panel order-list-panel">
           <div class="panel-head">
             <h2>訂單清單</h2>
           </div>

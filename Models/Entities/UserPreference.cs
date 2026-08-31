@@ -5,7 +5,7 @@ public sealed class UserPreference
     public int Id { get; set; }
     public int LoginUserId { get; set; }
     public LoginUser LoginUser { get; set; } = null!;
-    public string ThemeName { get; set; } = "purple-tech";
+    public string ThemeName { get; set; } = "internal-ops";
     public string? AccentColor { get; set; }
     public string? DashboardLayout { get; set; }
     public int TablePageSize { get; set; } = 100;

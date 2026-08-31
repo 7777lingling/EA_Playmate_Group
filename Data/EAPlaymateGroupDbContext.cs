@@ -780,7 +780,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.HasKey(x => x.Id).HasName("PK_user_preferences");
         entity.Property(x => x.Id).HasColumnName("id");
         entity.Property(x => x.LoginUserId).HasColumnName("login_user_id");
-        entity.Property(x => x.ThemeName).HasColumnName("theme_name").HasMaxLength(50).HasDefaultValue("purple-tech").IsRequired();
+        entity.Property(x => x.ThemeName).HasColumnName("theme_name").HasMaxLength(50).HasDefaultValue("internal-ops").IsRequired();
         entity.Property(x => x.AccentColor).HasColumnName("accent_color").HasMaxLength(20);
         entity.Property(x => x.DashboardLayout).HasColumnName("dashboard_layout");
         entity.Property(x => x.TablePageSize).HasColumnName("table_page_size").HasDefaultValue(100);
