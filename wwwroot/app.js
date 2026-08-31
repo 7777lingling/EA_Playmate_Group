@@ -256,6 +256,9 @@ function setupPersonalizationUI() {
               <option value="light-clean">Light Clean｜清透白</option>
             </select>
           </label>
+          <label>主色
+            <input name="accentColor" type="color" value="#1f7668">
+          </label>
           <div class="form-actions">
             <button class="primary" type="submit">儲存配色</button>
           </div>
@@ -280,6 +283,13 @@ function setupPersonalizationUI() {
     applyPreferences(preference);
     renderPreferencePreview(preference);
   });
+  document.getElementById("preferenceForm")?.elements.themeName?.addEventListener("change", (event) => {
+    const form = event.currentTarget.form;
+    form.elements.accentColor.value = themePreset(event.currentTarget.value).accentColor;
+    const preference = readPreferenceForm();
+    applyPreferences(preference);
+    renderPreferencePreview(preference);
+  });
 }
 
 function readPreferenceForm() {
@@ -288,7 +298,7 @@ function readPreferenceForm() {
   const current = normalizePreference(state.preferences);
   return {
     themeName: data.get("themeName") || "internal-ops",
-    accentColor: null,
+    accentColor: data.get("accentColor") || null,
     dashboardLayout: current.dashboardLayout,
     tablePageSize: current.tablePageSize,
     defaultOrderStatusFilter: current.defaultOrderStatusFilter,
@@ -304,6 +314,7 @@ function renderPreferenceForm(preference) {
 
   const resolved = normalizePreference(preference);
   form.elements.themeName.value = resolved.themeName;
+  form.elements.accentColor.value = resolved.accentColor || themePreset(resolved.themeName).accentColor;
   renderPreferencePreview(resolved);
 }
 
@@ -344,9 +355,10 @@ function applyPreferences(preference) {
   const resolved = normalizePreference(preference);
   const link = document.getElementById("themeStylesheet");
   if (link) {
-    link.href = `${themePreset(resolved.themeName).href}?v=20260830-internal-ops-v1`;
+    link.href = `${themePreset(resolved.themeName).href}?v=20260831-personalization-v2`;
   }
   document.body.dataset.theme = resolved.themeName;
+  applyAccentColor(resolved.accentColor || themePreset(resolved.themeName).accentColor);
 }
 
 function normalizePreference(preference) {
@@ -363,28 +375,91 @@ function normalizePreference(preference) {
 function themePreset(name) {
   const presets = {
     "internal-ops": {
-      href: "/themes/internal-ops.css"
+      href: "/themes/internal-ops.css",
+      accentColor: "#1f7668"
     },
     "purple-tech": {
-      href: "/themes/purple-tech.css"
+      href: "/themes/purple-tech.css",
+      accentColor: "#7c3aed"
     },
     "blue-metal": {
-      href: "/themes/blue-metal.css"
+      href: "/themes/blue-metal.css",
+      accentColor: "#2563eb"
     },
     "dopamine-candy": {
-      href: "/themes/dopamine-candy.css"
+      href: "/themes/dopamine-candy.css",
+      accentColor: "#ff4d9e"
     },
     "mint-energy": {
-      href: "/themes/mint-energy.css"
+      href: "/themes/mint-energy.css",
+      accentColor: "#10b981"
     },
     "sunset-neon": {
-      href: "/themes/sunset-neon.css"
+      href: "/themes/sunset-neon.css",
+      accentColor: "#ff6b35"
     },
     "light-clean": {
-      href: "/themes/light-clean.css"
+      href: "/themes/light-clean.css",
+      accentColor: "#64748b"
     }
   };
   return presets[name] || presets["internal-ops"];
+}
+
+function applyAccentColor(hexColor) {
+  const color = normalizeHexColor(hexColor);
+  if (!color) {
+    return;
+  }
+
+  const rgb = hexToRgb(color);
+  const dark = rgbToHex(scaleRgb(rgb, 0.72));
+  const secondary = rgbToHex(mixRgb(rgb, { r: 20, g: 184, b: 166 }, 0.35));
+  const gold = rgbToHex(mixRgb(rgb, { r: 185, g: 133, b: 44 }, 0.48));
+  const root = document.documentElement;
+  root.style.setProperty("--accent", color);
+  root.style.setProperty("--accent-dark", dark);
+  root.style.setProperty("--accent-2", secondary);
+  root.style.setProperty("--accent-soft", `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 12%)`);
+  root.style.setProperty("--gold", gold);
+  root.style.setProperty("--gold-soft", `rgb(${hexToRgb(gold).r} ${hexToRgb(gold).g} ${hexToRgb(gold).b} / 14%)`);
+  root.style.setProperty("--primary-gradient", `linear-gradient(135deg, ${color} 0%, ${secondary} 100%)`);
+}
+
+function normalizeHexColor(value) {
+  const text = String(value || "").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(text) ? text : null;
+}
+
+function hexToRgb(hex) {
+  const value = hex.replace("#", "");
+  return {
+    r: parseInt(value.slice(0, 2), 16),
+    g: parseInt(value.slice(2, 4), 16),
+    b: parseInt(value.slice(4, 6), 16)
+  };
+}
+
+function scaleRgb(rgb, factor) {
+  return {
+    r: Math.round(rgb.r * factor),
+    g: Math.round(rgb.g * factor),
+    b: Math.round(rgb.b * factor)
+  };
+}
+
+function mixRgb(a, b, weight) {
+  return {
+    r: Math.round(a.r * (1 - weight) + b.r * weight),
+    g: Math.round(a.g * (1 - weight) + b.g * weight),
+    b: Math.round(a.b * (1 - weight) + b.b * weight)
+  };
+}
+
+function rgbToHex(rgb) {
+  return `#${[rgb.r, rgb.g, rgb.b]
+    .map((value) => Math.max(0, Math.min(255, value)).toString(16).padStart(2, "0"))
+    .join("")}`;
 }
 
 function bindSidebar() {

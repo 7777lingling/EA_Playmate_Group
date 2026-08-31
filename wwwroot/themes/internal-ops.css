@@ -16,6 +16,9 @@
   --sidebar: #10231f;
   --sidebar-soft: rgb(255 255 255 / 7%);
   --sidebar-line: rgb(255 255 255 / 10%);
+  --sidebar-ink: #f5faf8;
+  --sidebar-muted: #b8c9c3;
+  --sidebar-active-bg: #ffffff;
   --warn: #b7791f;
   --warn-soft: #fff7e8;
   --danger: #c2413b;

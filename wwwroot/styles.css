@@ -16,6 +16,9 @@
   --sidebar: transparent;
   --sidebar-soft: rgb(255 255 255 / 44%);
   --sidebar-line: rgb(124 58 237 / 10%);
+  --sidebar-ink: #17211d;
+  --sidebar-muted: #60716b;
+  --sidebar-active-bg: #ffffff;
   --warn: #d97706;
   --warn-soft: #fff7ed;
   --danger: #ef4444;
@@ -211,7 +214,7 @@ button {
     linear-gradient(180deg, rgb(255 255 255 / 4%) 0%, transparent 34%),
     var(--sidebar);
   border-right: 1px solid var(--sidebar-line);
-  color: #eff5f2;
+  color: var(--sidebar-ink);
   transition: width .18s ease, padding .18s ease;
 }
 
@@ -246,7 +249,7 @@ button {
 }
 
 .brand span {
-  color: #9cb0aa;
+  color: var(--sidebar-muted);
   font-size: 13px;
 }
 
@@ -261,7 +264,7 @@ button {
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 9px;
   background: rgb(255 255 255 / 6%);
-  color: #d8e6e1;
+  color: var(--sidebar-ink);
   font-size: 22px;
   line-height: 1;
 }
@@ -279,7 +282,7 @@ button {
 .nav-tabs button {
   width: 100%;
   background: transparent;
-  color: #a7b8b2;
+  color: var(--sidebar-muted);
   border-radius: 10px;
   text-align: left;
   font-weight: 800;
@@ -3868,6 +3871,9 @@ tbody tr:hover td {
   --sidebar: #10231f;
   --sidebar-soft: rgb(255 255 255 / 7%);
   --sidebar-line: rgb(255 255 255 / 10%);
+  --sidebar-ink: #f5faf8;
+  --sidebar-muted: #b8c9c3;
+  --sidebar-active-bg: #ffffff;
   --shadow: 0 22px 58px rgb(20 49 42 / 12%);
   --shadow-soft: 0 8px 26px rgb(20 49 42 / 8%);
   --primary-gradient: linear-gradient(135deg, #1f7668 0%, #2d6f91 100%);
@@ -3896,7 +3902,7 @@ body {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 7%) 0%, transparent 240px),
     var(--sidebar);
-  color: #f5faf8;
+  color: var(--sidebar-ink);
 }
 
 .brand {
@@ -3915,13 +3921,13 @@ body {
 }
 
 .brand-copy strong {
-  color: #ffffff;
+  color: var(--sidebar-ink);
   font-size: 15px;
   line-height: 1.25;
 }
 
 .brand span {
-  color: #b8c9c3;
+  color: var(--sidebar-muted);
 }
 
 .sidebar-toggle {
@@ -3935,7 +3941,7 @@ body {
 .nav-tabs button {
   min-height: 40px;
   border-radius: 8px;
-  color: #b7c8c2;
+  color: var(--sidebar-muted);
 }
 
 .nav-tabs button:hover {
@@ -3943,7 +3949,7 @@ body {
 }
 
 .nav-tabs button.active {
-  background: #ffffff;
+  background: var(--sidebar-active-bg);
   color: var(--accent-dark);
   box-shadow: inset 4px 0 0 var(--gold);
 }

@@ -16,6 +16,9 @@
   --sidebar: transparent;
   --sidebar-soft: rgb(255 255 255 / 44%);
   --sidebar-line: rgb(124 58 237 / 10%);
+  --sidebar-ink: #211437;
+  --sidebar-muted: #6b5b83;
+  --sidebar-active-bg: rgb(255 255 255 / 82%);
   --shadow: 0 24px 70px rgb(124 58 237 / 13%);
   --shadow-soft: 0 8px 40px rgb(124 58 237 / 8%);
   --primary-gradient: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
