@@ -37,8 +37,7 @@ public sealed class OrderService
                 "Attachment is required before creating a disputed or paid order. Create the order first, upload attachments, then update status.");
         }
 
-        var commissionAmount = request.CommissionAmount
-            ?? decimal.Round(request.Amount * request.CommissionRate, 2, MidpointRounding.AwayFromZero);
+        var commission = await ResolveCommissionAsync(request);
 
         var order = new Order
         {
@@ -47,8 +46,9 @@ public sealed class OrderService
             OrderDate = request.OrderDate,
             OwnerUserId = request.OwnerUserId,
             Amount = request.Amount,
-            CommissionRate = request.CommissionRate,
-            CommissionAmount = commissionAmount,
+            ServiceQuantity = request.ServiceQuantity,
+            CommissionRate = commission.Rate,
+            CommissionAmount = commission.Amount,
             Status = request.Status,
             CustomerPaymentStatus = request.CustomerPaymentStatus,
             Remark = string.IsNullOrWhiteSpace(request.Remark) ? null : request.Remark.Trim(),
@@ -109,8 +109,7 @@ public sealed class OrderService
             }
         }
 
-        var commissionAmount = request.CommissionAmount
-            ?? decimal.Round(request.Amount * request.CommissionRate, 2, MidpointRounding.AwayFromZero);
+        var commission = await ResolveCommissionAsync(request);
 
         var order = new Order
         {
@@ -119,8 +118,9 @@ public sealed class OrderService
             OrderDate = request.OrderDate,
             OwnerUserId = request.OwnerUserId,
             Amount = request.Amount,
-            CommissionRate = request.CommissionRate,
-            CommissionAmount = commissionAmount,
+            ServiceQuantity = request.ServiceQuantity,
+            CommissionRate = commission.Rate,
+            CommissionAmount = commission.Amount,
             Status = request.Status,
             CustomerPaymentStatus = request.CustomerPaymentStatus,
             Remark = string.IsNullOrWhiteSpace(request.Remark) ? null : request.Remark.Trim(),
@@ -192,7 +192,7 @@ public sealed class OrderService
             return ServiceResult.Missing();
         }
 
-        var validationResult = await ValidateUpdateOrderAsync(request);
+        var validationResult = await ValidateUpdateOrderAsync(order.Id, request);
         if (!validationResult.Succeeded)
         {
             return validationResult;
@@ -210,8 +210,10 @@ public sealed class OrderService
         order.OrderDate = request.OrderDate;
         order.OwnerUserId = request.OwnerUserId;
         order.Amount = request.Amount;
-        order.CommissionRate = request.CommissionRate;
-        order.CommissionAmount = request.CommissionAmount;
+        order.ServiceQuantity = request.ServiceQuantity;
+        var commission = await ResolveCommissionAsync(request, order.Id);
+        order.CommissionRate = commission.Rate;
+        order.CommissionAmount = commission.Amount;
         order.Status = request.Status;
         order.CustomerPaymentStatus = request.CustomerPaymentStatus;
         order.Remark = string.IsNullOrWhiteSpace(request.Remark) ? null : request.Remark.Trim();
@@ -399,12 +401,12 @@ public sealed class OrderService
 
     private async Task<ServiceResult> ValidateCreateOrderAsync(CreateOrderRequestDto request)
     {
-        var commissionAmount = request.CommissionAmount
-            ?? decimal.Round(request.Amount * request.CommissionRate, 2, MidpointRounding.AwayFromZero);
+        var commission = await ResolveCommissionAsync(request);
 
         return await ValidateOrderAsync(
             request.Amount,
-            commissionAmount,
+            commission.Amount,
+            request.ServiceQuantity,
             request.OrderType,
             request.Status,
             request.CustomerPaymentStatus,
@@ -412,11 +414,12 @@ public sealed class OrderService
             request.Members);
     }
 
-    private async Task<ServiceResult> ValidateUpdateOrderAsync(UpdateOrderRequestDto request)
+    private async Task<ServiceResult> ValidateUpdateOrderAsync(int orderId, UpdateOrderRequestDto request)
     {
         return await ValidateOrderAsync(
             request.Amount,
-            request.CommissionAmount,
+            (await ResolveCommissionAsync(request, orderId)).Amount,
+            request.ServiceQuantity,
             request.OrderType,
             request.Status,
             request.CustomerPaymentStatus,
@@ -427,6 +430,7 @@ public sealed class OrderService
     private async Task<ServiceResult> ValidateOrderAsync(
         decimal amount,
         decimal commissionAmount,
+        decimal serviceQuantity,
         string orderType,
         string status,
         string customerPaymentStatus,
@@ -436,6 +440,16 @@ public sealed class OrderService
         if (amount <= 0)
         {
             return ServiceResult.Failure("invalid_amount", "Amount must be greater than zero.");
+        }
+
+        if (serviceQuantity < 0)
+        {
+            return ServiceResult.Failure("invalid_service_quantity", "Service quantity must be zero or greater.");
+        }
+
+        if (orderType == "companion" && serviceQuantity <= 0)
+        {
+            return ServiceResult.Failure("invalid_service_quantity", "Companion orders must include service hours.");
         }
 
         if (members.Count == 0)
@@ -478,6 +492,111 @@ public sealed class OrderService
         }
 
         return ServiceResult.Success();
+    }
+
+    private async Task<CommissionQuote> ResolveCommissionAsync(CreateOrderRequestDto request, int? excludeOrderId = null)
+    {
+        if (request.OrderType == "companion")
+        {
+            var primaryMemberId = request.Members.FirstOrDefault()?.UserId;
+            if (primaryMemberId is null || request.ServiceQuantity <= 0)
+            {
+                return new CommissionQuote(0m, 0m);
+            }
+
+            var monthStart = new DateOnly(request.OrderDate.Year, request.OrderDate.Month, 1);
+            var nextMonth = monthStart.AddMonths(1);
+            var completedHours = await _db.OrderMembers.AsNoTracking()
+                .Where(x => x.UserId == primaryMemberId.Value
+                    && x.Order.Status == "completed"
+                    && x.Order.OrderType == "companion"
+                    && x.Order.OrderDate >= monthStart
+                    && x.Order.OrderDate < nextMonth
+                    && (!excludeOrderId.HasValue || x.OrderId != excludeOrderId.Value))
+                .SumAsync(x => x.Order.ServiceQuantity);
+            var commissionAmount = CalculateCompanionTierCommission(
+                request.Amount,
+                request.ServiceQuantity,
+                completedHours);
+            var effectiveRate = request.Amount > 0
+                ? decimal.Round(commissionAmount / request.Amount, 4, MidpointRounding.AwayFromZero)
+                : 0m;
+            return new CommissionQuote(effectiveRate, commissionAmount);
+        }
+
+        var manualAmount = request.CommissionAmount ?? 0m;
+        var manualRate = request.Amount > 0
+            ? decimal.Round(manualAmount / request.Amount, 4, MidpointRounding.AwayFromZero)
+            : 0m;
+        return new CommissionQuote(manualRate, manualAmount);
+    }
+
+    private Task<CommissionQuote> ResolveCommissionAsync(UpdateOrderRequestDto request, int? excludeOrderId = null)
+    {
+        return ResolveCommissionAsync(
+            new CreateOrderRequestDto
+            {
+                OrderNo = request.OrderNo,
+                OrderType = request.OrderType,
+                OrderDate = request.OrderDate,
+                OwnerUserId = request.OwnerUserId,
+                Amount = request.Amount,
+                ServiceQuantity = request.ServiceQuantity,
+                CommissionRate = request.CommissionRate,
+                CommissionAmount = request.CommissionAmount,
+                Status = request.Status,
+                CustomerPaymentStatus = request.CustomerPaymentStatus,
+                Remark = request.Remark,
+                Members = request.Members
+            },
+            excludeOrderId);
+    }
+
+    private static decimal CalculateCompanionTierCommission(decimal amount, decimal hours, decimal completedHours)
+    {
+        if (amount <= 0 || hours <= 0)
+        {
+            return 0m;
+        }
+
+        var hourlyAmount = amount / hours;
+        var remainingHours = hours;
+        var cursor = completedHours;
+        var commission = 0m;
+
+        while (remainingHours > 0)
+        {
+            var rate = CompanionCommissionRate(cursor);
+            var nextBoundary = cursor < 15m
+                ? 15m
+                : cursor < 30m
+                    ? 30m
+                    : decimal.MaxValue;
+            var tierHours = nextBoundary == decimal.MaxValue
+                ? remainingHours
+                : Math.Min(remainingHours, nextBoundary - cursor);
+
+            commission += hourlyAmount * tierHours * rate;
+            remainingHours -= tierHours;
+            cursor += tierHours;
+        }
+
+        return decimal.Round(commission, 2, MidpointRounding.AwayFromZero);
+    }
+
+    private static decimal CompanionCommissionRate(decimal completedHours)
+    {
+        if (completedHours < 15m)
+        {
+            return 0.25m;
+        }
+
+        if (completedHours < 30m)
+        {
+            return 0.20m;
+        }
+
+        return 0.10m;
     }
 
     private IQueryable<Order> GetOrderWithRelations(int orderId)
@@ -557,4 +676,6 @@ public sealed class OrderService
             result.ErrorCode ?? "operation_failed",
             result.ErrorMessage ?? "Operation failed.");
     }
+
+    private sealed record CommissionQuote(decimal Rate, decimal Amount);
 }

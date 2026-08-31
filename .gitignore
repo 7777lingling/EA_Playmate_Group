@@ -29,6 +29,7 @@ coverage.*
 *.trx
 
 # Local temporary output
+.codex/
 .tmp/
 .temp/
 .verify*/

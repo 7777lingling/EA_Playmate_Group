@@ -359,20 +359,12 @@
         <div class="panel-head">
           <h2>服務價目清單</h2>
         </div>
-        <div class="category-tabs" id="serviceCategoryTabs"></div>
-        <div class="table-wrap">
+        <div class="service-menu-tabs" id="serviceCategoryTabs" aria-label="服務大類"></div>
+        <div class="service-branch-head" id="serviceBranchHead"></div>
+        <div class="service-item-grid" id="serviceItemRows"></div>
+        <div class="table-wrap service-table-fallback" hidden>
           <table>
-            <thead>
-              <tr>
-                <th>類型</th>
-                <th>項目</th>
-                <th>價格</th>
-                <th>單位</th>
-                <th>備註</th>
-                <th>點單</th>
-              </tr>
-            </thead>
-            <tbody id="serviceItemRows"></tbody>
+            <tbody></tbody>
           </table>
         </div>
       </section>
@@ -774,11 +766,9 @@
                   <input name="isLateNight" type="checkbox">
                   深夜 00:00-06:00 +30
                 </label>
-                <label id="lateNightMapPickField">深夜選地
-                  <select name="hasLateNightMapPick">
-                    <option value="no">無</option>
-                    <option value="yes">有</option>
-                  </select>
+                <label class="inline-check order-surcharge-check" id="autoLateNightField">
+                  <input name="autoDetectLateNight" type="checkbox">
+                  自動判斷深夜
                 </label>
               </div>
             </section>

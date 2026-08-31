@@ -37,8 +37,8 @@ BEGIN
         CONVERT(date, GETDATE()),
         @owner_user_id,
         200.00,
-        0.1000,
-        20.00,
+        0,
+        0.00,
         N'completed',
         N'unpaid',
         N'Demo order. You can delete it after verification.'
@@ -48,7 +48,7 @@ BEGIN
 
     INSERT INTO dbo.order_members (order_id, user_id, role, share_amount)
     VALUES
-        (@order_id, @player_a_user_id, N'player', 90.00),
-        (@order_id, @player_b_user_id, N'player', 90.00);
+        (@order_id, @player_a_user_id, N'player', 100.00),
+        (@order_id, @player_b_user_id, N'player', 100.00);
 END
 GO

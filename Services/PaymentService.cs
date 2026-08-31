@@ -54,7 +54,7 @@ public sealed class PaymentService
             })
             .ToListAsync();
 
-        var giftRows = await _db.GiftRecords.AsNoTracking()
+        var giftRows = (await _db.GiftRecords.AsNoTracking()
             .Where(x => x.Status == "completed"
                 && x.GiftDate >= monthStart
                 && x.GiftDate < nextMonth)
@@ -72,7 +72,28 @@ public sealed class PaymentService
                 BossNickname = x.BossUser!.Nickname,
                 x.CustomerPaymentStatus
             })
-            .ToListAsync();
+            .ToListAsync())
+            .Select(x =>
+            {
+                var commissionAmount = CalculateGiftCommission(x.TotalAmount);
+                return new
+                {
+                    x.UserId,
+                    x.Nickname,
+                    x.GiftRecordId,
+                    x.GiftDate,
+                    x.GiftName,
+                    x.Amount,
+                    x.Quantity,
+                    x.TotalAmount,
+                    CommissionAmount = commissionAmount,
+                    NetAmount = x.TotalAmount - commissionAmount,
+                    x.BossUserId,
+                    x.BossNickname,
+                    x.CustomerPaymentStatus
+                };
+            })
+            .ToList();
 
         var userIds = orderRows.Select(x => x.UserId)
             .Concat(giftRows.Select(x => x.UserId))
@@ -105,7 +126,7 @@ public sealed class PaymentService
             userGifts ??= [];
 
             var orderAmount = userOrders.Sum(x => x.ShareAmount);
-            var giftAmount = userGifts.Sum(x => x.TotalAmount);
+            var giftAmount = userGifts.Sum(x => x.NetAmount);
             var expectedAmount = orderAmount + giftAmount;
             var snapshot = new
             {
@@ -141,6 +162,8 @@ public sealed class PaymentService
                         amount = x.Amount,
                         quantity = x.Quantity,
                         total_amount = x.TotalAmount,
+                        commission_amount = x.CommissionAmount,
+                        net_amount = x.NetAmount,
                         customer_payment_status = x.CustomerPaymentStatus
                     })
             };
@@ -340,6 +363,13 @@ public sealed class PaymentService
             && int.TryParse(payMonth[5..], out var month)
             && month is >= 1 and <= 12
             && TryCreateDate(year, month, out monthStart);
+    }
+
+    private static decimal CalculateGiftCommission(decimal totalAmount)
+    {
+        return totalAmount > 150m
+            ? decimal.Round(totalAmount * 0.05m, 2, MidpointRounding.AwayFromZero)
+            : 0m;
     }
 
     private static bool TryCreateDate(int year, int month, out DateOnly value)

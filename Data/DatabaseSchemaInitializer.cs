@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace EAPlaymateGroup.Data;
 
@@ -11,6 +11,9 @@ IF OBJECT_ID(N'dbo.orders', N'U') IS NOT NULL
 BEGIN
     IF COL_LENGTH('dbo.orders', 'order_type') IS NULL
         ALTER TABLE dbo.orders ADD order_type NVARCHAR(20) NOT NULL CONSTRAINT DF_orders_order_type DEFAULT N'boosting';
+
+    IF COL_LENGTH('dbo.orders', 'service_quantity') IS NULL
+        ALTER TABLE dbo.orders ADD service_quantity DECIMAL(10,2) NOT NULL CONSTRAINT DF_orders_service_quantity DEFAULT 0;
 
     IF NOT EXISTS
     (
@@ -396,16 +399,16 @@ WITH seed_items AS
         (N'grind-weekly-treasures', N'grind', N'週常', N'代肝 - 娛樂週常三珍寶', N'week', CAST(20 AS DECIMAL(12,2)), N'20 / 週', NULL, 250),
         (N'grind-lose-match', N'grind', N'敗場', N'代肝 - 刷敗場', N'match', CAST(8 AS DECIMAL(12,2)), N'8 / 場', N'買 10 送 1。', 260),
 
-        (N'play-entertainment', N'play', N'一般娛樂', N'陪玩 - 娛樂陪', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 300),
-        (N'play-technical-tier-1-3', N'play', N'一般排位', N'陪玩 - 排位 1-4 階', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 310),
-        (N'play-technical-tier-4', N'play', N'一般排位', N'陪玩 - 排位 5-6 階', N'hour_person', CAST(210 AS DECIMAL(12,2)), N'210 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 320),
-        (N'play-technical-tier-5', N'play', N'一般排位', N'陪玩 - 排位 7 階以上', N'hour_person', CAST(260 AS DECIMAL(12,2)), N'260 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 330),
+        (N'play-entertainment', N'play', N'一般娛樂', N'陪玩 - 娛樂陪', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 300),
+        (N'play-technical-tier-1-3', N'play', N'一般排位', N'陪玩 - 排位 1-4 階', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 310),
+        (N'play-technical-tier-4', N'play', N'一般排位', N'陪玩 - 排位 5-6 階', N'hour_person', CAST(210 AS DECIMAL(12,2)), N'210 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 320),
+        (N'play-technical-tier-5', N'play', N'一般排位', N'陪玩 - 排位 7 階以上', N'hour_person', CAST(260 AS DECIMAL(12,2)), N'260 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 330),
         (N'play-technical-tier-6', N'play', N'舊價目', N'陪玩 - 技術陪 六階', N'hour_person', CAST(230 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 5-6 階。', 340),
         (N'play-technical-tier-7', N'play', N'舊價目', N'陪玩 - 技術陪 七階', N'hour_person', CAST(250 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 7 階以上。', 350),
         (N'play-technical-tier-peak7', N'play', N'舊價目', N'陪玩 - 技術陪 巔七以上', N'hour_person', CAST(300 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 7 階以上。', 360),
         (N'play-teaching', N'play', N'舊價目', N'陪玩 - 教學陪', N'hour_person', CAST(100 AS DECIMAL(12,2)), N'已停用', N'新版試行價暫不列教學陪。', 370),
-        (N'play-gold-entertainment', N'play', N'摸金／加頁', N'加頁 - 娛樂', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 380),
-        (N'play-gold-technical', N'play', N'摸金／加頁', N'加頁 - 技術', N'hour_person', CAST(170 AS DECIMAL(12,2)), N'170 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 390),
+        (N'play-gold-entertainment', N'play', N'摸金／加頁', N'加頁 - 娛樂', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 380),
+        (N'play-gold-technical', N'play', N'摸金／加頁', N'加頁 - 技術', N'hour_person', CAST(170 AS DECIMAL(12,2)), N'170 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 390),
         (N'play-gold-demon-protect', N'play', N'摸金／加頁', N'加頁 - 魔王護', N'hour_person', CAST(360 AS DECIMAL(12,2)), N'360 / 小時', N'二陪一，主打提高撤離保障與陪同強度。', 395),
 
         (N'gift-candle', N'gift', N'禮物', N'香氛蠟燭', N'item', CAST(40 AS DECIMAL(12,2)), N'40', NULL, 400),
@@ -854,16 +857,16 @@ WITH restore_service_items AS
         (N'grind-weekly-treasures', N'grind', N'週常', N'代肝 - 娛樂週常三珍寶', N'week', CAST(20 AS DECIMAL(12,2)), N'20 / 週', NULL, 250, CAST(1 AS BIT)),
         (N'grind-lose-match', N'grind', N'敗場', N'代肝 - 刷敗場', N'match', CAST(8 AS DECIMAL(12,2)), N'8 / 場', N'買 10 送 1。', 260, CAST(1 AS BIT)),
 
-        (N'play-entertainment', N'play', N'一般娛樂', N'陪玩 - 娛樂陪', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 300, CAST(1 AS BIT)),
-        (N'play-technical-tier-1-3', N'play', N'一般排位', N'陪玩 - 排位 1-4 階', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 310, CAST(1 AS BIT)),
-        (N'play-technical-tier-4', N'play', N'一般排位', N'陪玩 - 排位 5-6 階', N'hour_person', CAST(210 AS DECIMAL(12,2)), N'210 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 320, CAST(1 AS BIT)),
-        (N'play-technical-tier-5', N'play', N'一般排位', N'陪玩 - 排位 7 階以上', N'hour_person', CAST(260 AS DECIMAL(12,2)), N'260 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 330, CAST(1 AS BIT)),
+        (N'play-entertainment', N'play', N'一般娛樂', N'陪玩 - 娛樂陪', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 300, CAST(1 AS BIT)),
+        (N'play-technical-tier-1-3', N'play', N'一般排位', N'陪玩 - 排位 1-4 階', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 310, CAST(1 AS BIT)),
+        (N'play-technical-tier-4', N'play', N'一般排位', N'陪玩 - 排位 5-6 階', N'hour_person', CAST(210 AS DECIMAL(12,2)), N'210 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 320, CAST(1 AS BIT)),
+        (N'play-technical-tier-5', N'play', N'一般排位', N'陪玩 - 排位 7 階以上', N'hour_person', CAST(260 AS DECIMAL(12,2)), N'260 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 330, CAST(1 AS BIT)),
         (N'play-technical-tier-6', N'play', N'舊價目', N'陪玩 - 技術陪 六階', N'hour_person', CAST(230 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 5-6 階。', 340, CAST(0 AS BIT)),
         (N'play-technical-tier-7', N'play', N'舊價目', N'陪玩 - 技術陪 七階', N'hour_person', CAST(250 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 7 階以上。', 350, CAST(0 AS BIT)),
         (N'play-technical-tier-peak7', N'play', N'舊價目', N'陪玩 - 技術陪 巔七以上', N'hour_person', CAST(300 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 7 階以上。', 360, CAST(0 AS BIT)),
         (N'play-teaching', N'play', N'舊價目', N'陪玩 - 教學陪', N'hour_person', CAST(100 AS DECIMAL(12,2)), N'已停用', N'新版試行價暫不列教學陪。', 370, CAST(0 AS BIT)),
-        (N'play-gold-entertainment', N'play', N'摸金／加頁', N'加頁 - 娛樂', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 380, CAST(1 AS BIT)),
-        (N'play-gold-technical', N'play', N'摸金／加頁', N'加頁 - 技術', N'hour_person', CAST(170 AS DECIMAL(12,2)), N'170 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 390, CAST(1 AS BIT)),
+        (N'play-gold-entertainment', N'play', N'摸金／加頁', N'加頁 - 娛樂', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 380, CAST(1 AS BIT)),
+        (N'play-gold-technical', N'play', N'摸金／加頁', N'加頁 - 技術', N'hour_person', CAST(170 AS DECIMAL(12,2)), N'170 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 390, CAST(1 AS BIT)),
         (N'play-gold-demon-protect', N'play', N'摸金／加頁', N'加頁 - 魔王護', N'hour_person', CAST(360 AS DECIMAL(12,2)), N'360 / 小時', N'二陪一，主打提高撤離保障與陪同強度。', 395, CAST(1 AS BIT)),
 
         (N'gift-candle', N'gift', N'禮物', N'香氛蠟燭', N'item', CAST(40 AS DECIMAL(12,2)), N'40', NULL, 400, CAST(1 AS BIT)),
@@ -970,16 +973,16 @@ WITH pilot_service_prices AS
 (
     SELECT *
     FROM (VALUES
-        (N'play-entertainment', N'play', N'一般娛樂', N'陪玩 - 娛樂陪', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 300, CAST(1 AS BIT)),
-        (N'play-technical-tier-1-3', N'play', N'一般排位', N'陪玩 - 排位 1-4 階', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 310, CAST(1 AS BIT)),
-        (N'play-technical-tier-4', N'play', N'一般排位', N'陪玩 - 排位 5-6 階', N'hour_person', CAST(210 AS DECIMAL(12,2)), N'210 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 320, CAST(1 AS BIT)),
-        (N'play-technical-tier-5', N'play', N'一般排位', N'陪玩 - 排位 7 階以上', N'hour_person', CAST(260 AS DECIMAL(12,2)), N'260 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 330, CAST(1 AS BIT)),
+        (N'play-entertainment', N'play', N'一般娛樂', N'陪玩 - 娛樂陪', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 300, CAST(1 AS BIT)),
+        (N'play-technical-tier-1-3', N'play', N'一般排位', N'陪玩 - 排位 1-4 階', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 310, CAST(1 AS BIT)),
+        (N'play-technical-tier-4', N'play', N'一般排位', N'陪玩 - 排位 5-6 階', N'hour_person', CAST(210 AS DECIMAL(12,2)), N'210 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 320, CAST(1 AS BIT)),
+        (N'play-technical-tier-5', N'play', N'一般排位', N'陪玩 - 排位 7 階以上', N'hour_person', CAST(260 AS DECIMAL(12,2)), N'260 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 330, CAST(1 AS BIT)),
         (N'play-technical-tier-6', N'play', N'舊價目', N'陪玩 - 技術陪 六階', N'hour_person', CAST(230 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 5-6 階。', 340, CAST(0 AS BIT)),
         (N'play-technical-tier-7', N'play', N'舊價目', N'陪玩 - 技術陪 七階', N'hour_person', CAST(250 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 7 階以上。', 350, CAST(0 AS BIT)),
         (N'play-technical-tier-peak7', N'play', N'舊價目', N'陪玩 - 技術陪 巔七以上', N'hour_person', CAST(300 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 7 階以上。', 360, CAST(0 AS BIT)),
         (N'play-teaching', N'play', N'舊價目', N'陪玩 - 教學陪', N'hour_person', CAST(100 AS DECIMAL(12,2)), N'已停用', N'新版試行價暫不列教學陪。', 370, CAST(0 AS BIT)),
-        (N'play-gold-entertainment', N'play', N'摸金／加頁', N'加頁 - 娛樂', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 380, CAST(1 AS BIT)),
-        (N'play-gold-technical', N'play', N'摸金／加頁', N'加頁 - 技術', N'hour_person', CAST(170 AS DECIMAL(12,2)), N'170 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30；深夜選地需確認。', 390, CAST(1 AS BIT)),
+        (N'play-gold-entertainment', N'play', N'摸金／加頁', N'加頁 - 娛樂', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 380, CAST(1 AS BIT)),
+        (N'play-gold-technical', N'play', N'摸金／加頁', N'加頁 - 技術', N'hour_person', CAST(170 AS DECIMAL(12,2)), N'170 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 390, CAST(1 AS BIT)),
         (N'play-gold-demon-protect', N'play', N'摸金／加頁', N'加頁 - 魔王護', N'hour_person', CAST(360 AS DECIMAL(12,2)), N'360 / 小時', N'二陪一，主打提高撤離保障與陪同強度。', 395, CAST(1 AS BIT)),
         (N'special-companion-singing', N'special_companion', N'歌陪', N'歌陪 - 1 小時', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / 小時', N'歌陪 30 分鐘為 100。', 600, CAST(1 AS BIT)),
         (N'special-companion-singing-half', N'special_companion', N'歌陪', N'歌陪 - 30 分鐘', N'custom', CAST(100 AS DECIMAL(12,2)), N'100 / 30 分鐘', NULL, 605, CAST(1 AS BIT)),
@@ -1136,6 +1139,8 @@ IF COL_LENGTH('dbo.orders', 'created_audit_log_id') IS NULL
     ALTER TABLE dbo.orders ADD created_audit_log_id BIGINT NULL;
 IF COL_LENGTH('dbo.orders', 'order_type') IS NULL
     ALTER TABLE dbo.orders ADD order_type NVARCHAR(20) NOT NULL CONSTRAINT DF_orders_order_type DEFAULT N'boosting';
+IF COL_LENGTH('dbo.orders', 'service_quantity') IS NULL
+    ALTER TABLE dbo.orders ADD service_quantity DECIMAL(10,2) NOT NULL CONSTRAINT DF_orders_service_quantity DEFAULT 0;
 IF COL_LENGTH('dbo.orders', 'cancelled_audit_log_id') IS NULL
     ALTER TABLE dbo.orders ADD cancelled_audit_log_id BIGINT NULL;
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_orders_order_type')

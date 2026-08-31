@@ -301,7 +301,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.OrderDate).HasColumnName("order_date");
         entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
         entity.Property(x => x.Amount).HasColumnName("amount").HasPrecision(12, 2);
-        entity.Property(x => x.CommissionRate).HasColumnName("commission_rate").HasPrecision(6, 4).HasDefaultValue(0.1000m);
+        entity.Property(x => x.ServiceQuantity).HasColumnName("service_quantity").HasPrecision(10, 2).HasDefaultValue(0m);
+        entity.Property(x => x.CommissionRate).HasColumnName("commission_rate").HasPrecision(6, 4).HasDefaultValue(0m);
         entity.Property(x => x.CommissionAmount).HasColumnName("commission_amount").HasPrecision(12, 2);
         entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(20).HasDefaultValue("completed").IsRequired();
         entity.Property(x => x.CustomerPaymentStatus).HasColumnName("customer_payment_status").HasMaxLength(20).HasDefaultValue("unpaid").IsRequired();

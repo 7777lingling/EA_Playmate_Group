@@ -25,6 +25,8 @@ const state = {
   orderAttachmentFiles: [],
   view: "dashboard",
   serviceCategory: "play",
+  orderServiceCategory: "play",
+  orderAmountManuallyEdited: false,
   auth: null
 };
 
@@ -923,6 +925,10 @@ function setMemberPickerValue(fieldOrInput, value) {
   input.value = value == null ? "" : String(value);
   refreshMemberPickerField(field);
   input.dispatchEvent(new Event("change", { bubbles: true }));
+  if (input.matches("[data-member-select]")) {
+    updateOrderAmountFromService();
+    updateOrderCalc();
+  }
 }
 
 function refreshMemberPickerField(field) {
@@ -2159,22 +2165,24 @@ function renderServiceItems() {
   }
 
   renderServiceCategoryTabs();
-  const rows = state.serviceItems.filter((item) => item.category === state.serviceCategory && item.isActive);
+  renderServiceBranchHead();
+  const rows = state.serviceItems
+    .filter((item) => item.category === state.serviceCategory && item.isActive)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name, "zh-Hant"));
 
   body.innerHTML = rows.length ? rows.map((item) => `
-    <tr>
-      <td>${escapeHtml(item.subcategory || serviceCategoryText(item.category))}</td>
-      <td>${escapeHtml(item.name)}</td>
-      <td>${escapeHtml(servicePriceText(item))}</td>
-      <td>${escapeHtml(unitTypeText(item.unitType))}</td>
-      <td>${escapeHtml(item.remark || "")}</td>
-      <td class="service-order-action">
-        ${item.category === "gift"
-          ? `<button class="primary small" type="button" data-service-gift="${item.id}">贈送</button>`
-          : `<button class="primary small" type="button" data-service-order="${item.id}">點單</button>`}
-      </td>
-    </tr>
-  `).join("") : emptyRow(6);
+    <button class="service-item-card" type="button" data-${item.category === "gift" ? "service-gift" : "service-order"}="${item.id}">
+      <div class="service-item-card-main">
+        <span>${escapeHtml(item.subcategory || serviceCategoryText(item.category))}</span>
+        <strong>${escapeHtml(item.name)}</strong>
+        <em>${escapeHtml(servicePriceText(item))} / ${escapeHtml(unitTypeText(item.unitType))}</em>
+        ${item.remark ? `<p>${escapeHtml(item.remark)}</p>` : ""}
+      </div>
+      <span class="service-item-action">
+        ${item.category === "gift" ? "贈送" : "點單"}
+      </span>
+    </button>
+  `).join("") : `<p class="muted">這個分類目前沒有可用項目。</p>`;
 
   body.querySelectorAll("[data-service-order]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -2215,27 +2223,40 @@ function renderOrderServiceShortcuts() {
     return;
   }
 
-  wrap.innerHTML = preferredCategories.map((category) => {
-    const categoryItems = items.filter((item) => item.category === category);
-    if (!categoryItems.length) {
-      return "";
-    }
+  const categories = preferredCategories.filter((category) => items.some((item) => item.category === category));
+  if (!categories.includes(state.orderServiceCategory)) {
+    state.orderServiceCategory = categories[0] || "play";
+  }
+  const categoryItems = items.filter((item) => item.category === state.orderServiceCategory);
 
-    return `
-      <section class="order-shortcut-group">
-        <h3>${serviceCategoryText(category)}</h3>
-        <div class="order-shortcut-list">
-          ${categoryItems.map((item) => `
-            <button class="order-shortcut-card" type="button" data-service-order="${item.id}">
-              <span>${escapeHtml(item.subcategory || serviceCategoryText(item.category))}</span>
-              <strong>${escapeHtml(item.name)}</strong>
-              <em>${escapeHtml(servicePriceText(item))} / ${escapeHtml(unitTypeText(item.unitType))}</em>
-            </button>
-          `).join("")}
-        </div>
-      </section>
-    `;
-  }).join("");
+  wrap.innerHTML = `
+    <div class="order-shortcut-tabs" aria-label="新版價目大類">
+      ${categories.map((category) => `
+        <button class="${state.orderServiceCategory === category ? "active" : ""}" type="button" data-order-service-category="${category}">
+          ${serviceCategoryText(category)}
+        </button>
+      `).join("")}
+    </div>
+    <section class="order-shortcut-group">
+      <h3>${serviceCategoryText(state.orderServiceCategory)}</h3>
+      <div class="order-shortcut-list">
+        ${categoryItems.map((item) => `
+          <button class="order-shortcut-card" type="button" data-service-order="${item.id}">
+            <span>${escapeHtml(item.subcategory || serviceCategoryText(item.category))}</span>
+            <strong>${escapeHtml(item.name)}</strong>
+            <em>${escapeHtml(servicePriceText(item))} / ${escapeHtml(unitTypeText(item.unitType))}</em>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `;
+
+  wrap.querySelectorAll("[data-order-service-category]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.orderServiceCategory = button.dataset.orderServiceCategory;
+      renderOrderServiceShortcuts();
+    });
+  });
 
   wrap.querySelectorAll("[data-service-order]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -2463,18 +2484,29 @@ function renderServiceCategoryTabs() {
   }
 
   const categories = [
-    ["boost", "代打"],
-    ["grind", "代肝"],
     ["play", "陪玩"],
     ["special_companion", "特殊陪"],
+    ["grind", "代肝"],
+    ["boost", "代打"],
     ["gift", "禮物"],
     ["deposit_bonus", "預存"],
     ["other", "其他"]
   ];
+  const activeCategories = categories.filter(([value]) =>
+    state.serviceItems.some((item) => item.category === value && item.isActive));
+  if (!activeCategories.some(([value]) => value === state.serviceCategory)) {
+    state.serviceCategory = activeCategories[0]?.[0] || "play";
+  }
 
-  tabs.innerHTML = categories.map(([value, text]) => `
-    <button class="ghost small ${state.serviceCategory === value ? "active" : ""}" data-service-category="${value}" type="button">${text}</button>
-  `).join("");
+  tabs.innerHTML = activeCategories.map(([value, text]) => {
+    const count = state.serviceItems.filter((item) => item.category === value && item.isActive).length;
+    return `
+    <button class="${state.serviceCategory === value ? "active" : ""}" data-service-category="${value}" type="button">
+      <span>${text}</span>
+      <strong>${count}</strong>
+    </button>
+  `;
+  }).join("");
 
   tabs.querySelectorAll("[data-service-category]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -2915,6 +2947,22 @@ function renderAuditLogs(rows) {
       });
     });
   });
+}
+
+function renderServiceBranchHead() {
+  const head = document.getElementById("serviceBranchHead");
+  if (!head) {
+    return;
+  }
+
+  const rows = state.serviceItems.filter((item) => item.category === state.serviceCategory && item.isActive);
+  head.innerHTML = `
+    <div>
+      <span>目前大類</span>
+      <strong>${escapeHtml(serviceCategoryText(state.serviceCategory))}</strong>
+    </div>
+    <em>${money.format(rows.length)} 個項目</em>
+  `;
 }
 
 function renderMoneyLogs(rows) {
@@ -3756,6 +3804,7 @@ async function startOrderFromService(item) {
 
 function applyServiceToOrderForm(item) {
   resetOrderForm();
+  state.orderAmountManuallyEdited = false;
 
   const form = document.getElementById("orderForm");
   const price = item.defaultPrice ?? 0;
@@ -3830,6 +3879,8 @@ async function submitOrder(event) {
   if (!validateRequiredMemberPickers(form)) {
     return;
   }
+  applyAutoLateNightDetection(form);
+  updateOrderAmountFromService();
   const data = new FormData(form);
   let orderId = data.get("orderId");
   const editControlsVisible = !document.getElementById("copyOrderBtn").hidden;
@@ -3864,7 +3915,8 @@ async function submitOrder(event) {
       orderDate: data.get("orderDate"),
       ownerUserId: data.get("ownerUserId") ? Number(data.get("ownerUserId")) : null,
       amount,
-      commissionRate: 0.1,
+      serviceQuantity: Number(data.get("serviceQuantity") || 0),
+      commissionRate: amount > 0 ? roundRate(commissionAmount / amount) : 0,
       commissionAmount,
       status: data.get("status"),
       customerPaymentStatus: data.get("customerPaymentStatus"),
@@ -3893,6 +3945,7 @@ async function submitOrder(event) {
         createData.append("orderDate", payload.orderDate);
         createData.append("ownerUserId", payload.ownerUserId == null ? "" : String(payload.ownerUserId));
         createData.append("amount", String(payload.amount));
+        createData.append("serviceQuantity", String(payload.serviceQuantity));
         createData.append("commissionRate", String(payload.commissionRate));
         createData.append("commissionAmount", String(payload.commissionAmount));
         createData.append("status", payload.status);
@@ -3924,6 +3977,7 @@ async function submitOrder(event) {
 
 function startOrderEdit(order) {
   const form = document.getElementById("orderForm");
+  state.orderAmountManuallyEdited = true;
   form.elements.orderId.value = order.id;
   form.elements.orderDate.value = order.orderDate;
   form.elements.orderNo.value = order.orderNo || "";
@@ -3936,11 +3990,11 @@ function startOrderEdit(order) {
   form.elements.serviceUnitPrice.value = "";
   form.elements.serviceUnitType.value = "";
   form.elements.serviceUnitLabel.value = "";
-  form.elements.serviceQuantity.value = 1;
+  form.elements.serviceQuantity.value = order.serviceQuantity || 1;
   form.elements.assignedPlayerCount.value = 0;
   form.elements.friendCount.value = 0;
   form.elements.isLateNight.checked = false;
-  form.elements.hasLateNightMapPick.value = "no";
+  form.elements.autoDetectLateNight.checked = false;
   form.elements.commissionAmount.value = order.commissionAmount;
   form.elements.status.value = order.status || "completed";
   form.elements.customerPaymentStatus.value = order.customerPaymentStatus || "unpaid";
@@ -3971,6 +4025,7 @@ function startOrderEdit(order) {
 
 function copyOrderAsNew() {
   const form = document.getElementById("orderForm");
+  state.orderAmountManuallyEdited = true;
   form.elements.orderId.value = "";
   form.elements.orderType.value = form.elements.orderType.value || "boosting";
   clearOrderAttachmentDraft();
@@ -3984,6 +4039,7 @@ function copyOrderAsNew() {
 
 function resetOrderForm() {
   const form = document.getElementById("orderForm");
+  state.orderAmountManuallyEdited = false;
   form.reset();
   form.elements.orderId.value = "";
   form.elements.orderType.value = "companion";
@@ -3996,7 +4052,7 @@ function resetOrderForm() {
   form.elements.assignedPlayerCount.value = 0;
   form.elements.friendCount.value = 0;
   form.elements.isLateNight.checked = false;
-  form.elements.hasLateNightMapPick.value = "no";
+  form.elements.autoDetectLateNight.checked = false;
   refreshMemberPickerFields(form);
   document.getElementById("memberRows").innerHTML = "";
   setDefaultDates();
@@ -4012,7 +4068,8 @@ function resetOrderForm() {
 }
 
 function calculateDefaultCommission(amount) {
-  return amount > 0 ? roundMoney(amount * 0.1) : "";
+  const form = document.getElementById("orderForm");
+  return calculateOrderCommissionAmount(form, amount);
 }
 
 function fillBlankMemberShares(rows, distributableAmount) {
@@ -4076,16 +4133,37 @@ async function runAction(action) {
 function handleOrderInput(event) {
   if ([
     "serviceQuantity",
+    "orderDate",
+    "amount",
     "assignedPlayerCount",
     "friendCount",
     "isLateNight",
-    "hasLateNightMapPick",
+    "autoDetectLateNight",
     "orderType"
   ].includes(event.target?.name)) {
+    if (event.target?.name === "amount") {
+      state.orderAmountManuallyEdited = true;
+    } else if ([
+      "serviceQuantity",
+      "assignedPlayerCount",
+      "friendCount",
+      "isLateNight",
+      "autoDetectLateNight"
+    ].includes(event.target?.name)) {
+      state.orderAmountManuallyEdited = false;
+    }
     if (event.target?.name === "orderType") {
       updateLateNightAddonAvailability(event.currentTarget);
     }
-    updateOrderAmountFromService();
+    if (event.currentTarget.elements.autoDetectLateNight.checked) {
+      applyAutoLateNightDetection(event.currentTarget);
+    }
+    if (event.target?.name === "amount" || event.target?.name === "orderDate") {
+      const amount = Number(event.currentTarget.elements.amount.value || 0);
+      event.currentTarget.elements.commissionAmount.value = calculateDefaultCommission(amount);
+    } else {
+      updateOrderAmountFromService();
+    }
   }
 
   updateOrderCalc();
@@ -4093,6 +4171,12 @@ function handleOrderInput(event) {
 
 function updateOrderAmountFromService() {
   const form = document.getElementById("orderForm");
+  if (state.orderAmountManuallyEdited) {
+    const currentAmount = Number(form.elements.amount.value || 0);
+    form.elements.commissionAmount.value = calculateDefaultCommission(currentAmount);
+    return;
+  }
+
   const amount = calculateOrderQuotedAmount(form);
   if (amount <= 0) {
     return;
@@ -4120,6 +4204,84 @@ function calculateOrderQuotedAmount(form) {
   );
 }
 
+function calculateOrderCommissionAmount(form, amount) {
+  if (!form || amount <= 0) {
+    return "";
+  }
+
+  if (form.elements.orderType.value !== "companion") {
+    return Number(form.elements.commissionAmount.value || 0);
+  }
+
+  const quantity = Number(form.elements.serviceQuantity.value || 0);
+  const primaryMemberId = Number(document.querySelector("[data-member-select]")?.value || 0);
+  if (quantity <= 0 || !primaryMemberId) {
+    return roundMoney(amount * 0.25);
+  }
+
+  const completedHours = companionCompletedHoursForMonth(
+    primaryMemberId,
+    form.elements.orderDate.value,
+    Number(form.elements.orderId.value || 0));
+  return calculateCompanionTierCommission(amount, quantity, completedHours);
+}
+
+function companionCompletedHoursForMonth(userId, orderDate, excludeOrderId = 0) {
+  if (!userId || !orderDate) {
+    return 0;
+  }
+
+  const month = orderDate.slice(0, 7);
+  return state.orders
+    .filter((order) =>
+      order.id !== excludeOrderId &&
+      order.status === "completed" &&
+      order.orderType === "companion" &&
+      String(order.orderDate || "").startsWith(month) &&
+      (order.memberUserIds || []).includes(userId))
+    .reduce((sum, order) => sum + Number(order.serviceQuantity || 0), 0);
+}
+
+function calculateCompanionTierCommission(amount, hours, completedHours) {
+  if (amount <= 0 || hours <= 0) {
+    return 0;
+  }
+
+  const hourlyAmount = amount / hours;
+  let remainingHours = hours;
+  let cursor = completedHours;
+  let commission = 0;
+
+  while (remainingHours > 0) {
+    const rate = companionCommissionRate(cursor);
+    const nextBoundary = cursor < 15 ? 15 : cursor < 30 ? 30 : Number.POSITIVE_INFINITY;
+    const tierHours = Number.isFinite(nextBoundary)
+      ? Math.min(remainingHours, nextBoundary - cursor)
+      : remainingHours;
+    commission += hourlyAmount * tierHours * rate;
+    remainingHours -= tierHours;
+    cursor += tierHours;
+  }
+
+  return roundMoney(commission);
+}
+
+function companionCommissionRate(completedHours) {
+  if (completedHours < 15) {
+    return 0.25;
+  }
+
+  if (completedHours < 30) {
+    return 0.20;
+  }
+
+  return 0.10;
+}
+
+function roundRate(value) {
+  return Math.round(Number(value || 0) * 10000) / 10000;
+}
+
 function nonNegativeInteger(value) {
   return Math.max(0, Math.floor(Number(value || 0)));
 }
@@ -4139,7 +4301,7 @@ function updateLateNightAddonAvailability(form, item = null) {
   ));
   const enabled = supportsLateNightAddon(selectedItem) || (!selectedItem && form.elements.orderType.value === "companion");
   toggleLateNightField(form, "lateNightField", "isLateNight", enabled, "此服務可套用深夜加價");
-  toggleLateNightField(form, "lateNightMapPickField", "hasLateNightMapPick", enabled, "此服務可標記深夜選地");
+  toggleLateNightField(form, "autoLateNightField", "autoDetectLateNight", enabled, "依照送出訂單當下時間自動判斷深夜");
 }
 
 function toggleLateNightField(form, fieldId, inputName, enabled, enabledTitle) {
@@ -4151,14 +4313,23 @@ function toggleLateNightField(form, fieldId, inputName, enabled, enabledTitle) {
 
   input.disabled = !enabled;
   if (!enabled) {
-    if (input.type === "checkbox") {
-      input.checked = false;
-    } else {
-      input.value = "no";
-    }
+    input.checked = false;
   }
   field.classList.toggle("disabled", !enabled);
   field.title = enabled ? enabledTitle : "只有有深夜加價規則的服務可勾選";
+}
+
+function applyAutoLateNightDetection(form) {
+  if (!form.elements.autoDetectLateNight?.checked || form.elements.isLateNight.disabled) {
+    return;
+  }
+
+  form.elements.isLateNight.checked = isCurrentLateNight();
+}
+
+function isCurrentLateNight(now = new Date()) {
+  const hour = now.getHours();
+  return hour >= 0 && hour < 6;
 }
 
 function buildOrderServiceRemark(form) {
@@ -4179,7 +4350,7 @@ function buildOrderServiceRemark(form) {
     assignedPlayerCount > 0 ? `指定陪陪 +20／位 × ${assignedPlayerCount}` : "",
     friendCount > 0 ? `帶朋友 +20／位 × ${friendCount}` : "",
     form.elements.isLateNight.checked ? "深夜 00:00-06:00 +30" : "",
-    form.elements.hasLateNightMapPick.value === "yes" ? "深夜選地：有" : ""
+    form.elements.autoDetectLateNight.checked ? "深夜判斷：自動" : ""
   ].filter(Boolean);
 
   return [

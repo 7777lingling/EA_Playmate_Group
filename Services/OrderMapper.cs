@@ -17,6 +17,7 @@ public static class OrderMapper
             OwnerUserId = order.OwnerUserId,
             OwnerNickname = order.OwnerUser?.Nickname,
             Amount = order.Amount,
+            ServiceQuantity = order.ServiceQuantity,
             CommissionRate = order.CommissionRate,
             CommissionAmount = order.CommissionAmount,
             ShareTotalAmount = order.Members.Sum(x => x.ShareAmount),

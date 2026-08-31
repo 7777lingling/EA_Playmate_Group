@@ -42,7 +42,8 @@ CREATE TABLE dbo.orders (
 
     owner_user_id INT NULL,
     amount DECIMAL(12,2) NOT NULL,
-    commission_rate DECIMAL(6,4) NOT NULL CONSTRAINT DF_orders_commission_rate DEFAULT 0.1000,
+    service_quantity DECIMAL(10,2) NOT NULL CONSTRAINT DF_orders_service_quantity DEFAULT 0,
+    commission_rate DECIMAL(6,4) NOT NULL CONSTRAINT DF_orders_commission_rate DEFAULT 0,
     commission_amount DECIMAL(12,2) NOT NULL,
 
     status NVARCHAR(20) NOT NULL CONSTRAINT DF_orders_status DEFAULT N'completed',

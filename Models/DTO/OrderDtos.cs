@@ -10,6 +10,7 @@ public sealed class OrderDto
     public int? OwnerUserId { get; set; }
     public string? OwnerNickname { get; set; }
     public decimal Amount { get; set; }
+    public decimal ServiceQuantity { get; set; }
     public decimal CommissionRate { get; set; }
     public decimal CommissionAmount { get; set; }
     public decimal ShareTotalAmount { get; set; }
@@ -28,7 +29,8 @@ public sealed class CreateOrderRequestDto
     public DateOnly OrderDate { get; set; }
     public int? OwnerUserId { get; set; }
     public decimal Amount { get; set; }
-    public decimal CommissionRate { get; set; } = 0.1000m;
+    public decimal ServiceQuantity { get; set; }
+    public decimal CommissionRate { get; set; }
     public decimal? CommissionAmount { get; set; }
     public string Status { get; set; } = "completed";
     public string CustomerPaymentStatus { get; set; } = "unpaid";
@@ -43,6 +45,7 @@ public sealed class UpdateOrderRequestDto
     public DateOnly OrderDate { get; set; }
     public int? OwnerUserId { get; set; }
     public decimal Amount { get; set; }
+    public decimal ServiceQuantity { get; set; }
     public decimal CommissionRate { get; set; }
     public decimal CommissionAmount { get; set; }
     public string Status { get; set; } = "completed";
@@ -71,9 +74,11 @@ public sealed class OrderListItemDto
     public DateOnly OrderDate { get; set; }
     public string? OwnerNickname { get; set; }
     public decimal Amount { get; set; }
+    public decimal ServiceQuantity { get; set; }
     public decimal CommissionAmount { get; set; }
     public decimal ShareTotalAmount { get; set; }
     public int MemberCount { get; set; }
+    public List<int> MemberUserIds { get; set; } = [];
     public string Status { get; set; } = "completed";
     public string CustomerPaymentStatus { get; set; } = "unpaid";
 }

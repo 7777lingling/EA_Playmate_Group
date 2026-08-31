@@ -14,7 +14,8 @@ public sealed class Order : IOrganizationScoped
     public User? OwnerUser { get; set; }
 
     public decimal Amount { get; set; }
-    public decimal CommissionRate { get; set; } = 0.1000m;
+    public decimal ServiceQuantity { get; set; }
+    public decimal CommissionRate { get; set; }
     public decimal CommissionAmount { get; set; }
 
     public string Status { get; set; } = "completed";
