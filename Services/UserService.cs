@@ -25,7 +25,7 @@ public sealed class UserService
 
     public async Task<ServiceResult<UserDto>> CreateUserAsync(CreateUserRequestDto request)
     {
-        var validationResult = await ValidateUserAsync(request.Nickname);
+        var validationResult = await ValidateUserAsync(request.Nickname, request.OrganizationId);
         if (!validationResult.Succeeded)
         {
             return ToGenericResult<UserDto>(validationResult);
@@ -33,6 +33,7 @@ public sealed class UserService
 
         var user = new User
         {
+            OrganizationId = ResolveOrganizationId(request.OrganizationId),
             Nickname = request.Nickname.Trim(),
             BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount.Trim(),
             IsPlayer = request.IsPlayer,
@@ -67,14 +68,26 @@ public sealed class UserService
             return ServiceResult.Missing();
         }
 
-        var validationResult = await ValidateUserAsync(request.Nickname, id);
+        var resolvedOrganizationId = ResolveOrganizationId(request.OrganizationId);
+        var validationResult = await ValidateUserAsync(request.Nickname, request.OrganizationId, id);
         if (!validationResult.Succeeded)
         {
             return validationResult;
         }
 
+        if (user.OrganizationId != resolvedOrganizationId &&
+            await HasUserReferencesAsync(user.Id))
+        {
+            return ServiceResult.Validation(
+                new Dictionary<string, string[]>
+                {
+                    ["organizationId"] = ["此成員已有關聯資料，無法變更所屬組織；請建立新成員或先整理關聯資料。"]
+                });
+        }
+
         var before = UserMapper.ToDto(user);
 
+        user.OrganizationId = resolvedOrganizationId;
         user.Nickname = request.Nickname.Trim();
         user.BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount.Trim();
         user.IsPlayer = request.IsPlayer;
@@ -209,6 +222,7 @@ public sealed class UserService
 
     private async Task<ServiceResult> ValidateUserAsync(
         string nickname,
+        int? organizationId,
         int? excludeUserId = null)
     {
         var errors = new Dictionary<string, string[]>();
@@ -217,17 +231,25 @@ public sealed class UserService
             errors["nickname"] = ["請輸入暱稱。"];
         }
 
+        var resolvedOrganizationId = ResolveOrganizationId(organizationId);
+        if (resolvedOrganizationId <= 0 ||
+            !await _db.Organizations
+                .IgnoreQueryFilters()
+                .AnyAsync(x => x.Id == resolvedOrganizationId && x.IsActive))
+        {
+            errors["organizationId"] = ["請選擇有效的組織。"];
+        }
+
         if (!string.IsNullOrWhiteSpace(nickname))
         {
             var normalizedNickname = nickname.Trim();
-            var organizationId = _httpContextAccessor.HttpContext?.Session.GetInt32(AuthService.SessionOrganizationId) ?? 0;
             var query = _db.Users
                 .IgnoreQueryFilters()
                 .Where(x => x.Nickname == normalizedNickname);
 
-            if (organizationId > 0)
+            if (resolvedOrganizationId > 0)
             {
-                query = query.Where(x => x.OrganizationId == organizationId);
+                query = query.Where(x => x.OrganizationId == resolvedOrganizationId);
             }
 
             var nicknameExists = await query.AnyAsync(x =>
@@ -244,6 +266,28 @@ public sealed class UserService
         }
 
         return ServiceResult.Success();
+    }
+
+    private async Task<bool> HasUserReferencesAsync(int userId)
+    {
+        return await _db.Orders.AnyAsync(x => x.OwnerUserId == userId) ||
+               await _db.OrderMembers.AnyAsync(x => x.UserId == userId) ||
+               await _db.Payments.AnyAsync(x => x.UserId == userId) ||
+               await _db.GiftRecords.AnyAsync(x => x.BossUserId == userId || x.RecipientUserId == userId) ||
+               await _db.DepartmentMembers.AnyAsync(x => x.UserId == userId) ||
+               await _db.AuditLogs.AnyAsync(x => x.UserId == userId);
+    }
+
+    private int ResolveOrganizationId(int? requestedOrganizationId)
+    {
+        var role = _httpContextAccessor.HttpContext?.Session.GetString(AuthService.SessionSystemRole);
+        var hasLoginUser = _httpContextAccessor.HttpContext?.Session.GetInt32(AuthService.SessionUserId).HasValue == true;
+        if ((role == "admin" || !hasLoginUser) && requestedOrganizationId.HasValue)
+        {
+            return requestedOrganizationId.Value;
+        }
+
+        return _httpContextAccessor.HttpContext?.Session.GetInt32(AuthService.SessionOrganizationId) ?? 0;
     }
 
     private async Task<ServiceResult> SaveUserChangesAsync()

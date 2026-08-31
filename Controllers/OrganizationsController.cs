@@ -48,11 +48,6 @@ public sealed class OrganizationsController : ControllerBase
             return BadRequest(new { message = "請輸入組織名稱。" });
         }
 
-        if (await _db.Organizations.AnyAsync(x => x.Name == name))
-        {
-            return Conflict(new { message = "組織名稱已存在。" });
-        }
-
         var organization = new Organization
         {
             Name = name,
@@ -92,11 +87,6 @@ public sealed class OrganizationsController : ControllerBase
         if (string.IsNullOrWhiteSpace(name))
         {
             return BadRequest(new { message = "請輸入組織名稱。" });
-        }
-
-        if (await _db.Organizations.AnyAsync(x => x.Id != id && x.Name == name))
-        {
-            return Conflict(new { message = "組織名稱已存在。" });
         }
 
         var before = ToDto(organization);

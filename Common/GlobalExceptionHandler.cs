@@ -11,8 +11,37 @@ public sealed class GlobalExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken)
     {
-        var status = exception is BadHttpRequestException badRequest
-            ? badRequest.StatusCode
+        if (exception is BadHttpRequestException badRequest &&
+            badRequest.StatusCode < StatusCodes.Status500InternalServerError)
+        {
+            logger.LogWarning(
+                exception,
+                "Bad request rejected. TraceId: {TraceId}",
+                httpContext.TraceIdentifier);
+
+            if (!httpContext.Response.HasStarted)
+            {
+                await ApiProblemDetails.WriteAsync(
+                    httpContext,
+                    badRequest.StatusCode,
+                    detail: badRequest.Message,
+                    cancellationToken: cancellationToken);
+            }
+
+            return true;
+        }
+
+        if (exception is OperationCanceledException &&
+            httpContext.RequestAborted.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                "Request aborted by client. TraceId: {TraceId}",
+                httpContext.TraceIdentifier);
+            return true;
+        }
+
+        var status = exception is BadHttpRequestException badRequestException
+            ? badRequestException.StatusCode
             : StatusCodes.Status500InternalServerError;
 
         logger.LogError(

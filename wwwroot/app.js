@@ -867,11 +867,25 @@ function memberPickerUsers(field) {
     return state.users.filter((user) => user.isActive);
   }
   if (source === "login-user-members") {
-    const organizationSelectId = field.dataset.organizationSelectId || "loginUserOrganizationSelect";
-    const organizationId = Number(document.getElementById(organizationSelectId)?.value) ||
+    const owningForm = field.closest("form");
+    const organizationSelectId = field.dataset.organizationSelectId || "";
+    const organizationId = Number(owningForm?.elements.organizationId?.value) ||
+      Number(organizationSelectId ? document.getElementById(organizationSelectId)?.value : 0) ||
+      Number(document.getElementById("loginUserOrganizationSelect")?.value) ||
       state.auth?.user?.organizationId;
+    const selectedId = Number(field.querySelector("input[type='hidden']")?.value || 0);
+    const currentLoginUserId = Number(owningForm?.elements.loginUserId?.value) ||
+      Number(field.dataset.loginUserId || 0);
+    const boundUserIds = new Set(state.loginUsers
+      .filter((loginUser) =>
+        loginUser.userId &&
+        (!currentLoginUserId || loginUser.id !== currentLoginUserId))
+      .map((loginUser) => loginUser.userId));
     return state.users.filter((user) =>
-      user.isActive && (!organizationId || user.organizationId === organizationId));
+      user.id === selectedId ||
+      (user.isActive &&
+        !boundUserIds.has(user.id) &&
+        (!organizationId || user.organizationId === organizationId)));
   }
   return state.users.filter((user) => user.isActive);
 }
@@ -1101,7 +1115,18 @@ function recordDetail(labelText, value) {
   `;
 }
 
+function organizationDisplayName(organization) {
+  if (!organization) {
+    return "";
+  }
+
+  const hasDuplicateName = state.organizations
+    .some((item) => item.id !== organization.id && item.name === organization.name);
+  return hasDuplicateName ? `${organization.name} #${organization.id}` : organization.name;
+}
+
 function openUserRecordModal(user) {
+  const organization = state.organizations.find((item) => item.id === user.organizationId);
   openRecordModal({
     title: user.nickname,
     eyebrow: user.isBoss && user.isPlayer ? "團員 / 老闆" : user.isBoss ? "老闆資料" : "團員資料",
@@ -1110,6 +1135,7 @@ function openUserRecordModal(user) {
         <div class="record-detail-grid">
           ${recordDetail("Discord 名稱", user.discordName)}
           ${recordDetail("Discord ID", user.discordId)}
+          ${recordDetail("所屬組織", organizationDisplayName(organization))}
           ${recordDetail("銀行帳號", user.bankAccount)}
           ${recordDetail("身分類型", [user.isPlayer ? "團員" : "", user.isBoss ? "老闆" : ""].filter(Boolean).join(" / "))}
           ${recordDetail("狀態", user.isActive ? "啟用" : "停用")}
@@ -1129,10 +1155,19 @@ function openUserRecordModal(user) {
 }
 
 function renderUserRecordEdit(user) {
+  const organizationOptions = state.organizations
+    .filter((organization) => organization.isActive || organization.id === user.organizationId)
+    .map((organization) =>
+      `<option value="${organization.id}" ${organization.id === user.organizationId ? "selected" : ""}>${escapeHtml(organizationDisplayName(organization))}</option>`
+    ).join("");
+  const canSelectOrganization = state.auth?.user?.systemRole === "admin" || isBootstrapMode();
   document.getElementById("recordModalEyebrow").textContent = "Edit Member";
   document.getElementById("recordModalBody").innerHTML = `
     <form class="form record-edit-form" id="recordUserForm">
       <label>暱稱<input name="nickname" required maxlength="50" value="${escapeHtml(user.nickname || "")}"></label>
+      <label ${canSelectOrganization ? "" : "hidden"}>所屬組織
+        <select name="organizationId">${organizationOptions}</select>
+      </label>
       <label>Discord ID<input value="${escapeHtml(user.discordId || "尚未綁定")}" disabled></label>
       <label>Discord 名稱<input value="${escapeHtml(user.discordName || "尚未綁定")}" disabled></label>
       <label>銀行帳號<input name="bankAccount" maxlength="200" value="${escapeHtml(user.bankAccount || "")}"></label>
@@ -1156,6 +1191,7 @@ function renderUserRecordEdit(user) {
         method: "PUT",
         body: JSON.stringify({
           nickname: data.get("nickname"),
+          organizationId: Number(data.get("organizationId")) || user.organizationId,
           bankAccount: emptyToNull(data.get("bankAccount")),
           isPlayer: data.get("isPlayer") === "on",
           isBoss: data.get("isBoss") === "on",
@@ -1186,7 +1222,7 @@ function openLoginUserRecordModal(loginUser) {
         <div class="record-detail-grid">
           ${recordDetail("登入帳號", loginUser.loginAccount)}
           ${recordDetail("顯示名稱", loginUser.displayName)}
-          ${recordDetail("所屬組織", organization?.name)}
+          ${recordDetail("所屬組織", organizationDisplayName(organization))}
           ${recordDetail("綁定成員", member?.nickname || "不綁定")}
           ${recordDetail("系統權限", label("systemRole", loginUser.systemRole))}
           ${recordDetail("狀態", loginUser.isActive ? "啟用" : "停用")}
@@ -1207,8 +1243,10 @@ function renderLoginUserRecordEdit(loginUser) {
   const organizationOptions = state.organizations
     .filter((organization) => organization.isActive || organization.id === loginUser.organizationId)
     .map((organization) =>
-      `<option value="${organization.id}" ${organization.id === loginUser.organizationId ? "selected" : ""}>${escapeHtml(organization.name)}</option>`
+      `<option value="${organization.id}" ${organization.id === loginUser.organizationId ? "selected" : ""}>${escapeHtml(organizationDisplayName(organization))}</option>`
     ).join("");
+  const boundMember = state.users.find((user) => user.id === loginUser.userId);
+  const boundMemberLabel = boundMember?.nickname || "不綁定";
   document.getElementById("recordModalEyebrow").textContent = "Edit Account";
   document.getElementById("recordModalBody").innerHTML = `
     <form class="form record-edit-form" id="recordLoginUserForm">
@@ -1220,9 +1258,10 @@ function renderLoginUserRecordEdit(loginUser) {
       <label>綁定成員
         <span class="member-picker-field" data-member-picker data-source="login-user-members"
           data-organization-select-id="recordLoginOrganizationSelect"
+          data-login-user-id="${loginUser.id}"
           data-title="選擇綁定成員" data-empty-label="不綁定">
           <input name="userId" type="hidden" value="${loginUser.userId || ""}">
-          <button class="member-picker-trigger" type="button" data-member-picker-trigger>不綁定</button>
+          <button class="member-picker-trigger ${boundMember ? "has-value" : ""}" type="button" data-member-picker-trigger>${escapeHtml(boundMemberLabel)}</button>
         </span>
       </label>
       <label>系統權限
@@ -1623,11 +1662,16 @@ function applyActionPermissions() {
 async function api(path, options = {}) {
   const { skipAuthRedirect, ...fetchOptions } = options;
   const isFormData = fetchOptions.body instanceof FormData;
+  const headers = isFormData
+    ? { ...(options.headers || {}) }
+    : fetchOptions.body == null
+      ? { ...(options.headers || {}) }
+      : {
+          "Content-Type": "application/json",
+          ...(options.headers || {})
+        };
   const response = await fetch(path, {
-    headers: isFormData ? { ...(options.headers || {}) } : {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
+    headers,
     ...fetchOptions
   });
 
@@ -1769,6 +1813,10 @@ async function refreshAll() {
 
     if (state.view === "dashboard") {
       await loadDashboard();
+    }
+    if (state.view === "users" &&
+        (state.auth?.user?.systemRole === "admin" || isBootstrapMode())) {
+      await loadOrganizations();
     }
     if (state.view === "users" || state.view === "loginUsers" || state.view === "orders" || state.view === "giftRecords" || state.view === "organization") {
       await loadUsers();
@@ -1918,6 +1966,7 @@ async function loadOrganizations() {
   state.organizations = await api("/api/organizations");
   renderOrganizationManagement();
   renderOrganizationSelect();
+  renderUserOrganizationSelect();
 }
 
 function renderOrganizationSelect() {
@@ -1930,10 +1979,29 @@ function renderOrganizationSelect() {
   field.hidden = state.auth?.user?.systemRole !== "admin" && !isBootstrapMode();
   select.innerHTML = state.organizations
     .filter((organization) => organization.isActive)
-    .map((organization) => `<option value="${organization.id}">${escapeHtml(organization.name)}</option>`)
+    .map((organization) => `<option value="${organization.id}">${escapeHtml(organizationDisplayName(organization))}</option>`)
     .join("");
   renderLoginUserMemberSelect();
   select.onchange = renderLoginUserMemberSelect;
+}
+
+function renderUserOrganizationSelect() {
+  const field = document.getElementById("userOrganizationField");
+  const select = document.getElementById("userOrganizationSelect");
+  if (!field || !select) {
+    return;
+  }
+
+  field.hidden = state.auth?.user?.systemRole !== "admin" && !isBootstrapMode();
+  select.innerHTML = state.organizations
+    .filter((organization) => organization.isActive)
+    .map((organization) => `<option value="${organization.id}">${escapeHtml(organizationDisplayName(organization))}</option>`)
+    .join("");
+
+  const currentOrganizationId = state.auth?.user?.organizationId;
+  if (currentOrganizationId && [...select.options].some((option) => Number(option.value) === currentOrganizationId)) {
+    select.value = String(currentOrganizationId);
+  }
 }
 
 function renderLoginUserMemberSelect() {
@@ -2111,6 +2179,7 @@ function renderLoginUsers() {
           ${user.isActive
             ? `<button class="ghost small" data-login-user-deactivate="${user.id}">停用</button>`
             : `<button class="ghost small" data-login-user-activate="${user.id}">啟用</button>`}
+          <button class="ghost small" data-login-user-reset-password="${user.id}">重設密碼</button>
           <button class="ghost small danger-action" data-login-user-delete="${user.id}">刪除</button>
         </div>
       </td>
@@ -2165,6 +2234,22 @@ function bindLoginUserTableActions(body) {
         await api(`/api/loginusers/${button.dataset.loginUserActivate}/activate`, { method: "POST", body: "{}" });
         await loadLoginUsers();
         showAlert("登入者已啟用。", false);
+      });
+    });
+  });
+
+  body.querySelectorAll("[data-login-user-reset-password]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const loginUser = state.loginUsers.find((item) => item.id === Number(button.dataset.loginUserResetPassword));
+      const account = loginUser?.loginAccount || "";
+      if (!window.confirm(`確定要重設「${account || loginUser?.displayName || "此帳號"}」的密碼嗎？\n\n預設重設密碼為登入帳號。`)) {
+        return;
+      }
+
+      await runAction(async () => {
+        await api(`/api/loginusers/${button.dataset.loginUserResetPassword}/reset-password`, { method: "POST", body: "{}" });
+        await loadLoginUsers();
+        showAlert("密碼已重設為登入帳號。", false);
       });
     });
   });
@@ -3493,19 +3578,34 @@ async function submitUser(event) {
   const userId = data.get("userId");
   const isEdit = Boolean(userId);
   const existingUser = isEdit ? state.users.find((user) => user.id === Number(userId)) : null;
-  const payload = {
-    nickname: data.get("nickname"),
-    bankAccount: emptyToNull(data.get("bankAccount")),
-    isPlayer: data.get("isPlayer") === "on",
-    isBoss: data.get("isBoss") === "on"
-  };
-
-  if (isEdit) {
-    payload.isActive = existingUser?.isActive ?? true;
-    payload.leftAt = existingUser?.leftAt ?? null;
-  }
 
   await runAction(async () => {
+    if ((state.auth?.user?.systemRole === "admin" || isBootstrapMode()) && state.organizations.length === 0) {
+      await loadOrganizations();
+    }
+
+    const selectedOrganizationId = Number(form.elements.organizationId?.value) ||
+      existingUser?.organizationId ||
+      state.auth?.user?.organizationId;
+
+    if (!selectedOrganizationId) {
+      showAlert("請先建立或選擇有效的組織。");
+      return;
+    }
+
+    const payload = {
+      organizationId: selectedOrganizationId,
+      nickname: data.get("nickname"),
+      bankAccount: emptyToNull(data.get("bankAccount")),
+      isPlayer: data.get("isPlayer") === "on",
+      isBoss: data.get("isBoss") === "on"
+    };
+
+    if (isEdit) {
+      payload.isActive = existingUser?.isActive ?? true;
+      payload.leftAt = existingUser?.leftAt ?? null;
+    }
+
     await api(isEdit ? `/api/users/${userId}` : "/api/users", {
       method: isEdit ? "PUT" : "POST",
       body: JSON.stringify(payload)
@@ -3630,6 +3730,9 @@ function startUserEdit(user) {
   const form = document.getElementById("userForm");
   form.elements.userId.value = user.id;
   form.elements.nickname.value = user.nickname || "";
+  if (form.elements.organizationId) {
+    form.elements.organizationId.value = user.organizationId || "";
+  }
   form.elements.bankAccount.value = user.bankAccount || "";
   form.elements.isPlayer.checked = Boolean(user.isPlayer);
   form.elements.isBoss.checked = Boolean(user.isBoss);
@@ -3643,6 +3746,7 @@ function resetUserForm() {
   const form = document.getElementById("userForm");
   form.reset();
   form.elements.userId.value = "";
+  renderUserOrganizationSelect();
   form.elements.isPlayer.checked = true;
   document.getElementById("userFormTitle").textContent = "新增成員";
   document.getElementById("userSubmitBtn").textContent = "新增";

@@ -790,8 +790,10 @@ BEGIN
         is_active BIT NOT NULL CONSTRAINT DF_organizations_is_active DEFAULT 1,
         created_at DATETIME2 NOT NULL CONSTRAINT DF_organizations_created_at DEFAULT SYSUTCDATETIME()
     );
-    CREATE UNIQUE INDEX UQ_organizations_name ON dbo.organizations(name);
 END;
+
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UQ_organizations_name' AND object_id = OBJECT_ID(N'dbo.organizations'))
+    DROP INDEX UQ_organizations_name ON dbo.organizations;
 
 IF NOT EXISTS (SELECT 1 FROM dbo.organizations)
 BEGIN
@@ -1131,6 +1133,19 @@ INNER JOIN pilot_service_prices source ON source.seed_key = target.seed_key;
 """);
 
         await db.Database.ExecuteSqlRawAsync("""
+IF OBJECT_ID(N'dbo.audit_logs', N'U') IS NOT NULL
+   AND OBJECT_ID(N'dbo.login_users', N'U') IS NOT NULL
+   AND COL_LENGTH('dbo.audit_logs', 'organization_id') IS NOT NULL
+   AND COL_LENGTH('dbo.audit_logs', 'login_user_id') IS NOT NULL
+   AND COL_LENGTH('dbo.login_users', 'organization_id') IS NOT NULL
+BEGIN
+    UPDATE a
+    SET organization_id = lu.organization_id
+    FROM dbo.audit_logs a
+    INNER JOIN dbo.login_users lu ON lu.id = a.login_user_id
+    WHERE a.organization_id <> lu.organization_id;
+END;
+
 IF EXISTS
 (
     SELECT 1

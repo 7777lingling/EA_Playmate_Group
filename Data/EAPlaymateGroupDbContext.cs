@@ -757,7 +757,6 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
         entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
-        entity.HasIndex(x => x.Name).IsUnique().HasDatabaseName("UQ_organizations_name");
     }
 
     private static void ConfigureLoginHistory(ModelBuilder modelBuilder)

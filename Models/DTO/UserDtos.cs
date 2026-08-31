@@ -20,6 +20,7 @@ public sealed class UserDto
 
 public sealed class CreateUserRequestDto
 {
+    public int? OrganizationId { get; set; }
     public string Nickname { get; set; } = string.Empty;
     public string? BankAccount { get; set; }
     public bool IsPlayer { get; set; } = true;
@@ -28,6 +29,7 @@ public sealed class CreateUserRequestDto
 
 public sealed class UpdateUserRequestDto
 {
+    public int? OrganizationId { get; set; }
     public string Nickname { get; set; } = string.Empty;
     public string? BankAccount { get; set; }
     public bool IsPlayer { get; set; }

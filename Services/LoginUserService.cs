@@ -90,6 +90,7 @@ public sealed class LoginUserService
         }
 
         if (loginUser.DiscordLinkedAt.HasValue &&
+            loginUser.UserId.HasValue &&
             loginUser.UserId != request.UserId)
         {
             return ServiceResult<LoginUserDto>.Validation(
@@ -179,7 +180,7 @@ public sealed class LoginUserService
 
     public async Task<ServiceResult> SetActiveAsync(int id, bool isActive)
     {
-        var loginUser = await _db.LoginUsers.FirstOrDefaultAsync(x => x.Id == id);
+        var loginUser = await _db.LoginUsers.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id);
         if (loginUser is null)
         {
             return ServiceResult.Missing();
@@ -197,6 +198,38 @@ public sealed class LoginUserService
             loginUser.Uuid,
             before,
             LoginUserMapper.ToDto(loginUser)));
+        await _db.SaveChangesAsync();
+
+        return ServiceResult.Success();
+    }
+
+    public async Task<ServiceResult> ResetPasswordToLoginAccountAsync(int id)
+    {
+        var loginUser = await _db.LoginUsers.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id);
+        if (loginUser is null)
+        {
+            return ServiceResult.Missing();
+        }
+
+        if (string.IsNullOrWhiteSpace(loginUser.LoginAccount))
+        {
+            return ServiceResult.Validation(
+                new Dictionary<string, string[]>
+                {
+                    ["loginAccount"] = ["登入帳號不可為空，無法重設密碼。"]
+                });
+        }
+
+        loginUser.PasswordHash = _passwordHasher.Hash(loginUser.LoginAccount.Trim());
+        loginUser.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        _db.AuditLogs.Add(AuditLogWriter.Create(
+            "reset_password",
+            "login_users",
+            loginUser.Id,
+            loginUser.Uuid,
+            after: new { resetTo = "login_account" }));
         await _db.SaveChangesAsync();
 
         return ServiceResult.Success();

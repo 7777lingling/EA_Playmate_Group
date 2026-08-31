@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>陪玩團營運後台</title>
-  <link rel="stylesheet" href="/styles.css?v=20260831-modal-stack-v1">
+  <link rel="stylesheet" href="/styles.css?v=20260831-password-reset-v7">
   <link rel="stylesheet" id="themeStylesheet" href="/themes/internal-ops.css?v=20260830-internal-ops-v1">
 </head>
 <body>
@@ -162,6 +162,9 @@
           <h2 id="userFormTitle">新增成員</h2>
           <input type="hidden" name="userId">
           <label>暱稱<input name="nickname" required maxlength="50"></label>
+          <label id="userOrganizationField">所屬組織
+            <select name="organizationId" id="userOrganizationSelect"></select>
+          </label>
           <label>銀行帳號<input name="bankAccount" maxlength="200"></label>
           <div class="check-grid">
             <label><input type="checkbox" name="isPlayer" checked> 團員</label>
@@ -1221,6 +1224,6 @@
     </section>
   </div>
 
-  <script src="/app.js?v=20260831-modal-stack-v1"></script>
+  <script src="/app.js?v=20260831-password-reset-v7"></script>
 </body>
 </html>

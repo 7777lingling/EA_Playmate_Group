@@ -75,7 +75,17 @@ public sealed class LoginUsersController : ControllerBase
     public async Task<IActionResult> DeactivateLoginUser(int id)
     {
         var result = await _loginUserService.SetActiveAsync(id, false);
-        return result.NotFound ? NotFound() : NoContent();
+        if (result.NotFound)
+        {
+            return NotFound();
+        }
+
+        if (HttpContext.Session.GetInt32(AuthService.SessionUserId) == id)
+        {
+            HttpContext.Session.Clear();
+        }
+
+        return NoContent();
     }
 
     [HttpPost("{id:int}/activate")]
@@ -83,6 +93,25 @@ public sealed class LoginUsersController : ControllerBase
     {
         var result = await _loginUserService.SetActiveAsync(id, true);
         return result.NotFound ? NotFound() : NoContent();
+    }
+
+    [HttpPost("{id:int}/reset-password")]
+    public async Task<IActionResult> ResetPassword(int id)
+    {
+        var result = await _loginUserService.ResetPasswordToLoginAccountAsync(id);
+        if (result.NotFound)
+        {
+            return NotFound();
+        }
+
+        if (result.ValidationErrors is not null)
+        {
+            return ApiErrors.Validation(result.ValidationErrors);
+        }
+
+        return result.Succeeded
+            ? NoContent()
+            : ApiErrors.BadRequest(result.ErrorCode ?? "operation_failed", result.ErrorMessage ?? "Operation failed.");
     }
 
     [HttpDelete("{id:int}")]
