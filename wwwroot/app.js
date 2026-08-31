@@ -2,6 +2,7 @@ const state = {
   users: [],
   loginUsers: [],
   serviceItems: [],
+  activities: [],
   giftRecords: [],
   departments: [],
   players: [],
@@ -27,6 +28,7 @@ const state = {
   serviceCategory: "play",
   orderServiceCategory: "play",
   orderAmountManuallyEdited: false,
+  orderBaseAmountManuallyEdited: false,
   auth: null
 };
 
@@ -36,6 +38,7 @@ const titles = {
   loginUsers: ["Accounts", "帳號管理"],
   organization: ["Organization", "組織"],
   orders: ["Orders", "訂單"],
+  activities: ["Activities", "活動管理"],
   giftRecords: ["Gift Records", "送禮紀錄"],
   payments: ["Payments", "月結"],
   audit: ["Audit", "紀錄"],
@@ -108,6 +111,7 @@ const labels = {
     payments: "發薪",
     login_users: "登入者",
     service_items: "服務項目",
+    activities: "活動",
     gift_records: "送禮紀錄",
     departments: "部門",
     department_members: "部門成員",
@@ -461,6 +465,8 @@ function bindForms() {
   document.getElementById("cancelDepartmentEditBtn").addEventListener("click", resetDepartmentForm);
   document.getElementById("departmentMemberForm").addEventListener("submit", submitDepartmentMember);
   document.getElementById("cancelDepartmentMemberEditBtn").addEventListener("click", resetDepartmentMemberForm);
+  document.getElementById("activityForm").addEventListener("submit", submitActivity);
+  document.getElementById("cancelActivityEditBtn").addEventListener("click", resetActivityForm);
   document.getElementById("orderForm").addEventListener("submit", submitOrder);
   document.getElementById("orderAttachmentInput").addEventListener("change", handleOrderAttachmentChange);
   document.getElementById("copyOrderBtn").addEventListener("click", copyOrderAsNew);
@@ -1560,6 +1566,7 @@ function applyNavigationPermissions() {
     loginUsers: "Account.Manage",
     organization: "Organization.Manage",
     services: "Gift.View",
+    activities: "Order.View",
     giftRecords: "Gift.View",
     orders: "Order.View",
     payments: "Settlement.View",
@@ -1603,6 +1610,7 @@ function applyActionPermissions() {
   setHidden("#orderForm", !(hasPermission("Order.Create") || hasPermission("Order.Edit")));
   setHidden("[data-order-edit]", !hasPermission("Order.Edit"));
   setHidden("[data-order-delete]", !hasPermission("Order.Cancel"));
+  setHidden("#activityForm, [data-activity-edit], [data-activity-toggle]", !hasPermission("Order.Edit"));
   setHidden("#paymentForm, [data-payment-paid]", !hasPermission("Settlement.Close"));
   setHidden("[data-money-reverse]", !hasAnyPermission(["Settlement.Close", "Account.Manage"]));
 }
@@ -1775,6 +1783,9 @@ async function refreshAll() {
     if (state.view === "services" || state.view === "giftRecords" || state.view === "orders") {
       await loadServiceItems();
     }
+    if (state.view === "activities" || state.view === "orders") {
+      await loadActivities();
+    }
     if (state.view === "giftRecords") {
       await loadGiftRecords();
     }
@@ -1835,6 +1846,12 @@ async function loadServiceItems() {
   renderServiceItems();
   renderOrderServiceShortcuts();
   renderSelects();
+}
+
+async function loadActivities() {
+  state.activities = await api("/api/activities");
+  renderActivities();
+  renderOrderActivityOptions();
 }
 
 async function loadGiftRecords() {
@@ -2569,6 +2586,46 @@ function bindUserTableActions(body) {
   });
 }
 
+function renderActivities() {
+  const body = document.getElementById("activityRows");
+  if (!body) {
+    return;
+  }
+
+  body.innerHTML = state.activities.length ? state.activities.map((activity) => `
+    <tr>
+      <td>${escapeHtml(activity.name)}</td>
+      <td>${formatDateTime(activity.startsAt)}<br>${formatDateTime(activity.endsAt)}</td>
+      <td>${escapeHtml(activityDiscountText(activity))}</td>
+      <td>${escapeHtml(activityCategoriesText(activity.applicableCategories))}</td>
+      <td>${pill(activity.isActive ? "啟用" : "停用", activity.isActive ? "success" : "muted")}</td>
+      <td>
+        <div class="table-actions">
+          <button class="ghost small" data-activity-edit="${activity.id}">編輯</button>
+          <button class="ghost small" data-activity-toggle="${activity.id}">${activity.isActive ? "停用" : "啟用"}</button>
+        </div>
+      </td>
+    </tr>
+  `).join("") : emptyRow(6);
+
+  body.querySelectorAll("[data-activity-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const activity = state.activities.find((item) => item.id === Number(button.dataset.activityEdit));
+      if (activity) {
+        startActivityEdit(activity);
+      }
+    });
+  });
+  body.querySelectorAll("[data-activity-toggle]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await runAction(async () => {
+        await api(`/api/activities/${button.dataset.activityToggle}/toggle`, { method: "POST", body: "{}" });
+        await loadActivities();
+      });
+    });
+  });
+}
+
 function renderOrders() {
   const body = document.getElementById("orderRows");
   body.innerHTML = state.orders.length ? state.orders.map((order) => `
@@ -2577,12 +2634,13 @@ function renderOrders() {
       <td>${order.orderDate}</td>
       <td>${escapeHtml(order.orderNo || "")}</td>
       <td>${escapeHtml(orderTypeText(order.orderType))}</td>
-      <td>${money.format(order.amount)}</td>
+      <td>${money.format(orderFinalAmount(order))}</td>
       <td>${money.format(order.commissionAmount)}</td>
       <td>${statusPill(order.status)}</td>
       <td>${paymentPill(order.customerPaymentStatus)}</td>
       <td>
         <div class="table-actions">
+          <button class="ghost small" data-order-detail="${order.id}">詳情</button>
           <button class="ghost small" data-order-edit="${order.id}">編輯</button>
           <button class="ghost small" data-order-attachments="${order.id}">附件</button>
           <button class="ghost small danger-action" data-order-delete="${order.id}">刪除</button>
@@ -2590,6 +2648,15 @@ function renderOrders() {
       </td>
     </tr>
   `).join("") : emptyRow(9);
+
+  body.querySelectorAll("[data-order-detail]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await runAction(async () => {
+        const order = await api(`/api/orders/${button.dataset.orderDetail}`);
+        openOrderDetail(order);
+      });
+    });
+  });
 
   body.querySelectorAll("[data-order-edit]").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -2625,6 +2692,54 @@ function renderOrders() {
       });
     });
   });
+}
+
+function openOrderDetail(order) {
+  const finalAmount = orderFinalAmount(order);
+  const baseAmount = Number(order.baseAmount || 0) || finalAmount;
+  openLogDrawer({
+    title: `訂單 #${order.id}`,
+    eyebrow: "訂單詳情",
+    content: `
+      <div class="log-drawer-section">
+        ${recordDetail("日期", order.orderDate)}
+        ${recordDetail("單號", order.orderNo)}
+        ${recordDetail("類型", orderTypeText(order.orderType))}
+        ${recordDetail("老闆", order.ownerNickname)}
+        ${recordDetail("狀態", label("orderStatus", order.status))}
+        ${recordDetail("客戶收款", label("customerPaymentStatus", order.customerPaymentStatus))}
+      </div>
+      <h3>金額組成</h3>
+      <div class="log-drawer-section">
+        ${recordDetail("基礎價格", money.format(baseAmount))}
+        ${recordDetail("指定陪陪費", money.format(order.designatedFee || 0))}
+        ${recordDetail("帶朋友費", money.format(order.friendFee || 0))}
+        ${recordDetail("換人費", money.format(order.replacementFee || 0))}
+        ${recordDetail("深夜加價", money.format(order.nightFee || 0))}
+        ${recordDetail("其他加價", money.format(order.otherFee || 0))}
+        ${recordDetail("活動折扣", `-${money.format(order.discountAmount || 0)}`)}
+        ${recordDetail("最終實收", money.format(finalAmount))}
+        ${recordDetail("套用活動", order.activityNameSnapshot || "無")}
+        ${recordDetail("活動折扣方式", order.activityNameSnapshot ? activityDiscountText({
+          discountType: order.activityDiscountType,
+          discountValue: order.activityDiscountValue
+        }) : "")}
+        ${recordDetail("活動包含加價", order.activityNameSnapshot ? (order.activityIncludeFees ? "是" : "否") : "")}
+        ${recordDetail("團抽", money.format(order.commissionAmount || 0))}
+        ${recordDetail("可分配", money.format(finalAmount - Number(order.commissionAmount || 0)))}
+      </div>
+      <h3>陪陪分配</h3>
+      <div class="log-drawer-section">
+        ${(order.members || []).map((member) => recordDetail(member.nickname || `會員${member.userId}`, money.format(member.shareAmount || 0))).join("") || recordDetail("分配", "無")}
+      </div>
+      <h3>備註</h3>
+      <pre class="record-json">${escapeHtml(order.remark || "")}</pre>
+    `
+  });
+}
+
+function orderFinalAmount(order) {
+  return Number(order?.finalAmount || order?.amount || 0);
 }
 
 function renderPayments() {
@@ -3805,11 +3920,13 @@ async function startOrderFromService(item) {
 function applyServiceToOrderForm(item) {
   resetOrderForm();
   state.orderAmountManuallyEdited = false;
+  state.orderBaseAmountManuallyEdited = false;
 
   const form = document.getElementById("orderForm");
   const price = item.defaultPrice ?? 0;
   const unitText = unitTypeText(item.unitType);
   form.elements.orderType.value = orderTypeFromServiceCategory(item.category);
+  form.elements.pricingCategory.value = item.category || "";
   form.elements.serviceName.value = item.name;
   form.elements.serviceSeedKey.value = item.seedKey || "";
   form.elements.serviceUnitPrice.value = item.defaultPrice ?? "";
@@ -3818,6 +3935,14 @@ function applyServiceToOrderForm(item) {
     ? `${servicePriceText(item)} / ${unitText}`
     : `${money.format(item.defaultPrice)} / ${unitText}`;
   form.elements.serviceQuantity.value = 1;
+  form.elements.baseAmount.value = price || 0;
+  form.elements.designatedFee.value = 0;
+  form.elements.friendFee.value = 0;
+  form.elements.replacementCount.value = 0;
+  form.elements.replacementFee.value = 0;
+  form.elements.nightFee.value = 0;
+  form.elements.otherFee.value = 0;
+  form.elements.discountAmount.value = 0;
   form.elements.amount.value = calculateOrderQuotedAmount(form) || price || "";
   form.elements.commissionAmount.value = calculateDefaultCommission(Number(form.elements.amount.value || 0));
   form.elements.status.value = "draft";
@@ -3825,6 +3950,7 @@ function applyServiceToOrderForm(item) {
   form.elements.remark.value = item.remark || "";
 
   updateLateNightAddonAvailability(form, item);
+  renderOrderActivityOptions();
   updateOrderCalc();
 }
 
@@ -3841,6 +3967,77 @@ async function startGiftRecordFromService(item) {
   const form = document.getElementById("giftRecordForm");
   showAlert(`已帶入「${item.name}」到送禮紀錄。`, false);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function submitActivity(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const activityId = data.get("activityId");
+  const payload = {
+    name: data.get("name"),
+    startsAt: toIsoDateTime(data.get("startsAt")),
+    endsAt: toIsoDateTime(data.get("endsAt")),
+    discountType: data.get("discountType"),
+    discountValue: Number(data.get("discountValue") || 0),
+    applicableCategories: [...form.querySelectorAll('input[name="activityCategory"]:checked')]
+      .map((input) => input.value)
+      .join(","),
+    includeFees: data.get("includeFees") === "on",
+    isActive: data.get("isActive") === "on",
+    note: emptyToNull(data.get("note"))
+  };
+
+  await runAction(async () => {
+    if (activityId) {
+      await api(`/api/activities/${activityId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await api("/api/activities", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+    }
+    resetActivityForm();
+    await loadActivities();
+    showAlert(activityId ? "活動已更新。" : "活動已新增。", false);
+  });
+}
+
+function startActivityEdit(activity) {
+  const form = document.getElementById("activityForm");
+  form.elements.activityId.value = activity.id;
+  form.elements.name.value = activity.name || "";
+  form.elements.startsAt.value = toDateTimeLocalValue(activity.startsAt);
+  form.elements.endsAt.value = toDateTimeLocalValue(activity.endsAt);
+  form.elements.discountType.value = activity.discountType || "percent";
+  form.elements.discountValue.value = activity.discountValue ?? 0;
+  form.elements.includeFees.checked = Boolean(activity.includeFees);
+  form.elements.isActive.checked = Boolean(activity.isActive);
+  form.elements.note.value = activity.note || "";
+  const categories = new Set(String(activity.applicableCategories || "").split(",").filter(Boolean));
+  form.querySelectorAll('input[name="activityCategory"]').forEach((input) => {
+    input.checked = categories.has(input.value);
+  });
+  document.getElementById("activityFormTitle").textContent = "編輯活動";
+  document.getElementById("activitySubmitBtn").textContent = "更新活動";
+  document.getElementById("cancelActivityEditBtn").hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetActivityForm() {
+  const form = document.getElementById("activityForm");
+  form.reset();
+  form.elements.activityId.value = "";
+  form.elements.isActive.checked = true;
+  form.querySelectorAll('input[name="activityCategory"]').forEach((input) => {
+    input.checked = false;
+  });
+  document.getElementById("activityFormTitle").textContent = "新增活動";
+  document.getElementById("activitySubmitBtn").textContent = "新增活動";
+  document.getElementById("cancelActivityEditBtn").hidden = true;
 }
 
 function handleOrderAttachmentChange(event) {
@@ -3883,6 +4080,7 @@ async function submitOrder(event) {
   updateOrderAmountFromService();
   const data = new FormData(form);
   let orderId = data.get("orderId");
+  const activityValue = data.get("activityId");
   const editControlsVisible = !document.getElementById("copyOrderBtn").hidden;
   if (orderId && !editControlsVisible) {
     form.elements.orderId.value = "";
@@ -3912,10 +4110,21 @@ async function submitOrder(event) {
     const payload = {
       orderNo: emptyToNull(data.get("orderNo")),
       orderType: data.get("orderType") || "boosting",
+      pricingCategory: emptyToNull(data.get("pricingCategory")),
       orderDate: data.get("orderDate"),
       ownerUserId: data.get("ownerUserId") ? Number(data.get("ownerUserId")) : null,
       amount,
       serviceQuantity: Number(data.get("serviceQuantity") || 0),
+      baseAmount: Number(data.get("baseAmount") || 0),
+      designatedFee: Number(data.get("designatedFee") || 0),
+      friendFee: Number(data.get("friendFee") || 0),
+      replacementFee: Number(data.get("replacementFee") || 0),
+      nightFee: Number(data.get("nightFee") || 0),
+      otherFee: Number(data.get("otherFee") || 0),
+      discountAmount: Number(data.get("discountAmount") || 0),
+      finalAmount: amount,
+      activityId: activityValue && activityValue !== "none" ? Number(activityValue) : null,
+      ignoreActivity: activityValue === "none",
       commissionRate: amount > 0 ? roundRate(commissionAmount / amount) : 0,
       commissionAmount,
       status: data.get("status"),
@@ -3942,10 +4151,21 @@ async function submitOrder(event) {
         const createData = new FormData();
         createData.append("orderNo", payload.orderNo || "");
         createData.append("orderType", payload.orderType);
+        createData.append("pricingCategory", payload.pricingCategory || "");
         createData.append("orderDate", payload.orderDate);
         createData.append("ownerUserId", payload.ownerUserId == null ? "" : String(payload.ownerUserId));
         createData.append("amount", String(payload.amount));
         createData.append("serviceQuantity", String(payload.serviceQuantity));
+        createData.append("baseAmount", String(payload.baseAmount));
+        createData.append("designatedFee", String(payload.designatedFee));
+        createData.append("friendFee", String(payload.friendFee));
+        createData.append("replacementFee", String(payload.replacementFee));
+        createData.append("nightFee", String(payload.nightFee));
+        createData.append("otherFee", String(payload.otherFee));
+        createData.append("discountAmount", String(payload.discountAmount));
+        createData.append("finalAmount", String(payload.finalAmount));
+        createData.append("activityId", payload.activityId == null ? "" : String(payload.activityId));
+        createData.append("ignoreActivity", String(payload.ignoreActivity));
         createData.append("commissionRate", String(payload.commissionRate));
         createData.append("commissionAmount", String(payload.commissionAmount));
         createData.append("status", payload.status);
@@ -3978,19 +4198,30 @@ async function submitOrder(event) {
 function startOrderEdit(order) {
   const form = document.getElementById("orderForm");
   state.orderAmountManuallyEdited = true;
+  state.orderBaseAmountManuallyEdited = true;
   form.elements.orderId.value = order.id;
   form.elements.orderDate.value = order.orderDate;
   form.elements.orderNo.value = order.orderNo || "";
   form.elements.orderType.value = order.orderType || "boosting";
+  form.elements.pricingCategory.value = order.pricingCategory || "";
   form.elements.ownerUserId.value = order.ownerUserId || "";
   refreshMemberPickerFields(form);
-  form.elements.amount.value = order.amount;
+  form.elements.amount.value = orderFinalAmount(order);
   form.elements.serviceName.value = "";
   form.elements.serviceSeedKey.value = "";
   form.elements.serviceUnitPrice.value = "";
   form.elements.serviceUnitType.value = "";
   form.elements.serviceUnitLabel.value = "";
   form.elements.serviceQuantity.value = order.serviceQuantity || 1;
+  form.elements.baseAmount.value = Number(order.baseAmount || 0) || orderFinalAmount(order);
+  form.elements.designatedFee.value = order.designatedFee || 0;
+  form.elements.friendFee.value = order.friendFee || 0;
+  form.elements.replacementCount.value = 0;
+  form.elements.replacementFee.value = order.replacementFee || 0;
+  form.elements.nightFee.value = order.nightFee || 0;
+  form.elements.otherFee.value = order.otherFee || 0;
+  form.elements.discountAmount.value = order.discountAmount || 0;
+  form.elements.activityId.value = order.activityId || "none";
   form.elements.assignedPlayerCount.value = 0;
   form.elements.friendCount.value = 0;
   form.elements.isLateNight.checked = false;
@@ -4026,6 +4257,7 @@ function startOrderEdit(order) {
 function copyOrderAsNew() {
   const form = document.getElementById("orderForm");
   state.orderAmountManuallyEdited = true;
+  state.orderBaseAmountManuallyEdited = true;
   form.elements.orderId.value = "";
   form.elements.orderType.value = form.elements.orderType.value || "boosting";
   clearOrderAttachmentDraft();
@@ -4040,15 +4272,26 @@ function copyOrderAsNew() {
 function resetOrderForm() {
   const form = document.getElementById("orderForm");
   state.orderAmountManuallyEdited = false;
+  state.orderBaseAmountManuallyEdited = false;
   form.reset();
   form.elements.orderId.value = "";
   form.elements.orderType.value = "companion";
+  form.elements.pricingCategory.value = "";
   form.elements.serviceName.value = "";
   form.elements.serviceSeedKey.value = "";
   form.elements.serviceUnitPrice.value = "";
   form.elements.serviceUnitType.value = "";
   form.elements.serviceUnitLabel.value = "";
   form.elements.serviceQuantity.value = 1;
+  form.elements.baseAmount.value = 0;
+  form.elements.designatedFee.value = 0;
+  form.elements.friendFee.value = 0;
+  form.elements.replacementCount.value = 0;
+  form.elements.replacementFee.value = 0;
+  form.elements.nightFee.value = 0;
+  form.elements.otherFee.value = 0;
+  form.elements.discountAmount.value = 0;
+  form.elements.activityId.value = "";
   form.elements.assignedPlayerCount.value = 0;
   form.elements.friendCount.value = 0;
   form.elements.isLateNight.checked = false;
@@ -4064,6 +4307,7 @@ function resetOrderForm() {
   clearOrderAttachmentDraft();
   document.getElementById("orderAttachmentBtn").hidden = false;
   updateLateNightAddonAvailability(form);
+  renderOrderActivityOptions();
   updateOrderCalc();
 }
 
@@ -4135,22 +4379,45 @@ function handleOrderInput(event) {
     "serviceQuantity",
     "orderDate",
     "amount",
+    "baseAmount",
     "assignedPlayerCount",
+    "designatedFee",
     "friendCount",
+    "friendFee",
+    "replacementCount",
+    "replacementFee",
     "isLateNight",
+    "nightFee",
+    "otherFee",
+    "discountAmount",
+    "activityId",
     "autoDetectLateNight",
     "orderType"
   ].includes(event.target?.name)) {
     if (event.target?.name === "amount") {
       state.orderAmountManuallyEdited = true;
+    } else if (event.target?.name === "baseAmount") {
+      state.orderAmountManuallyEdited = false;
+      state.orderBaseAmountManuallyEdited = true;
     } else if ([
       "serviceQuantity",
       "assignedPlayerCount",
+      "designatedFee",
       "friendCount",
+      "friendFee",
+      "replacementCount",
+      "replacementFee",
       "isLateNight",
+      "nightFee",
+      "otherFee",
+      "discountAmount",
+      "activityId",
       "autoDetectLateNight"
     ].includes(event.target?.name)) {
       state.orderAmountManuallyEdited = false;
+      if (event.target?.name === "serviceQuantity") {
+        state.orderBaseAmountManuallyEdited = false;
+      }
     }
     if (event.target?.name === "orderType") {
       updateLateNightAddonAvailability(event.currentTarget);
@@ -4158,7 +4425,7 @@ function handleOrderInput(event) {
     if (event.currentTarget.elements.autoDetectLateNight.checked) {
       applyAutoLateNightDetection(event.currentTarget);
     }
-    if (event.target?.name === "amount" || event.target?.name === "orderDate") {
+    if (event.target?.name === "amount") {
       const amount = Number(event.currentTarget.elements.amount.value || 0);
       event.currentTarget.elements.commissionAmount.value = calculateDefaultCommission(amount);
     } else {
@@ -4171,12 +4438,7 @@ function handleOrderInput(event) {
 
 function updateOrderAmountFromService() {
   const form = document.getElementById("orderForm");
-  if (state.orderAmountManuallyEdited) {
-    const currentAmount = Number(form.elements.amount.value || 0);
-    form.elements.commissionAmount.value = calculateDefaultCommission(currentAmount);
-    return;
-  }
-
+  renderOrderActivityOptions();
   const amount = calculateOrderQuotedAmount(form);
   if (amount <= 0) {
     return;
@@ -4189,19 +4451,99 @@ function updateOrderAmountFromService() {
 function calculateOrderQuotedAmount(form) {
   const unitPrice = Number(form.elements.serviceUnitPrice.value || 0);
   const quantity = Number(form.elements.serviceQuantity.value || 0);
-  if (unitPrice <= 0 || quantity <= 0) {
-    return 0;
+  if (!state.orderBaseAmountManuallyEdited && unitPrice > 0 && quantity > 0) {
+    form.elements.baseAmount.value = roundMoney(unitPrice * quantity);
   }
 
+  const baseAmount = nonNegativeMoney(form.elements.baseAmount.value);
   const assignedPlayerCount = nonNegativeInteger(form.elements.assignedPlayerCount.value);
   const friendCount = nonNegativeInteger(form.elements.friendCount.value);
+  const replacementCount = nonNegativeInteger(form.elements.replacementCount.value);
   const lateNightCharge = form.elements.isLateNight.checked ? 30 : 0;
-  return roundMoney(
-    unitPrice * quantity
-    + assignedPlayerCount * 20
-    + friendCount * 20
-    + lateNightCharge
-  );
+  const designatedFee = roundMoney(assignedPlayerCount * 20);
+  const friendFee = roundMoney(friendCount * 20);
+  const replacementFee = roundMoney(replacementCount * 10);
+  const nightFee = roundMoney(lateNightCharge);
+  const otherFee = nonNegativeMoney(form.elements.otherFee.value);
+  const subtotal = roundMoney(baseAmount + designatedFee + friendFee + replacementFee + nightFee + otherFee);
+  const appliedActivity = selectedOrderActivity(form);
+  const discountAmount = appliedActivity
+    ? Math.min(calculateActivityDiscount(appliedActivity, baseAmount, subtotal), subtotal)
+    : Math.min(nonNegativeMoney(form.elements.discountAmount.value), subtotal);
+
+  form.elements.designatedFee.value = designatedFee;
+  form.elements.friendFee.value = friendFee;
+  form.elements.replacementFee.value = replacementFee;
+  form.elements.nightFee.value = nightFee;
+  form.elements.discountAmount.value = discountAmount;
+
+  return roundMoney(subtotal - discountAmount);
+}
+
+function renderOrderActivityOptions() {
+  const select = document.getElementById("orderActivitySelect");
+  const form = document.getElementById("orderForm");
+  if (!select || !form) {
+    return;
+  }
+
+  const currentValue = select.value;
+  const category = form.elements.pricingCategory.value;
+  const orderDate = form.elements.orderDate.value;
+  const options = activeActivitiesForOrder(category, orderDate);
+  select.innerHTML = `
+    <option value="">自動套用</option>
+    <option value="none">不套活動</option>
+    ${options.map((activity) => `
+      <option value="${activity.id}">${escapeHtml(activity.name)}｜${escapeHtml(activityDiscountText(activity))}</option>
+    `).join("")}
+  `;
+  if ([...select.options].some((option) => option.value === currentValue)) {
+    select.value = currentValue;
+  }
+}
+
+function selectedOrderActivity(form) {
+  const value = form.elements.activityId.value;
+  if (value === "none") {
+    return null;
+  }
+  if (value) {
+    return state.activities.find((activity) => activity.id === Number(value) && activity.isActive) || null;
+  }
+  return activeActivitiesForOrder(form.elements.pricingCategory.value, form.elements.orderDate.value)[0] || null;
+}
+
+function activeActivitiesForOrder(category, orderDate) {
+  return state.activities
+    .filter((activity) => activity.isActive && activityAppliesToOrder(activity, category, orderDate))
+    .sort((a, b) => new Date(b.startsAt) - new Date(a.startsAt) || b.id - a.id);
+}
+
+function activityAppliesToOrder(activity, category, orderDate) {
+  if (!activity || !orderDate) {
+    return false;
+  }
+  const now = new Date();
+  const targetDate = new Date(`${orderDate}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:00`);
+  if (targetDate < new Date(activity.startsAt) || targetDate > new Date(activity.endsAt)) {
+    return false;
+  }
+  const categories = String(activity.applicableCategories || "").split(",").filter(Boolean);
+  return categories.length === 0 || categories.includes(category);
+}
+
+function calculateActivityDiscount(activity, baseAmount, subtotal) {
+  const discountBase = activity.includeFees ? subtotal : baseAmount;
+  const value = Number(activity.discountValue || 0);
+  const discount = activity.discountType === "percent"
+    ? discountBase * value / 100
+    : activity.discountType === "fixed_amount"
+      ? value
+      : activity.discountType === "fixed_price"
+        ? discountBase - value
+        : 0;
+  return nonNegativeMoney(Math.min(discount, subtotal));
 }
 
 function calculateOrderCommissionAmount(form, amount) {
@@ -4286,6 +4628,10 @@ function nonNegativeInteger(value) {
   return Math.max(0, Math.floor(Number(value || 0)));
 }
 
+function nonNegativeMoney(value) {
+  return Math.max(0, roundMoney(Number(value || 0)));
+}
+
 function supportsLateNightAddon(item) {
   if (!item) {
     return false;
@@ -4346,10 +4692,16 @@ function buildOrderServiceRemark(form) {
     : "";
   const assignedPlayerCount = nonNegativeInteger(form.elements.assignedPlayerCount.value);
   const friendCount = nonNegativeInteger(form.elements.friendCount.value);
+  const replacementCount = nonNegativeInteger(form.elements.replacementCount.value);
+  const otherFee = nonNegativeMoney(form.elements.otherFee.value);
+  const discountAmount = nonNegativeMoney(form.elements.discountAmount.value);
   const surcharges = [
     assignedPlayerCount > 0 ? `指定陪陪 +20／位 × ${assignedPlayerCount}` : "",
     friendCount > 0 ? `帶朋友 +20／位 × ${friendCount}` : "",
+    replacementCount > 0 ? `換人 +10／位 × ${replacementCount}` : "",
     form.elements.isLateNight.checked ? "深夜 00:00-06:00 +30" : "",
+    otherFee > 0 ? `其他加價 ${money.format(otherFee)}` : "",
+    discountAmount > 0 ? `活動折扣 -${money.format(discountAmount)}` : "",
     form.elements.autoDetectLateNight.checked ? "深夜判斷：自動" : ""
   ].filter(Boolean);
 
@@ -4466,6 +4818,47 @@ function roundMoney(value) {
 
 function formatDateTime(value) {
   return new Date(value).toLocaleString("zh-TW", { hour12: false });
+}
+
+function toIsoDateTime(value) {
+  if (!value) {
+    return null;
+  }
+  return value.length === 16 ? `${value}:00` : value;
+}
+
+function toDateTimeLocalValue(value) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function activityDiscountText(activity) {
+  if (!activity) {
+    return "";
+  }
+  if (activity.discountType === "percent") {
+    return `${activity.discountValue}%`;
+  }
+  if (activity.discountType === "fixed_amount") {
+    return `折 ${money.format(activity.discountValue)}`;
+  }
+  if (activity.discountType === "fixed_price") {
+    return `活動價 ${money.format(activity.discountValue)}`;
+  }
+  return money.format(activity.discountValue);
+}
+
+function activityCategoriesText(value) {
+  const categories = String(value || "")
+    .split(",")
+    .filter(Boolean);
+  return categories.length
+    ? categories.map(serviceCategoryText).join("、")
+    : "全部";
 }
 
 function showAlert(message, isError = true) {

@@ -1370,6 +1370,15 @@ textarea {
   align-items: end;
 }
 
+.activity-field-pair {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+}
+
+.activity-field-pair input,
+.activity-field-pair select {
+  min-width: 0;
+}
+
 .gift-form-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

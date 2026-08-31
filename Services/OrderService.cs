@@ -37,16 +37,31 @@ public sealed class OrderService
                 "Attachment is required before creating a disputed or paid order. Create the order first, upload attachments, then update status.");
         }
 
+        var pricing = await ResolvePricingAsync(request);
         var commission = await ResolveCommissionAsync(request);
 
         var order = new Order
         {
             OrderNo = string.IsNullOrWhiteSpace(request.OrderNo) ? null : request.OrderNo.Trim(),
             OrderType = string.IsNullOrWhiteSpace(request.OrderType) ? "boosting" : request.OrderType,
+            PricingCategory = string.IsNullOrWhiteSpace(request.PricingCategory) ? null : request.PricingCategory.Trim(),
             OrderDate = request.OrderDate,
             OwnerUserId = request.OwnerUserId,
-            Amount = request.Amount,
+            Amount = pricing.FinalAmount,
             ServiceQuantity = request.ServiceQuantity,
+            BaseAmount = pricing.BaseAmount,
+            DesignatedFee = pricing.DesignatedFee,
+            FriendFee = pricing.FriendFee,
+            ReplacementFee = pricing.ReplacementFee,
+            NightFee = pricing.NightFee,
+            OtherFee = pricing.OtherFee,
+            DiscountAmount = pricing.DiscountAmount,
+            FinalAmount = pricing.FinalAmount,
+            ActivityId = pricing.ActivityId,
+            ActivityNameSnapshot = pricing.ActivityNameSnapshot,
+            ActivityDiscountType = pricing.ActivityDiscountType,
+            ActivityDiscountValue = pricing.ActivityDiscountValue,
+            ActivityIncludeFees = pricing.ActivityIncludeFees,
             CommissionRate = commission.Rate,
             CommissionAmount = commission.Amount,
             Status = request.Status,
@@ -109,16 +124,31 @@ public sealed class OrderService
             }
         }
 
+        var pricing = await ResolvePricingAsync(request);
         var commission = await ResolveCommissionAsync(request);
 
         var order = new Order
         {
             OrderNo = string.IsNullOrWhiteSpace(request.OrderNo) ? null : request.OrderNo.Trim(),
             OrderType = string.IsNullOrWhiteSpace(request.OrderType) ? "boosting" : request.OrderType,
+            PricingCategory = string.IsNullOrWhiteSpace(request.PricingCategory) ? null : request.PricingCategory.Trim(),
             OrderDate = request.OrderDate,
             OwnerUserId = request.OwnerUserId,
-            Amount = request.Amount,
+            Amount = pricing.FinalAmount,
             ServiceQuantity = request.ServiceQuantity,
+            BaseAmount = pricing.BaseAmount,
+            DesignatedFee = pricing.DesignatedFee,
+            FriendFee = pricing.FriendFee,
+            ReplacementFee = pricing.ReplacementFee,
+            NightFee = pricing.NightFee,
+            OtherFee = pricing.OtherFee,
+            DiscountAmount = pricing.DiscountAmount,
+            FinalAmount = pricing.FinalAmount,
+            ActivityId = pricing.ActivityId,
+            ActivityNameSnapshot = pricing.ActivityNameSnapshot,
+            ActivityDiscountType = pricing.ActivityDiscountType,
+            ActivityDiscountValue = pricing.ActivityDiscountValue,
+            ActivityIncludeFees = pricing.ActivityIncludeFees,
             CommissionRate = commission.Rate,
             CommissionAmount = commission.Amount,
             Status = request.Status,
@@ -207,10 +237,25 @@ public sealed class OrderService
 
         order.OrderNo = string.IsNullOrWhiteSpace(request.OrderNo) ? null : request.OrderNo.Trim();
         order.OrderType = string.IsNullOrWhiteSpace(request.OrderType) ? "boosting" : request.OrderType;
+        order.PricingCategory = string.IsNullOrWhiteSpace(request.PricingCategory) ? null : request.PricingCategory.Trim();
         order.OrderDate = request.OrderDate;
         order.OwnerUserId = request.OwnerUserId;
-        order.Amount = request.Amount;
+        var pricing = await ResolvePricingAsync(request);
+        order.Amount = pricing.FinalAmount;
         order.ServiceQuantity = request.ServiceQuantity;
+        order.BaseAmount = pricing.BaseAmount;
+        order.DesignatedFee = pricing.DesignatedFee;
+        order.FriendFee = pricing.FriendFee;
+        order.ReplacementFee = pricing.ReplacementFee;
+        order.NightFee = pricing.NightFee;
+        order.OtherFee = pricing.OtherFee;
+        order.DiscountAmount = pricing.DiscountAmount;
+        order.FinalAmount = pricing.FinalAmount;
+        order.ActivityId = pricing.ActivityId;
+        order.ActivityNameSnapshot = pricing.ActivityNameSnapshot;
+        order.ActivityDiscountType = pricing.ActivityDiscountType;
+        order.ActivityDiscountValue = pricing.ActivityDiscountValue;
+        order.ActivityIncludeFees = pricing.ActivityIncludeFees;
         var commission = await ResolveCommissionAsync(request, order.Id);
         order.CommissionRate = commission.Rate;
         order.CommissionAmount = commission.Amount;
@@ -401,10 +446,11 @@ public sealed class OrderService
 
     private async Task<ServiceResult> ValidateCreateOrderAsync(CreateOrderRequestDto request)
     {
+        var pricing = await ResolvePricingAsync(request);
         var commission = await ResolveCommissionAsync(request);
 
         return await ValidateOrderAsync(
-            request.Amount,
+            pricing,
             commission.Amount,
             request.ServiceQuantity,
             request.OrderType,
@@ -416,8 +462,9 @@ public sealed class OrderService
 
     private async Task<ServiceResult> ValidateUpdateOrderAsync(int orderId, UpdateOrderRequestDto request)
     {
+        var pricing = await ResolvePricingAsync(request);
         return await ValidateOrderAsync(
-            request.Amount,
+            pricing,
             (await ResolveCommissionAsync(request, orderId)).Amount,
             request.ServiceQuantity,
             request.OrderType,
@@ -428,7 +475,7 @@ public sealed class OrderService
     }
 
     private async Task<ServiceResult> ValidateOrderAsync(
-        decimal amount,
+        OrderPricing pricing,
         decimal commissionAmount,
         decimal serviceQuantity,
         string orderType,
@@ -437,7 +484,17 @@ public sealed class OrderService
         int? ownerUserId,
         IReadOnlyCollection<CreateOrderMemberRequestDto> members)
     {
-        if (amount <= 0)
+        if (pricing.HasNegativeComponent)
+        {
+            return ServiceResult.Failure("invalid_pricing", "Pricing fields cannot be negative.");
+        }
+
+        if (pricing.DiscountAmount > pricing.SubtotalAmount)
+        {
+            return ServiceResult.Failure("invalid_discount", "Discount amount cannot exceed amount before discount.");
+        }
+
+        if (pricing.FinalAmount <= 0)
         {
             return ServiceResult.Failure("invalid_amount", "Amount must be greater than zero.");
         }
@@ -463,12 +520,12 @@ public sealed class OrderService
             return ServiceResult.Validation(valueErrors);
         }
 
-        if (commissionAmount < 0 || commissionAmount > amount)
+        if (commissionAmount < 0 || commissionAmount > pricing.FinalAmount)
         {
             return ServiceResult.Failure("invalid_commission_amount", "Commission amount must be between zero and amount.");
         }
 
-        var distributableAmount = amount - commissionAmount;
+        var distributableAmount = pricing.FinalAmount - commissionAmount;
         var shareTotal = members.Sum(x => x.ShareAmount);
         if (shareTotal != distributableAmount)
         {
@@ -496,6 +553,7 @@ public sealed class OrderService
 
     private async Task<CommissionQuote> ResolveCommissionAsync(CreateOrderRequestDto request, int? excludeOrderId = null)
     {
+        var pricing = await ResolvePricingAsync(request);
         if (request.OrderType == "companion")
         {
             var primaryMemberId = request.Members.FirstOrDefault()?.UserId;
@@ -515,18 +573,18 @@ public sealed class OrderService
                     && (!excludeOrderId.HasValue || x.OrderId != excludeOrderId.Value))
                 .SumAsync(x => x.Order.ServiceQuantity);
             var commissionAmount = CalculateCompanionTierCommission(
-                request.Amount,
+                pricing.FinalAmount,
                 request.ServiceQuantity,
                 completedHours);
-            var effectiveRate = request.Amount > 0
-                ? decimal.Round(commissionAmount / request.Amount, 4, MidpointRounding.AwayFromZero)
+            var effectiveRate = pricing.FinalAmount > 0
+                ? decimal.Round(commissionAmount / pricing.FinalAmount, 4, MidpointRounding.AwayFromZero)
                 : 0m;
             return new CommissionQuote(effectiveRate, commissionAmount);
         }
 
         var manualAmount = request.CommissionAmount ?? 0m;
-        var manualRate = request.Amount > 0
-            ? decimal.Round(manualAmount / request.Amount, 4, MidpointRounding.AwayFromZero)
+        var manualRate = pricing.FinalAmount > 0
+            ? decimal.Round(manualAmount / pricing.FinalAmount, 4, MidpointRounding.AwayFromZero)
             : 0m;
         return new CommissionQuote(manualRate, manualAmount);
     }
@@ -538,10 +596,25 @@ public sealed class OrderService
             {
                 OrderNo = request.OrderNo,
                 OrderType = request.OrderType,
+                PricingCategory = request.PricingCategory,
                 OrderDate = request.OrderDate,
                 OwnerUserId = request.OwnerUserId,
                 Amount = request.Amount,
                 ServiceQuantity = request.ServiceQuantity,
+                BaseAmount = request.BaseAmount,
+                DesignatedFee = request.DesignatedFee,
+                FriendFee = request.FriendFee,
+                ReplacementFee = request.ReplacementFee,
+                NightFee = request.NightFee,
+                OtherFee = request.OtherFee,
+                DiscountAmount = request.DiscountAmount,
+                FinalAmount = request.FinalAmount,
+                ActivityId = request.ActivityId,
+                IgnoreActivity = request.IgnoreActivity,
+                ActivityNameSnapshot = request.ActivityNameSnapshot,
+                ActivityDiscountType = request.ActivityDiscountType,
+                ActivityDiscountValue = request.ActivityDiscountValue,
+                ActivityIncludeFees = request.ActivityIncludeFees,
                 CommissionRate = request.CommissionRate,
                 CommissionAmount = request.CommissionAmount,
                 Status = request.Status,
@@ -550,6 +623,169 @@ public sealed class OrderService
                 Members = request.Members
             },
             excludeOrderId);
+    }
+
+    private async Task<OrderPricing> ResolvePricingAsync(CreateOrderRequestDto request)
+    {
+        var pricing = ResolvePricing(
+            request.Amount,
+            request.BaseAmount,
+            request.DesignatedFee,
+            request.FriendFee,
+            request.ReplacementFee,
+            request.NightFee,
+            request.OtherFee,
+            request.DiscountAmount);
+
+        if (request.IgnoreActivity)
+        {
+            return pricing;
+        }
+
+        var orderMoment = OrderMoment(request.OrderDate);
+        var activity = request.ActivityId.HasValue
+            ? await _db.Activities.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == request.ActivityId.Value && x.IsActive)
+            : await FindApplicableActivityAsync(request.PricingCategory, orderMoment);
+        if (activity is null || !ActivityApplies(activity, request.PricingCategory, orderMoment))
+        {
+            return request.ActivityId.HasValue
+                ? pricing with { DiscountAmount = 0m, FinalAmount = pricing.SubtotalAmount }
+                : pricing;
+        }
+
+        var discountBase = activity.IncludeFees ? pricing.SubtotalAmount : pricing.BaseAmount;
+        var discount = CalculateActivityDiscount(activity.DiscountType, activity.DiscountValue, discountBase);
+        discount = Math.Min(discount, pricing.SubtotalAmount);
+        return pricing with
+        {
+            DiscountAmount = discount,
+            FinalAmount = decimal.Round(pricing.SubtotalAmount - discount, 2, MidpointRounding.AwayFromZero),
+            ActivityId = activity.Id,
+            ActivityNameSnapshot = activity.Name,
+            ActivityDiscountType = activity.DiscountType,
+            ActivityDiscountValue = activity.DiscountValue,
+            ActivityIncludeFees = activity.IncludeFees
+        };
+    }
+
+    private async Task<Activity?> FindApplicableActivityAsync(string? pricingCategory, DateTime orderMoment)
+    {
+        var activities = await _db.Activities.AsNoTracking()
+            .Where(x => x.IsActive && x.StartsAt <= orderMoment && x.EndsAt >= orderMoment)
+            .OrderByDescending(x => x.StartsAt)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync();
+        return activities.FirstOrDefault(x => ActivityApplies(x, pricingCategory, orderMoment));
+    }
+
+    private async Task<OrderPricing> ResolvePricingAsync(UpdateOrderRequestDto request)
+    {
+        return await ResolvePricingAsync(new CreateOrderRequestDto
+        {
+            OrderNo = request.OrderNo,
+            OrderType = request.OrderType,
+            PricingCategory = request.PricingCategory,
+            OrderDate = request.OrderDate,
+            OwnerUserId = request.OwnerUserId,
+            Amount = request.Amount,
+            ServiceQuantity = request.ServiceQuantity,
+            BaseAmount = request.BaseAmount,
+            DesignatedFee = request.DesignatedFee,
+            FriendFee = request.FriendFee,
+            ReplacementFee = request.ReplacementFee,
+            NightFee = request.NightFee,
+            OtherFee = request.OtherFee,
+            DiscountAmount = request.DiscountAmount,
+            FinalAmount = request.FinalAmount,
+            ActivityId = request.ActivityId,
+            IgnoreActivity = request.IgnoreActivity,
+            Status = request.Status,
+            CustomerPaymentStatus = request.CustomerPaymentStatus,
+            Remark = request.Remark,
+            Members = request.Members
+        });
+    }
+
+    private static OrderPricing ResolvePricing(
+        decimal legacyAmount,
+        decimal baseAmount,
+        decimal designatedFee,
+        decimal friendFee,
+        decimal replacementFee,
+        decimal nightFee,
+        decimal otherFee,
+        decimal discountAmount)
+    {
+        var hasBreakdown = baseAmount != 0m
+            || designatedFee != 0m
+            || friendFee != 0m
+            || replacementFee != 0m
+            || nightFee != 0m
+            || otherFee != 0m
+            || discountAmount != 0m;
+
+        if (!hasBreakdown)
+        {
+            var amount = decimal.Round(legacyAmount, 2, MidpointRounding.AwayFromZero);
+            return new OrderPricing(
+                amount,
+                0m,
+                0m,
+                0m,
+                0m,
+                0m,
+                0m,
+                amount);
+        }
+
+        var subtotal = baseAmount
+            + designatedFee
+            + friendFee
+            + replacementFee
+            + nightFee
+            + otherFee;
+        var finalAmount = decimal.Round(subtotal - discountAmount, 2, MidpointRounding.AwayFromZero);
+        return new OrderPricing(
+            decimal.Round(baseAmount, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(designatedFee, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(friendFee, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(replacementFee, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(nightFee, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(otherFee, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(discountAmount, 2, MidpointRounding.AwayFromZero),
+            finalAmount);
+    }
+
+    private static DateTime OrderMoment(DateOnly orderDate)
+    {
+        var now = DateTime.Now;
+        return orderDate.ToDateTime(TimeOnly.FromTimeSpan(now.TimeOfDay));
+    }
+
+    private static bool ActivityApplies(Activity activity, string? pricingCategory, DateTime orderMoment)
+    {
+        if (orderMoment < activity.StartsAt || orderMoment > activity.EndsAt)
+        {
+            return false;
+        }
+
+        var categories = activity.ApplicableCategories
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return categories.Length == 0
+            || categories.Contains(pricingCategory ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static decimal CalculateActivityDiscount(string discountType, decimal discountValue, decimal discountBase)
+    {
+        var discount = discountType switch
+        {
+            "percent" => discountBase * discountValue / 100m,
+            "fixed_amount" => discountValue,
+            "fixed_price" => discountBase - discountValue,
+            _ => 0m
+        };
+        return decimal.Round(Math.Max(0m, discount), 2, MidpointRounding.AwayFromZero);
     }
 
     private static decimal CalculateCompanionTierCommission(decimal amount, decimal hours, decimal completedHours)
@@ -675,6 +911,33 @@ public sealed class OrderService
         return ServiceResult<T>.Failure(
             result.ErrorCode ?? "operation_failed",
             result.ErrorMessage ?? "Operation failed.");
+    }
+
+    private sealed record OrderPricing(
+        decimal BaseAmount,
+        decimal DesignatedFee,
+        decimal FriendFee,
+        decimal ReplacementFee,
+        decimal NightFee,
+        decimal OtherFee,
+        decimal DiscountAmount,
+        decimal FinalAmount,
+        int? ActivityId = null,
+        string? ActivityNameSnapshot = null,
+        string? ActivityDiscountType = null,
+        decimal? ActivityDiscountValue = null,
+        bool ActivityIncludeFees = false)
+    {
+        public decimal SubtotalAmount => BaseAmount + DesignatedFee + FriendFee + ReplacementFee + NightFee + OtherFee;
+
+        public bool HasNegativeComponent => BaseAmount < 0m
+            || DesignatedFee < 0m
+            || FriendFee < 0m
+            || ReplacementFee < 0m
+            || NightFee < 0m
+            || OtherFee < 0m
+            || DiscountAmount < 0m
+            || FinalAmount < 0m;
     }
 
     private sealed record CommissionQuote(decimal Rate, decimal Amount);

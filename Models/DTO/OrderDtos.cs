@@ -6,11 +6,25 @@ public sealed class OrderDto
     public Guid Uuid { get; set; }
     public string? OrderNo { get; set; }
     public string OrderType { get; set; } = "boosting";
+    public string? PricingCategory { get; set; }
     public DateOnly OrderDate { get; set; }
     public int? OwnerUserId { get; set; }
     public string? OwnerNickname { get; set; }
     public decimal Amount { get; set; }
     public decimal ServiceQuantity { get; set; }
+    public decimal BaseAmount { get; set; }
+    public decimal DesignatedFee { get; set; }
+    public decimal FriendFee { get; set; }
+    public decimal ReplacementFee { get; set; }
+    public decimal NightFee { get; set; }
+    public decimal OtherFee { get; set; }
+    public decimal DiscountAmount { get; set; }
+    public decimal FinalAmount { get; set; }
+    public int? ActivityId { get; set; }
+    public string? ActivityNameSnapshot { get; set; }
+    public string? ActivityDiscountType { get; set; }
+    public decimal? ActivityDiscountValue { get; set; }
+    public bool ActivityIncludeFees { get; set; }
     public decimal CommissionRate { get; set; }
     public decimal CommissionAmount { get; set; }
     public decimal ShareTotalAmount { get; set; }
@@ -26,10 +40,25 @@ public sealed class CreateOrderRequestDto
 {
     public string? OrderNo { get; set; }
     public string OrderType { get; set; } = "boosting";
+    public string? PricingCategory { get; set; }
     public DateOnly OrderDate { get; set; }
     public int? OwnerUserId { get; set; }
     public decimal Amount { get; set; }
     public decimal ServiceQuantity { get; set; }
+    public decimal BaseAmount { get; set; }
+    public decimal DesignatedFee { get; set; }
+    public decimal FriendFee { get; set; }
+    public decimal ReplacementFee { get; set; }
+    public decimal NightFee { get; set; }
+    public decimal OtherFee { get; set; }
+    public decimal DiscountAmount { get; set; }
+    public decimal FinalAmount { get; set; }
+    public int? ActivityId { get; set; }
+    public bool IgnoreActivity { get; set; }
+    public string? ActivityNameSnapshot { get; set; }
+    public string? ActivityDiscountType { get; set; }
+    public decimal? ActivityDiscountValue { get; set; }
+    public bool ActivityIncludeFees { get; set; }
     public decimal CommissionRate { get; set; }
     public decimal? CommissionAmount { get; set; }
     public string Status { get; set; } = "completed";
@@ -42,10 +71,25 @@ public sealed class UpdateOrderRequestDto
 {
     public string? OrderNo { get; set; }
     public string OrderType { get; set; } = "boosting";
+    public string? PricingCategory { get; set; }
     public DateOnly OrderDate { get; set; }
     public int? OwnerUserId { get; set; }
     public decimal Amount { get; set; }
     public decimal ServiceQuantity { get; set; }
+    public decimal BaseAmount { get; set; }
+    public decimal DesignatedFee { get; set; }
+    public decimal FriendFee { get; set; }
+    public decimal ReplacementFee { get; set; }
+    public decimal NightFee { get; set; }
+    public decimal OtherFee { get; set; }
+    public decimal DiscountAmount { get; set; }
+    public decimal FinalAmount { get; set; }
+    public int? ActivityId { get; set; }
+    public bool IgnoreActivity { get; set; }
+    public string? ActivityNameSnapshot { get; set; }
+    public string? ActivityDiscountType { get; set; }
+    public decimal? ActivityDiscountValue { get; set; }
+    public bool ActivityIncludeFees { get; set; }
     public decimal CommissionRate { get; set; }
     public decimal CommissionAmount { get; set; }
     public string Status { get; set; } = "completed";
@@ -71,10 +115,24 @@ public sealed class OrderListItemDto
     public Guid Uuid { get; set; }
     public string? OrderNo { get; set; }
     public string OrderType { get; set; } = "boosting";
+    public string? PricingCategory { get; set; }
     public DateOnly OrderDate { get; set; }
     public string? OwnerNickname { get; set; }
     public decimal Amount { get; set; }
     public decimal ServiceQuantity { get; set; }
+    public decimal BaseAmount { get; set; }
+    public decimal DesignatedFee { get; set; }
+    public decimal FriendFee { get; set; }
+    public decimal ReplacementFee { get; set; }
+    public decimal NightFee { get; set; }
+    public decimal OtherFee { get; set; }
+    public decimal DiscountAmount { get; set; }
+    public decimal FinalAmount { get; set; }
+    public int? ActivityId { get; set; }
+    public string? ActivityNameSnapshot { get; set; }
+    public string? ActivityDiscountType { get; set; }
+    public decimal? ActivityDiscountValue { get; set; }
+    public bool ActivityIncludeFees { get; set; }
     public decimal CommissionAmount { get; set; }
     public decimal ShareTotalAmount { get; set; }
     public int MemberCount { get; set; }

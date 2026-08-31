@@ -32,17 +32,59 @@ ON dbo.users (discord_id)
 WHERE discord_id IS NOT NULL;
 GO
 
+CREATE TABLE dbo.activities (
+    id INT IDENTITY(1,1) NOT NULL,
+    organization_id INT NOT NULL,
+    uuid UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_activities_uuid DEFAULT NEWID(),
+    name NVARCHAR(100) NOT NULL,
+    starts_at DATETIME2 NOT NULL,
+    ends_at DATETIME2 NOT NULL,
+    discount_type NVARCHAR(30) NOT NULL,
+    discount_value DECIMAL(10,2) NOT NULL,
+    applicable_categories NVARCHAR(500) NOT NULL CONSTRAINT DF_activities_applicable_categories DEFAULT N'',
+    include_fees BIT NOT NULL CONSTRAINT DF_activities_include_fees DEFAULT 0,
+    is_active BIT NOT NULL CONSTRAINT DF_activities_is_active DEFAULT 1,
+    note NVARCHAR(500) NULL,
+    created_at DATETIME2 NOT NULL CONSTRAINT DF_activities_created_at DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NULL,
+
+    CONSTRAINT PK_activities PRIMARY KEY CLUSTERED (id),
+    CONSTRAINT UQ_activities_uuid UNIQUE (uuid),
+    CONSTRAINT CK_activities_period CHECK (ends_at >= starts_at),
+    CONSTRAINT CK_activities_discount_type CHECK (discount_type IN (N'percent', N'fixed_amount', N'fixed_price')),
+    CONSTRAINT CK_activities_discount_value CHECK (discount_value >= 0 AND (discount_type <> N'percent' OR discount_value <= 100))
+);
+GO
+
+CREATE INDEX IX_activities_scope
+ON dbo.activities (organization_id, is_active, starts_at, ends_at);
+GO
+
 CREATE TABLE dbo.orders (
     id INT IDENTITY(1,1) NOT NULL,
     uuid UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_orders_uuid DEFAULT NEWID(),
 
     order_no NVARCHAR(30) NULL,
     order_type NVARCHAR(20) NOT NULL CONSTRAINT DF_orders_order_type DEFAULT N'boosting',
+    pricing_category NVARCHAR(50) NULL,
     order_date DATE NOT NULL,
 
     owner_user_id INT NULL,
     amount DECIMAL(12,2) NOT NULL,
     service_quantity DECIMAL(10,2) NOT NULL CONSTRAINT DF_orders_service_quantity DEFAULT 0,
+    base_amount DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_base_amount DEFAULT 0,
+    designated_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_designated_fee DEFAULT 0,
+    friend_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_friend_fee DEFAULT 0,
+    replacement_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_replacement_fee DEFAULT 0,
+    night_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_night_fee DEFAULT 0,
+    other_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_other_fee DEFAULT 0,
+    discount_amount DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_discount_amount DEFAULT 0,
+    final_amount DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_final_amount DEFAULT 0,
+    activity_id INT NULL,
+    activity_name_snapshot NVARCHAR(100) NULL,
+    activity_discount_type NVARCHAR(30) NULL,
+    activity_discount_value DECIMAL(10,2) NULL,
+    activity_include_fees BIT NOT NULL CONSTRAINT DF_orders_activity_include_fees DEFAULT 0,
     commission_rate DECIMAL(6,4) NOT NULL CONSTRAINT DF_orders_commission_rate DEFAULT 0,
     commission_amount DECIMAL(12,2) NOT NULL,
 
@@ -58,7 +100,20 @@ CREATE TABLE dbo.orders (
     CONSTRAINT UQ_orders_uuid UNIQUE (uuid),
     CONSTRAINT UQ_orders_order_no UNIQUE (order_no),
     CONSTRAINT FK_orders_owner_user FOREIGN KEY (owner_user_id) REFERENCES dbo.users(id),
+    CONSTRAINT FK_orders_activity FOREIGN KEY (activity_id) REFERENCES dbo.activities(id),
     CONSTRAINT CK_orders_amount CHECK (amount >= 0),
+    CONSTRAINT CK_orders_pricing_non_negative CHECK (
+        base_amount >= 0
+        AND designated_fee >= 0
+        AND friend_fee >= 0
+        AND replacement_fee >= 0
+        AND night_fee >= 0
+        AND other_fee >= 0
+        AND discount_amount >= 0
+        AND final_amount >= 0
+    ),
+    CONSTRAINT CK_orders_discount_amount CHECK (discount_amount <= base_amount + designated_fee + friend_fee + replacement_fee + night_fee + other_fee),
+    CONSTRAINT CK_orders_final_amount CHECK (final_amount = base_amount + designated_fee + friend_fee + replacement_fee + night_fee + other_fee - discount_amount),
     CONSTRAINT CK_orders_commission_rate CHECK (commission_rate >= 0 AND commission_rate <= 1),
     CONSTRAINT CK_orders_commission_amount CHECK (commission_amount >= 0),
     CONSTRAINT CK_orders_order_type CHECK (order_type IN (N'boosting', N'farming', N'companion', N'prepaid')),
@@ -144,6 +199,10 @@ GO
 
 CREATE INDEX IX_orders_customer_payment_status
 ON dbo.orders (customer_payment_status, status, order_date);
+GO
+
+CREATE INDEX IX_orders_activity_id
+ON dbo.orders (activity_id);
 GO
 
 CREATE INDEX IX_order_members_user_order

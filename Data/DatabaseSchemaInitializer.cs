@@ -9,11 +9,132 @@ public static class DatabaseSchemaInitializer
         await db.Database.ExecuteSqlRawAsync("""
 IF OBJECT_ID(N'dbo.orders', N'U') IS NOT NULL
 BEGIN
+    IF OBJECT_ID(N'dbo.activities', N'U') IS NULL
+    BEGIN
+        CREATE TABLE dbo.activities
+        (
+            id INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_activities PRIMARY KEY,
+            organization_id INT NOT NULL,
+            uuid UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_activities_uuid DEFAULT NEWID(),
+            name NVARCHAR(100) NOT NULL,
+            starts_at DATETIME2 NOT NULL,
+            ends_at DATETIME2 NOT NULL,
+            discount_type NVARCHAR(30) NOT NULL,
+            discount_value DECIMAL(10,2) NOT NULL,
+            applicable_categories NVARCHAR(500) NOT NULL CONSTRAINT DF_activities_applicable_categories DEFAULT N'',
+            include_fees BIT NOT NULL CONSTRAINT DF_activities_include_fees DEFAULT 0,
+            is_active BIT NOT NULL CONSTRAINT DF_activities_is_active DEFAULT 1,
+            note NVARCHAR(500) NULL,
+            created_at DATETIME2 NOT NULL CONSTRAINT DF_activities_created_at DEFAULT SYSUTCDATETIME(),
+            updated_at DATETIME2 NULL,
+            CONSTRAINT UQ_activities_uuid UNIQUE (uuid),
+            CONSTRAINT CK_activities_period CHECK (ends_at >= starts_at),
+            CONSTRAINT CK_activities_discount_type CHECK (discount_type IN (N'percent', N'fixed_amount', N'fixed_price')),
+            CONSTRAINT CK_activities_discount_value CHECK (discount_value >= 0 AND (discount_type <> N'percent' OR discount_value <= 100))
+        );
+        CREATE INDEX IX_activities_scope ON dbo.activities(organization_id, is_active, starts_at, ends_at);
+    END;
+
     IF COL_LENGTH('dbo.orders', 'order_type') IS NULL
         ALTER TABLE dbo.orders ADD order_type NVARCHAR(20) NOT NULL CONSTRAINT DF_orders_order_type DEFAULT N'boosting';
+    IF COL_LENGTH('dbo.orders', 'pricing_category') IS NULL
+        ALTER TABLE dbo.orders ADD pricing_category NVARCHAR(50) NULL;
 
     IF COL_LENGTH('dbo.orders', 'service_quantity') IS NULL
         ALTER TABLE dbo.orders ADD service_quantity DECIMAL(10,2) NOT NULL CONSTRAINT DF_orders_service_quantity DEFAULT 0;
+
+    IF COL_LENGTH('dbo.orders', 'base_amount') IS NULL
+        ALTER TABLE dbo.orders ADD base_amount DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_base_amount DEFAULT 0;
+    IF COL_LENGTH('dbo.orders', 'designated_fee') IS NULL
+        ALTER TABLE dbo.orders ADD designated_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_designated_fee DEFAULT 0;
+    IF COL_LENGTH('dbo.orders', 'friend_fee') IS NULL
+        ALTER TABLE dbo.orders ADD friend_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_friend_fee DEFAULT 0;
+    IF COL_LENGTH('dbo.orders', 'replacement_fee') IS NULL
+        ALTER TABLE dbo.orders ADD replacement_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_replacement_fee DEFAULT 0;
+    IF COL_LENGTH('dbo.orders', 'night_fee') IS NULL
+        ALTER TABLE dbo.orders ADD night_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_night_fee DEFAULT 0;
+    IF COL_LENGTH('dbo.orders', 'other_fee') IS NULL
+        ALTER TABLE dbo.orders ADD other_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_other_fee DEFAULT 0;
+    IF COL_LENGTH('dbo.orders', 'discount_amount') IS NULL
+        ALTER TABLE dbo.orders ADD discount_amount DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_discount_amount DEFAULT 0;
+    IF COL_LENGTH('dbo.orders', 'final_amount') IS NULL
+        ALTER TABLE dbo.orders ADD final_amount DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_final_amount DEFAULT 0;
+    IF COL_LENGTH('dbo.orders', 'activity_id') IS NULL
+        ALTER TABLE dbo.orders ADD activity_id INT NULL;
+    IF COL_LENGTH('dbo.orders', 'activity_name_snapshot') IS NULL
+        ALTER TABLE dbo.orders ADD activity_name_snapshot NVARCHAR(100) NULL;
+    IF COL_LENGTH('dbo.orders', 'activity_discount_type') IS NULL
+        ALTER TABLE dbo.orders ADD activity_discount_type NVARCHAR(30) NULL;
+    IF COL_LENGTH('dbo.orders', 'activity_discount_value') IS NULL
+        ALTER TABLE dbo.orders ADD activity_discount_value DECIMAL(10,2) NULL;
+    IF COL_LENGTH('dbo.orders', 'activity_include_fees') IS NULL
+        ALTER TABLE dbo.orders ADD activity_include_fees BIT NOT NULL CONSTRAINT DF_orders_activity_include_fees DEFAULT 0;
+
+    EXEC(N'UPDATE dbo.orders
+    SET base_amount = amount,
+        final_amount = amount
+    WHERE amount > 0
+      AND base_amount = 0
+      AND designated_fee = 0
+      AND friend_fee = 0
+      AND replacement_fee = 0
+      AND night_fee = 0
+      AND other_fee = 0
+      AND discount_amount = 0
+      AND final_amount = 0;');
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.check_constraints
+        WHERE name = N'CK_orders_pricing_non_negative'
+          AND parent_object_id = OBJECT_ID(N'dbo.orders')
+    )
+        EXEC(N'ALTER TABLE dbo.orders WITH CHECK ADD CONSTRAINT CK_orders_pricing_non_negative CHECK (base_amount >= 0 AND designated_fee >= 0 AND friend_fee >= 0 AND replacement_fee >= 0 AND night_fee >= 0 AND other_fee >= 0 AND discount_amount >= 0 AND final_amount >= 0)');
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.check_constraints
+        WHERE name = N'CK_orders_discount_amount'
+          AND parent_object_id = OBJECT_ID(N'dbo.orders')
+    )
+        EXEC(N'ALTER TABLE dbo.orders WITH CHECK ADD CONSTRAINT CK_orders_discount_amount CHECK (discount_amount <= base_amount + designated_fee + friend_fee + replacement_fee + night_fee + other_fee)');
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.check_constraints
+        WHERE name = N'CK_orders_final_amount'
+          AND parent_object_id = OBJECT_ID(N'dbo.orders')
+    )
+        EXEC(N'ALTER TABLE dbo.orders WITH CHECK ADD CONSTRAINT CK_orders_final_amount CHECK (final_amount = base_amount + designated_fee + friend_fee + replacement_fee + night_fee + other_fee - discount_amount)');
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.foreign_keys
+        WHERE name = N'FK_orders_activity'
+    )
+        EXEC(N'ALTER TABLE dbo.orders WITH CHECK ADD CONSTRAINT FK_orders_activity FOREIGN KEY (activity_id) REFERENCES dbo.activities(id)');
+
+    IF OBJECT_ID(N'dbo.organizations', N'U') IS NOT NULL
+       AND NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.foreign_keys
+        WHERE name = N'FK_activities_organization'
+    )
+        EXEC(N'ALTER TABLE dbo.activities WITH CHECK ADD CONSTRAINT FK_activities_organization FOREIGN KEY (organization_id) REFERENCES dbo.organizations(id)');
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.indexes
+        WHERE name = N'IX_orders_activity_id'
+          AND object_id = OBJECT_ID(N'dbo.orders')
+    )
+        CREATE INDEX IX_orders_activity_id ON dbo.orders(activity_id);
 
     IF NOT EXISTS
     (
@@ -38,6 +159,7 @@ END;
         await db.AuditLogs.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.MoneyLogs.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.ServiceItems.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+        await db.Activities.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.GiftRecords.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.Departments.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
         await db.DepartmentMembers.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
@@ -1034,6 +1156,7 @@ IF EXISTS
     UNION ALL SELECT 1 FROM dbo.payments WHERE organization_id <= 0
     UNION ALL SELECT 1 FROM dbo.audit_logs WHERE organization_id <= 0
     UNION ALL SELECT 1 FROM dbo.service_items WHERE organization_id <= 0
+    UNION ALL SELECT 1 FROM dbo.activities WHERE organization_id <= 0
     UNION ALL SELECT 1 FROM dbo.gift_records WHERE organization_id <= 0
     UNION ALL SELECT 1 FROM dbo.departments WHERE organization_id <= 0
     UNION ALL SELECT 1 FROM dbo.department_members WHERE organization_id <= 0
@@ -1049,6 +1172,7 @@ IF EXISTS
     UNION ALL SELECT 1 FROM dbo.payments x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
     UNION ALL SELECT 1 FROM dbo.audit_logs x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
     UNION ALL SELECT 1 FROM dbo.service_items x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
+    UNION ALL SELECT 1 FROM dbo.activities x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
     UNION ALL SELECT 1 FROM dbo.gift_records x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
     UNION ALL SELECT 1 FROM dbo.departments x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
     UNION ALL SELECT 1 FROM dbo.department_members x LEFT JOIN dbo.organizations o ON o.id = x.organization_id WHERE o.id IS NULL
@@ -1139,8 +1263,61 @@ IF COL_LENGTH('dbo.orders', 'created_audit_log_id') IS NULL
     ALTER TABLE dbo.orders ADD created_audit_log_id BIGINT NULL;
 IF COL_LENGTH('dbo.orders', 'order_type') IS NULL
     ALTER TABLE dbo.orders ADD order_type NVARCHAR(20) NOT NULL CONSTRAINT DF_orders_order_type DEFAULT N'boosting';
+IF COL_LENGTH('dbo.orders', 'pricing_category') IS NULL
+    ALTER TABLE dbo.orders ADD pricing_category NVARCHAR(50) NULL;
 IF COL_LENGTH('dbo.orders', 'service_quantity') IS NULL
     ALTER TABLE dbo.orders ADD service_quantity DECIMAL(10,2) NOT NULL CONSTRAINT DF_orders_service_quantity DEFAULT 0;
+IF COL_LENGTH('dbo.orders', 'base_amount') IS NULL
+    ALTER TABLE dbo.orders ADD base_amount DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_base_amount DEFAULT 0;
+IF COL_LENGTH('dbo.orders', 'designated_fee') IS NULL
+    ALTER TABLE dbo.orders ADD designated_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_designated_fee DEFAULT 0;
+IF COL_LENGTH('dbo.orders', 'friend_fee') IS NULL
+    ALTER TABLE dbo.orders ADD friend_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_friend_fee DEFAULT 0;
+IF COL_LENGTH('dbo.orders', 'replacement_fee') IS NULL
+    ALTER TABLE dbo.orders ADD replacement_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_replacement_fee DEFAULT 0;
+IF COL_LENGTH('dbo.orders', 'night_fee') IS NULL
+    ALTER TABLE dbo.orders ADD night_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_night_fee DEFAULT 0;
+IF COL_LENGTH('dbo.orders', 'other_fee') IS NULL
+    ALTER TABLE dbo.orders ADD other_fee DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_other_fee DEFAULT 0;
+IF COL_LENGTH('dbo.orders', 'discount_amount') IS NULL
+    ALTER TABLE dbo.orders ADD discount_amount DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_discount_amount DEFAULT 0;
+IF COL_LENGTH('dbo.orders', 'final_amount') IS NULL
+    ALTER TABLE dbo.orders ADD final_amount DECIMAL(12,2) NOT NULL CONSTRAINT DF_orders_final_amount DEFAULT 0;
+IF COL_LENGTH('dbo.orders', 'activity_id') IS NULL
+    ALTER TABLE dbo.orders ADD activity_id INT NULL;
+IF COL_LENGTH('dbo.orders', 'activity_name_snapshot') IS NULL
+    ALTER TABLE dbo.orders ADD activity_name_snapshot NVARCHAR(100) NULL;
+IF COL_LENGTH('dbo.orders', 'activity_discount_type') IS NULL
+    ALTER TABLE dbo.orders ADD activity_discount_type NVARCHAR(30) NULL;
+IF COL_LENGTH('dbo.orders', 'activity_discount_value') IS NULL
+    ALTER TABLE dbo.orders ADD activity_discount_value DECIMAL(10,2) NULL;
+IF COL_LENGTH('dbo.orders', 'activity_include_fees') IS NULL
+    ALTER TABLE dbo.orders ADD activity_include_fees BIT NOT NULL CONSTRAINT DF_orders_activity_include_fees DEFAULT 0;
+EXEC(N'UPDATE dbo.orders
+SET base_amount = amount,
+    final_amount = amount
+WHERE amount > 0
+  AND base_amount = 0
+  AND designated_fee = 0
+  AND friend_fee = 0
+  AND replacement_fee = 0
+  AND night_fee = 0
+  AND other_fee = 0
+  AND discount_amount = 0
+  AND final_amount = 0;');
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_orders_pricing_non_negative')
+    EXEC(N'ALTER TABLE dbo.orders WITH CHECK ADD CONSTRAINT CK_orders_pricing_non_negative CHECK (base_amount >= 0 AND designated_fee >= 0 AND friend_fee >= 0 AND replacement_fee >= 0 AND night_fee >= 0 AND other_fee >= 0 AND discount_amount >= 0 AND final_amount >= 0)');
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_orders_discount_amount')
+    EXEC(N'ALTER TABLE dbo.orders WITH CHECK ADD CONSTRAINT CK_orders_discount_amount CHECK (discount_amount <= base_amount + designated_fee + friend_fee + replacement_fee + night_fee + other_fee)');
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_orders_final_amount')
+    EXEC(N'ALTER TABLE dbo.orders WITH CHECK ADD CONSTRAINT CK_orders_final_amount CHECK (final_amount = base_amount + designated_fee + friend_fee + replacement_fee + night_fee + other_fee - discount_amount)');
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_orders_activity')
+    EXEC(N'ALTER TABLE dbo.orders WITH CHECK ADD CONSTRAINT FK_orders_activity FOREIGN KEY (activity_id) REFERENCES dbo.activities(id)');
+IF OBJECT_ID(N'dbo.organizations', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_activities_organization')
+    EXEC(N'ALTER TABLE dbo.activities WITH CHECK ADD CONSTRAINT FK_activities_organization FOREIGN KEY (organization_id) REFERENCES dbo.organizations(id)');
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_orders_activity_id' AND object_id = OBJECT_ID(N'dbo.orders'))
+    CREATE INDEX IX_orders_activity_id ON dbo.orders(activity_id);
 IF COL_LENGTH('dbo.orders', 'cancelled_audit_log_id') IS NULL
     ALTER TABLE dbo.orders ADD cancelled_audit_log_id BIGINT NULL;
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_orders_order_type')

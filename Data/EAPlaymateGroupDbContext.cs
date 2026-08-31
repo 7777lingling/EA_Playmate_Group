@@ -23,6 +23,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<MoneyLog> MoneyLogs => Set<MoneyLog>();
     public DbSet<ServiceItem> ServiceItems => Set<ServiceItem>();
+    public DbSet<Activity> Activities => Set<Activity>();
     public DbSet<GiftRecord> GiftRecords => Set<GiftRecord>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<DepartmentMember> DepartmentMembers => Set<DepartmentMember>();
@@ -62,6 +63,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         ConfigureAuditLog(modelBuilder);
         ConfigureMoneyLog(modelBuilder);
         ConfigureServiceItem(modelBuilder);
+        ConfigureActivity(modelBuilder);
         ConfigureGiftRecord(modelBuilder);
         ConfigureDepartment(modelBuilder);
         ConfigureDepartmentMember(modelBuilder);
@@ -284,6 +286,9 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.ToTable("orders", "dbo", table =>
         {
             table.HasCheckConstraint("CK_orders_amount", "[amount] >= 0");
+            table.HasCheckConstraint("CK_orders_pricing_non_negative", "[base_amount] >= 0 AND [designated_fee] >= 0 AND [friend_fee] >= 0 AND [replacement_fee] >= 0 AND [night_fee] >= 0 AND [other_fee] >= 0 AND [discount_amount] >= 0 AND [final_amount] >= 0");
+            table.HasCheckConstraint("CK_orders_discount_amount", "[discount_amount] <= [base_amount] + [designated_fee] + [friend_fee] + [replacement_fee] + [night_fee] + [other_fee]");
+            table.HasCheckConstraint("CK_orders_final_amount", "[final_amount] = [base_amount] + [designated_fee] + [friend_fee] + [replacement_fee] + [night_fee] + [other_fee] - [discount_amount]");
             table.HasCheckConstraint("CK_orders_commission_rate", "[commission_rate] >= 0 AND [commission_rate] <= 1");
             table.HasCheckConstraint("CK_orders_commission_amount", "[commission_amount] >= 0");
             table.HasCheckConstraint("CK_orders_order_type", "[order_type] IN (N'boosting', N'farming', N'companion', N'prepaid')");
@@ -298,10 +303,24 @@ public sealed class EAPlaymateGroupDbContext : DbContext
         entity.Property(x => x.Uuid).HasColumnName("uuid").HasDefaultValueSql("NEWID()");
         entity.Property(x => x.OrderNo).HasColumnName("order_no").HasMaxLength(30);
         entity.Property(x => x.OrderType).HasColumnName("order_type").HasMaxLength(20).HasDefaultValue("boosting").IsRequired();
+        entity.Property(x => x.PricingCategory).HasColumnName("pricing_category").HasMaxLength(50);
         entity.Property(x => x.OrderDate).HasColumnName("order_date");
         entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
         entity.Property(x => x.Amount).HasColumnName("amount").HasPrecision(12, 2);
         entity.Property(x => x.ServiceQuantity).HasColumnName("service_quantity").HasPrecision(10, 2).HasDefaultValue(0m);
+        entity.Property(x => x.BaseAmount).HasColumnName("base_amount").HasPrecision(12, 2).HasDefaultValue(0m);
+        entity.Property(x => x.DesignatedFee).HasColumnName("designated_fee").HasPrecision(12, 2).HasDefaultValue(0m);
+        entity.Property(x => x.FriendFee).HasColumnName("friend_fee").HasPrecision(12, 2).HasDefaultValue(0m);
+        entity.Property(x => x.ReplacementFee).HasColumnName("replacement_fee").HasPrecision(12, 2).HasDefaultValue(0m);
+        entity.Property(x => x.NightFee).HasColumnName("night_fee").HasPrecision(12, 2).HasDefaultValue(0m);
+        entity.Property(x => x.OtherFee).HasColumnName("other_fee").HasPrecision(12, 2).HasDefaultValue(0m);
+        entity.Property(x => x.DiscountAmount).HasColumnName("discount_amount").HasPrecision(12, 2).HasDefaultValue(0m);
+        entity.Property(x => x.FinalAmount).HasColumnName("final_amount").HasPrecision(12, 2).HasDefaultValue(0m);
+        entity.Property(x => x.ActivityId).HasColumnName("activity_id");
+        entity.Property(x => x.ActivityNameSnapshot).HasColumnName("activity_name_snapshot").HasMaxLength(100);
+        entity.Property(x => x.ActivityDiscountType).HasColumnName("activity_discount_type").HasMaxLength(30);
+        entity.Property(x => x.ActivityDiscountValue).HasColumnName("activity_discount_value").HasPrecision(10, 2);
+        entity.Property(x => x.ActivityIncludeFees).HasColumnName("activity_include_fees").HasDefaultValue(false);
         entity.Property(x => x.CommissionRate).HasColumnName("commission_rate").HasPrecision(6, 4).HasDefaultValue(0m);
         entity.Property(x => x.CommissionAmount).HasColumnName("commission_amount").HasPrecision(12, 2);
         entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(20).HasDefaultValue("completed").IsRequired();
@@ -319,6 +338,7 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             .HasDatabaseName("IX_orders_order_date_status");
         entity.HasIndex(x => new { x.CustomerPaymentStatus, x.Status, x.OrderDate })
             .HasDatabaseName("IX_orders_customer_payment_status");
+        entity.HasIndex(x => x.ActivityId).HasDatabaseName("IX_orders_activity_id");
         entity.HasIndex(x => x.CreatedAuditLogId).HasDatabaseName("IX_orders_created_audit_log_id");
         entity.HasIndex(x => x.CancelledAuditLogId).HasDatabaseName("IX_orders_cancelled_audit_log_id");
 
@@ -326,6 +346,11 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             .WithMany(x => x.OwnedOrders)
             .HasForeignKey(x => x.OwnerUserId)
             .HasConstraintName("FK_orders_owner_user")
+            .OnDelete(DeleteBehavior.NoAction);
+        entity.HasOne(x => x.Activity)
+            .WithMany()
+            .HasForeignKey(x => x.ActivityId)
+            .HasConstraintName("FK_orders_activity")
             .OnDelete(DeleteBehavior.NoAction);
         entity.HasOne(x => x.CreatedAuditLog)
             .WithMany()
@@ -620,6 +645,34 @@ public sealed class EAPlaymateGroupDbContext : DbContext
             .OnDelete(DeleteBehavior.NoAction);
     }
 
+    private static void ConfigureActivity(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<Activity>();
+        entity.ToTable("activities", "dbo", table =>
+        {
+            table.HasCheckConstraint("CK_activities_period", "[ends_at] >= [starts_at]");
+            table.HasCheckConstraint("CK_activities_discount_type", "[discount_type] IN (N'percent', N'fixed_amount', N'fixed_price')");
+            table.HasCheckConstraint("CK_activities_discount_value", "[discount_value] >= 0 AND ([discount_type] <> N'percent' OR [discount_value] <= 100)");
+        });
+        entity.HasKey(x => x.Id).HasName("PK_activities");
+        entity.Property(x => x.Id).HasColumnName("id");
+        entity.Property(x => x.OrganizationId).HasColumnName("organization_id");
+        entity.Property(x => x.Uuid).HasColumnName("uuid").HasDefaultValueSql("NEWID()");
+        entity.Property(x => x.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+        entity.Property(x => x.StartsAt).HasColumnName("starts_at");
+        entity.Property(x => x.EndsAt).HasColumnName("ends_at");
+        entity.Property(x => x.DiscountType).HasColumnName("discount_type").HasMaxLength(30).IsRequired();
+        entity.Property(x => x.DiscountValue).HasColumnName("discount_value").HasPrecision(10, 2);
+        entity.Property(x => x.ApplicableCategories).HasColumnName("applicable_categories").HasMaxLength(500);
+        entity.Property(x => x.IncludeFees).HasColumnName("include_fees").HasDefaultValue(false);
+        entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+        entity.Property(x => x.Note).HasColumnName("note").HasMaxLength(500);
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSUTCDATETIME()");
+        entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        entity.HasIndex(x => x.Uuid).IsUnique().HasDatabaseName("UQ_activities_uuid");
+        entity.HasIndex(x => new { x.OrganizationId, x.IsActive, x.StartsAt, x.EndsAt }).HasDatabaseName("IX_activities_scope");
+    }
+
     private static void ConfigureDepartment(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<Department>();
@@ -842,6 +895,8 @@ public sealed class EAPlaymateGroupDbContext : DbContext
                (x.BossUserId == CurrentMemberUserId ||
                 x.RecipientUserId == CurrentMemberUserId)))));
         modelBuilder.Entity<ServiceItem>().HasQueryFilter(x =>
+            IsSystemAdmin || HasNoSessionScope || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<Activity>().HasQueryFilter(x =>
             IsSystemAdmin || HasNoSessionScope || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<Department>().HasQueryFilter(x =>
             IsSystemAdmin || HasNoSessionScope || (CurrentOrganizationId > 0 && x.OrganizationId == CurrentOrganizationId));
