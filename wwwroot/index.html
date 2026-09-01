@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>陪玩團營運後台</title>
-  <link rel="stylesheet" href="/styles.css?v=20260831-password-reset-v7">
+  <link rel="stylesheet" href="/styles.css?v=20260901-response-time-v12">
   <link rel="stylesheet" id="themeStylesheet" href="/themes/internal-ops.css?v=20260830-internal-ops-v1">
 </head>
 <body>
@@ -64,6 +64,10 @@
       </div>
       <div class="top-actions">
         <span class="status-dot" id="apiStatus">API</span>
+        <label class="organization-switcher" id="currentOrganizationField" hidden>
+          <span>組織</span>
+          <select id="currentOrganizationSelect" aria-label="目前檢視組織"></select>
+        </label>
         <span class="status-dot" id="currentUser" hidden></span>
         <button class="ghost" id="refreshBtn" type="button">重新整理</button>
         <button class="ghost" id="personalizationBtn" type="button" hidden>個人化</button>
@@ -97,6 +101,37 @@
           <strong id="unpaidCount">0</strong>
         </article>
       </div>
+
+      <section class="panel response-time-panel" id="responseTimePanel">
+        <div class="panel-head">
+          <h2>Response Time</h2>
+          <span class="response-time-status" id="responseTimeStatus">待測</span>
+        </div>
+        <div class="response-time-grid">
+          <article>
+            <span>最近一次</span>
+            <strong id="responseTimeLast">-- ms</strong>
+          </article>
+          <article>
+            <span>平均</span>
+            <strong id="responseTimeAverage">-- ms</strong>
+          </article>
+          <article>
+            <span>最慢</span>
+            <strong id="responseTimeMax">-- ms</strong>
+          </article>
+          <article>
+            <span>樣本數</span>
+            <strong id="responseTimeSampleCount">0</strong>
+          </article>
+        </div>
+        <div class="response-time-meter" aria-hidden="true">
+          <span id="responseTimeMeterBar"></span>
+        </div>
+        <div class="response-time-list" id="responseTimeList">
+          <span>尚無 API 樣本</span>
+        </div>
+      </section>
 
       <section class="ops-home-strip">
         <article>
@@ -414,14 +449,14 @@
             <label>禮物 / 打賞
               <span class="gift-picker-field" data-gift-picker>
                 <input name="serviceItemId" id="giftItemSelect" type="hidden">
-                <button class="member-picker-trigger" id="giftPickerTrigger" type="button">自訂打賞</button>
+                <button class="member-picker-trigger" id="giftPickerTrigger" type="button">自訂禮物</button>
               </span>
             </label>
           </div>
           <div class="gift-pricing-grid">
             <label>自訂名稱
               <input name="giftName" maxlength="100" placeholder="例如：現金打賞、生日禮物">
-              <small class="field-hint" id="giftNameHint">只有選擇「自訂打賞」時可以填寫自訂名稱。</small>
+              <small class="field-hint" id="giftNameHint">只有選擇「自訂禮物」時可以填寫自訂名稱。</small>
             </label>
             <label>金額<input name="amount" type="number" step="0.01" min="0.01" required></label>
             <label>數量<input name="quantity" type="number" step="0.01" min="0.01" value="1" required></label>
@@ -496,26 +531,26 @@
 
             <div class="pilot-price-lanes">
               <article class="pilot-lane">
-                <h3>遊戲陪玩</h3>
-                <div class="pilot-price-row"><span>娛樂陪</span><strong>160／h</strong><em>一般娛樂、陪打、放鬆互動</em></div>
+                <h3>一般專區</h3>
+                <div class="pilot-price-row"><span>娛樂</span><strong>160／h</strong><em>一般娛樂</em></div>
+                <h3>一般排位</h3>
                 <div class="pilot-price-row"><span>排位 1-4 階</span><strong>180／h</strong><em>低中階排位</em></div>
                 <div class="pilot-price-row"><span>排位 5-6 階</span><strong>210／h</strong><em>中高階排位</em></div>
                 <div class="pilot-price-row"><span>排位 7 階以上</span><strong>260／h</strong><em>高階排位</em></div>
               </article>
 
               <article class="pilot-lane">
-                <h3>摸金／加頁</h3>
-                <div class="pilot-price-row"><span>娛樂</span><strong>160／h</strong><em>輕鬆陪跑</em></div>
-                <div class="pilot-price-row"><span>技術</span><strong>170／h</strong><em>路線、判斷、撤離協助</em></div>
-                <div class="pilot-price-row featured"><span>魔王護</span><strong>360／h</strong><em>二陪一，提高撤離保障</em></div>
+                <h3>加頁專區</h3>
+                <div class="pilot-price-row"><span>娛樂</span><strong>160／h</strong><em>加頁娛樂</em></div>
+                <div class="pilot-price-row"><span>技術</span><strong>170／h</strong><em>加頁技術</em></div>
+                <div class="pilot-price-row featured"><span>魔王護</span><strong>360／h</strong><em>二陪一，保撤離率</em></div>
               </article>
 
               <article class="pilot-lane">
-                <h3>語音與特殊</h3>
-                <div class="pilot-price-row"><span>語聊</span><strong>130／h</strong><em>聊天陪伴</em></div>
+                <h3>其他專區</h3>
+                <div class="pilot-price-row"><span>語聊</span><strong>130／h</strong><em>語音聊天</em></div>
                 <div class="pilot-price-row"><span>歌陪</span><strong>100／30min</strong><em>短時段</em></div>
                 <div class="pilot-price-row"><span>歌陪</span><strong>180／h</strong><em>一小時</em></div>
-                <div class="pilot-price-row"><span>小尬劇</span><strong>20／張</strong><em>以張計價</em></div>
               </article>
 
               <article class="pilot-lane">
@@ -568,20 +603,30 @@
         <section class="pilot-board pilot-service-board">
           <div class="pilot-section-head">
             <div>
-              <span class="pilot-kicker">Legacy Items</span>
-              <h2>代肝與代打暫用表</h2>
+              <span class="pilot-kicker">Service Items</span>
+              <h2>代肝與代打價目</h2>
             </div>
             <span class="pilot-chip">接單前再確認</span>
           </div>
           <div class="pilot-service-columns">
             <article class="pilot-lane">
-              <h3>代肝服務</h3>
-              <div class="pilot-price-row"><span>周上限</span><strong>250／周</strong><em>暫用舊基準</em></div>
+              <h3>代肝｜一般模式</h3>
+              <div class="pilot-price-row"><span>周上限</span><strong>200／周</strong><em>一般模式</em></div>
               <div class="pilot-price-row"><span>劇情</span><strong>60／個</strong><em>單項計算</em></div>
               <div class="pilot-price-row"><span>公共地圖</span><strong>100／個</strong><em>單項計算</em></div>
               <div class="pilot-price-row"><span>活動獎勵</span><strong>80／個</strong><em>單項計算</em></div>
               <div class="pilot-price-row"><span>每日排位珍寶</span><strong>50／天</strong><em>每日計算</em></div>
-              <div class="pilot-price-row"><span>每日五排珍寶</span><strong>50／天</strong><em>每日計算</em></div>
+              <div class="pilot-price-row"><span>每日五排珍寶</span><strong>50／天</strong><em>不保勝；保勝 +10</em></div>
+            </article>
+            <article class="pilot-lane">
+              <h3>代肝｜加頁手記</h3>
+              <div class="pilot-price-row"><span>弧光</span><strong>2／根</strong><em>單項計算</em></div>
+              <div class="pilot-price-row"><span>添頁</span><strong>2／張</strong><em>單項計算</em></div>
+              <div class="pilot-price-row"><span>武器洗煉</span><strong>4000／把</strong><em>單項計算</em></div>
+              <div class="pilot-price-row"><span>武器洗練</span><strong>500／孔</strong><em>單項計算</em></div>
+              <div class="pilot-price-row"><span>300萬項鍊</span><strong>3500／條</strong><em>單項計算</em></div>
+              <div class="pilot-price-row"><span>140萬項鍊</span><strong>650／條</strong><em>單項計算</em></div>
+              <div class="pilot-price-row"><span>隨機項鍊</span><strong>500／條</strong><em>單項計算</em></div>
             </article>
             <article class="pilot-lane">
               <h3>代打服務</h3>
@@ -595,7 +640,17 @@
                 <span>七階</span><strong>100 / 95</strong>
                 <span>巔七</span><strong>125 / 120</strong>
               </div>
-              <p class="pilot-footnote">左為求生，右為監管；保勝價格依段位另外判定。</p>
+              <p class="pilot-footnote">左為求生，右為監管；保勝價格依段位而定，有想要的牌子可私訊詢價。</p>
+            </article>
+            <article class="pilot-lane">
+              <h3>小禮物｜古風禮物區</h3>
+              <div class="pilot-price-row"><span>碎銀</span><strong>50</strong><em>禮物</em></div>
+              <div class="pilot-price-row"><span>玉佩</span><strong>120</strong><em>禮物</em></div>
+              <div class="pilot-price-row"><span>相思簪</span><strong>250</strong><em>禮物</em></div>
+              <div class="pilot-price-row"><span>金步搖</span><strong>520</strong><em>禮物</em></div>
+              <div class="pilot-price-row"><span>鳳凰金令</span><strong>888</strong><em>禮物</em></div>
+              <div class="pilot-price-row"><span>傳國玉璽</span><strong>5888</strong><em>禮物</em></div>
+              <div class="pilot-price-row"><span>自訂禮物</span><strong>自填</strong><em>自訂名稱與金額</em></div>
             </article>
           </div>
         </section>
@@ -663,24 +718,20 @@
             <span class="pilot-chip">比對參考</span>
           </div>
           <section class="price-gallery pilot-gallery" aria-label="原價目表圖片">
-            <a class="price-shot" href="/價目表/陪玩.png" data-price-preview>
-              <img src="/價目表/陪玩.png" alt="陪玩價目表">
+            <a class="price-shot" href="/玉閣價目表/陪玩服務價目表.png" data-price-preview>
+              <img src="/玉閣價目表/陪玩服務價目表.png" alt="陪玩價目表">
               <span>陪玩</span>
             </a>
-            <a class="price-shot" href="/價目表/特殊陪.png" data-price-preview>
-              <img src="/價目表/特殊陪.png" alt="特殊陪價目表">
-              <span>特殊陪</span>
-            </a>
-            <a class="price-shot" href="/價目表/代肝.jpg" data-price-preview>
-              <img src="/價目表/代肝.jpg" alt="代肝價目表">
+            <a class="price-shot" href="/玉閣價目表/代肝服務價目表.png" data-price-preview>
+              <img src="/玉閣價目表/代肝服務價目表.png" alt="代肝價目表">
               <span>代肝</span>
             </a>
-            <a class="price-shot" href="/價目表/代打.jpg" data-price-preview>
-              <img src="/價目表/代打.jpg" alt="代打價目表">
+            <a class="price-shot" href="/玉閣價目表/代打服務價目表.png" data-price-preview>
+              <img src="/玉閣價目表/代打服務價目表.png" alt="代打價目表">
               <span>代打</span>
             </a>
-            <a class="price-shot" href="/價目表/禮物.png" data-price-preview>
-              <img src="/價目表/禮物.png" alt="禮物價目表">
+            <a class="price-shot" href="/玉閣價目表/禮物清單.png" data-price-preview>
+              <img src="/玉閣價目表/禮物清單.png" alt="禮物價目表">
               <span>禮物</span>
             </a>
           </section>
@@ -1217,13 +1268,13 @@
         <input id="giftPickerSearch" type="search" placeholder="搜尋禮物名稱或備註" autocomplete="off">
         <div class="gift-picker-list" id="giftPickerList"></div>
         <div class="form-actions">
-          <button class="ghost" id="giftPickerCustom" type="button">自訂打賞</button>
+          <button class="ghost" id="giftPickerCustom" type="button">自訂禮物</button>
           <button class="ghost" id="giftPickerCancel" type="button">取消</button>
         </div>
       </div>
     </section>
   </div>
 
-  <script src="/app.js?v=20260831-password-reset-v7"></script>
+  <script src="/app.js?v=20260901-response-time-v12"></script>
 </body>
 </html>

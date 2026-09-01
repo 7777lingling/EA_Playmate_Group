@@ -38,6 +38,7 @@ public sealed class AuthController : ControllerBase
         {
             AuthRequired = await _authService.IsAuthRequiredAsync(),
             IsAuthenticated = HttpContext.Session.GetInt32(AuthService.SessionUserId).HasValue,
+            CurrentOrganizationId = HttpContext.Session.GetInt32(AuthService.SessionOrganizationId),
             User = user,
             Preferences = user is null ? null : await _userPreferenceService.GetAsync(user.Id)
         });
@@ -59,9 +60,28 @@ public sealed class AuthController : ControllerBase
         {
             AuthRequired = true,
             IsAuthenticated = true,
+            CurrentOrganizationId = HttpContext.Session.GetInt32(AuthService.SessionOrganizationId),
             User = user,
             Preferences = await _userPreferenceService.GetAsync(user.Id)
         });
+    }
+
+    [HttpPost("organization")]
+    public async Task<ActionResult<AuthMeDto>> SwitchOrganization(SwitchOrganizationRequestDto request)
+    {
+        var loginUserId = HttpContext.Session.GetInt32(AuthService.SessionUserId);
+        if (!loginUserId.HasValue)
+        {
+            return Unauthorized(new { message = "請先登入。" });
+        }
+
+        var switched = await _authService.SwitchOrganizationAsync(loginUserId.Value, request.OrganizationId, HttpContext);
+        if (!switched)
+        {
+            return Forbid();
+        }
+
+        return await Me();
     }
 
     [HttpGet("discord/login")]

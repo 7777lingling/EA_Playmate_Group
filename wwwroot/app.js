@@ -29,6 +29,12 @@ const state = {
   orderServiceCategory: "play",
   orderAmountManuallyEdited: false,
   orderBaseAmountManuallyEdited: false,
+  responseTime: {
+    samples: [],
+    lastMs: null,
+    averageMs: null,
+    maxMs: null
+  },
   auth: null
 };
 
@@ -501,6 +507,7 @@ function bindNavigation() {
 
   document.getElementById("refreshBtn").addEventListener("click", refreshAll);
   document.getElementById("personalizationBtn")?.addEventListener("click", () => navigateToView("settings"));
+  document.getElementById("currentOrganizationSelect")?.addEventListener("change", switchCurrentOrganization);
   document.querySelectorAll("[data-view-jump]").forEach((button) => {
     button.addEventListener("click", () => navigateToView(button.dataset.viewJump));
   });
@@ -628,7 +635,7 @@ function bindGiftPicker() {
   document.getElementById("giftPickerClose").addEventListener("click", closeGiftPicker);
   document.getElementById("giftPickerCancel").addEventListener("click", closeGiftPicker);
   document.getElementById("giftPickerCustom").addEventListener("click", () => {
-    setGiftPickerValue("");
+    setGiftPickerValue("", { keepCustomFields: true });
     closeGiftPicker();
   });
   document.getElementById("giftPickerSearch").addEventListener("input", renderGiftPickerOptions);
@@ -665,8 +672,18 @@ function renderGiftPickerOptions() {
     item.isActive &&
     (!query || [item.name, item.remark].filter(Boolean).join(" ").toLowerCase().includes(query)));
 
-  list.innerHTML = items.length
-    ? items.map((item) => `
+  const customOption = `
+      <button class="gift-picker-option ${selectedId ? "" : "selected"}" type="button" data-gift-picker-custom>
+        <span>
+          <strong>自訂禮物</strong>
+          <small>自訂名稱與金額</small>
+        </span>
+        <span>自填</span>
+      </button>
+    `;
+
+  list.innerHTML = customOption || items.length
+    ? `${customOption}${items.map((item) => `
       <button class="gift-picker-option ${item.id === selectedId ? "selected" : ""}" type="button" data-gift-picker-value="${item.id}">
         <span>
           <strong>${escapeHtml(item.name)}</strong>
@@ -674,8 +691,15 @@ function renderGiftPickerOptions() {
         </span>
         <span>${escapeHtml(servicePriceText(item))}</span>
       </button>
-    `).join("")
+    `).join("")}`
     : `<p class="member-picker-empty">找不到符合條件的禮物。</p>`;
+
+  list.querySelectorAll("[data-gift-picker-custom]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setGiftPickerValue("", { keepCustomFields: true });
+      closeGiftPicker();
+    });
+  });
 
   list.querySelectorAll("[data-gift-picker-value]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -685,7 +709,7 @@ function renderGiftPickerOptions() {
   });
 }
 
-function setGiftPickerValue(value) {
+function setGiftPickerValue(value, options = {}) {
   const form = document.getElementById("giftRecordForm");
   const input = document.getElementById("giftItemSelect");
   const trigger = document.getElementById("giftPickerTrigger");
@@ -693,17 +717,17 @@ function setGiftPickerValue(value) {
   input.value = value == null ? "" : String(value);
   const item = state.serviceItems.find((serviceItem) => serviceItem.id === Number(input.value));
 
-  trigger.textContent = item?.name || "自訂打賞";
+  trigger.textContent = item?.name || "自訂禮物";
   trigger.classList.toggle("has-value", Boolean(item));
   form.elements.giftName.disabled = Boolean(item);
   giftNameHint.textContent = item
     ? "已選擇固定禮物，名稱不可修改。"
-    : "只有選擇「自訂打賞」時可以填寫自訂名稱。";
+    : "只有選擇「自訂禮物」時可以填寫自訂名稱。";
   if (item) {
     form.elements.giftName.value = "";
     form.elements.amount.value = item.defaultPrice ?? "";
     form.elements.remark.value = item.remark || "";
-  } else {
+  } else if (!options.keepCustomFields) {
     form.elements.giftName.value = "";
     form.elements.amount.value = "";
     form.elements.remark.value = "";
@@ -1627,6 +1651,7 @@ function showLogin() {
   document.getElementById("discordLinkBtn").hidden = true;
   document.getElementById("personalizationBtn").hidden = true;
   document.getElementById("currentUser").hidden = true;
+  document.getElementById("currentOrganizationField").hidden = true;
 }
 
 function showApp() {
@@ -1649,6 +1674,7 @@ function showApp() {
   state.preferences = state.auth?.preferences || null;
   applyPreferences(state.preferences);
   renderPreferenceForm(state.preferences);
+  renderCurrentOrganizationSwitcher();
   applyNavigationPermissions();
   if (state.auth?.user?.systemRole === "viewer") {
     const userNav = document.querySelector('.nav-tabs button[data-view="users"]');
@@ -1672,6 +1698,10 @@ function hasPermission(code) {
 
 function isBootstrapMode() {
   return state.auth?.authRequired === false;
+}
+
+function currentOrganizationId() {
+  return state.auth?.currentOrganizationId || state.auth?.user?.organizationId || 0;
 }
 
 function hasAnyPermission(codes) {
@@ -1745,10 +1775,20 @@ async function api(path, options = {}) {
           "Content-Type": "application/json",
           ...(options.headers || {})
         };
-  const response = await fetch(path, {
-    headers,
-    ...fetchOptions
-  });
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  let response;
+
+  try {
+    response = await fetch(path, {
+      headers,
+      ...fetchOptions
+    });
+  } catch (error) {
+    recordResponseTime(path, elapsedMs(startedAt), false, 0);
+    throw error;
+  }
+
+  recordResponseTime(path, elapsedMs(startedAt), response.ok, response.status);
 
   if (!response.ok) {
     if (response.status === 401 && !skipAuthRedirect) {
@@ -1779,6 +1819,135 @@ async function api(path, options = {}) {
   }
 
   return response.json();
+}
+
+function elapsedMs(startedAt) {
+  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  return Math.max(0, Math.round(now - startedAt));
+}
+
+function recordResponseTime(path, durationMs, ok, status) {
+  if (!state.responseTime) {
+    return;
+  }
+
+  const samples = state.responseTime.samples;
+  samples.unshift({
+    path,
+    durationMs,
+    ok,
+    status,
+    at: new Date().toISOString()
+  });
+
+  if (samples.length > 30) {
+    samples.length = 30;
+  }
+
+  const completed = samples.filter((sample) => sample.ok);
+  const measured = completed.length ? completed : samples;
+  const total = measured.reduce((sum, sample) => sum + sample.durationMs, 0);
+
+  state.responseTime.lastMs = durationMs;
+  state.responseTime.averageMs = measured.length ? Math.round(total / measured.length) : null;
+  state.responseTime.maxMs = measured.length ? Math.max(...measured.map((sample) => sample.durationMs)) : null;
+
+  renderResponseTimePanel();
+}
+
+function renderResponseTimePanel() {
+  const panel = document.getElementById("responseTimePanel");
+  if (!panel) {
+    return;
+  }
+
+  const samples = state.responseTime?.samples || [];
+  const lastMs = state.responseTime?.lastMs;
+  const averageMs = state.responseTime?.averageMs;
+  const maxMs = state.responseTime?.maxMs;
+  const latest = samples[0];
+  const status = document.getElementById("responseTimeStatus");
+
+  setText("responseTimeLast", formatMilliseconds(lastMs));
+  setText("responseTimeAverage", formatMilliseconds(averageMs));
+  setText("responseTimeMax", formatMilliseconds(maxMs));
+  setText("responseTimeSampleCount", samples.length);
+
+  if (status) {
+    status.className = `response-time-status ${responseTimeTone(averageMs, latest?.ok)}`;
+    status.textContent = responseTimeLabel(averageMs, latest?.ok);
+  }
+
+  const meter = document.getElementById("responseTimeMeterBar");
+  if (meter) {
+    const width = averageMs == null ? 0 : Math.min(100, Math.max(6, Math.round((averageMs / 1500) * 100)));
+    meter.style.width = `${width}%`;
+  }
+
+  const list = document.getElementById("responseTimeList");
+  if (!list) {
+    return;
+  }
+
+  if (!samples.length) {
+    list.innerHTML = "<span>尚無 API 樣本</span>";
+    return;
+  }
+
+  list.innerHTML = samples.slice(0, 6).map((sample) => `
+    <article class="${sample.ok ? "" : "failed"}">
+      <span>${escapeHtml(shortApiPath(sample.path))}</span>
+      <strong>${sample.durationMs} ms</strong>
+    </article>
+  `).join("");
+}
+
+function setText(id, value) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.textContent = value;
+  }
+}
+
+function formatMilliseconds(value) {
+  return value == null ? "-- ms" : `${Math.round(value)} ms`;
+}
+
+function responseTimeTone(averageMs, ok) {
+  if (ok === false) {
+    return "danger";
+  }
+  if (averageMs == null) {
+    return "";
+  }
+  if (averageMs <= 300) {
+    return "good";
+  }
+  if (averageMs <= 800) {
+    return "warning";
+  }
+  return "danger";
+}
+
+function responseTimeLabel(averageMs, ok) {
+  if (ok === false) {
+    return "錯誤";
+  }
+  if (averageMs == null) {
+    return "待測";
+  }
+  if (averageMs <= 300) {
+    return "快速";
+  }
+  if (averageMs <= 800) {
+    return "正常";
+  }
+  return "偏慢";
+}
+
+function shortApiPath(path) {
+  const value = String(path || "");
+  return value.replace(/^\/api\//, "");
 }
 
 async function submitLogin(event) {
@@ -1885,6 +2054,10 @@ async function refreshAll() {
     await api("/api/health");
     document.getElementById("apiStatus").classList.add("online");
     hideAlert();
+
+    if ((state.auth?.user?.systemRole === "admin" || isBootstrapMode()) && state.organizations.length === 0) {
+      await loadOrganizations();
+    }
 
     if (state.view === "dashboard") {
       await loadDashboard();
@@ -2039,9 +2212,67 @@ async function loadPreferences() {
 
 async function loadOrganizations() {
   state.organizations = await api("/api/organizations");
+  renderCurrentOrganizationSwitcher();
   renderOrganizationManagement();
   renderOrganizationSelect();
   renderUserOrganizationSelect();
+}
+
+function renderCurrentOrganizationSwitcher() {
+  const field = document.getElementById("currentOrganizationField");
+  const select = document.getElementById("currentOrganizationSelect");
+  if (!field || !select) {
+    return;
+  }
+
+  const activeOrganizations = state.organizations.filter((organization) => organization.isActive);
+  const canSwitch = state.auth?.user?.systemRole === "admin" && activeOrganizations.length > 1;
+  field.hidden = !canSwitch;
+  if (!canSwitch) {
+    select.innerHTML = "";
+    return;
+  }
+
+  select.innerHTML = activeOrganizations
+    .map((organization) => `<option value="${organization.id}">${escapeHtml(organizationDisplayName(organization))}</option>`)
+    .join("");
+  select.value = String(currentOrganizationId());
+}
+
+async function switchCurrentOrganization(event) {
+  const organizationId = Number(event.currentTarget.value);
+  if (!organizationId) {
+    return;
+  }
+
+  await runAction(async () => {
+    state.auth = await api("/api/auth/organization", {
+      method: "POST",
+      body: JSON.stringify({ organizationId })
+    });
+    clearScopedState();
+    renderCurrentOrganizationSwitcher();
+    await refreshAll();
+    const organization = state.organizations.find((item) => item.id === organizationId);
+    showAlert(`已切換到「${organizationDisplayName(organization)}」。`, false);
+  });
+}
+
+function clearScopedState() {
+  state.users = [];
+  state.loginUsers = [];
+  state.serviceItems = [];
+  state.activities = [];
+  state.giftRecords = [];
+  state.departments = [];
+  state.players = [];
+  state.bosses = [];
+  state.orders = [];
+  state.payments = [];
+  state.auditLogs = [];
+  state.moneyLogs = [];
+  state.loginHistories = [];
+  state.permissionMatrix = null;
 }
 
 function renderOrganizationSelect() {
@@ -2056,6 +2287,10 @@ function renderOrganizationSelect() {
     .filter((organization) => organization.isActive)
     .map((organization) => `<option value="${organization.id}">${escapeHtml(organizationDisplayName(organization))}</option>`)
     .join("");
+  const selectedOrganizationId = currentOrganizationId();
+  if (selectedOrganizationId && [...select.options].some((option) => Number(option.value) === selectedOrganizationId)) {
+    select.value = String(selectedOrganizationId);
+  }
   renderLoginUserMemberSelect();
   select.onchange = renderLoginUserMemberSelect;
 }
@@ -2073,9 +2308,9 @@ function renderUserOrganizationSelect() {
     .map((organization) => `<option value="${organization.id}">${escapeHtml(organizationDisplayName(organization))}</option>`)
     .join("");
 
-  const currentOrganizationId = state.auth?.user?.organizationId;
-  if (currentOrganizationId && [...select.options].some((option) => Number(option.value) === currentOrganizationId)) {
-    select.value = String(currentOrganizationId);
+  const selectedOrganizationId = currentOrganizationId();
+  if (selectedOrganizationId && [...select.options].some((option) => Number(option.value) === selectedOrganizationId)) {
+    select.value = String(selectedOrganizationId);
   }
 }
 
@@ -2086,7 +2321,7 @@ function renderLoginUserMemberSelect() {
     return;
   }
 
-  const organizationId = Number(organizationSelect?.value) || state.auth?.user?.organizationId;
+  const organizationId = Number(organizationSelect?.value) || currentOrganizationId();
   const selected = state.users.find((user) => user.id === Number(memberInput.value));
   if (selected && organizationId && selected.organizationId !== organizationId) {
     memberInput.value = "";
@@ -2352,7 +2587,21 @@ function renderServiceItems() {
     .filter((item) => item.category === state.serviceCategory && item.isActive)
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name, "zh-Hant"));
 
-  body.innerHTML = rows.length ? rows.map((item) => `
+  const giftCustomCard = state.serviceCategory === "gift"
+    ? `
+      <button class="service-item-card" type="button" data-service-gift-custom>
+        <div class="service-item-card-main">
+          <span>自訂</span>
+          <strong>自訂禮物</strong>
+          <em>自填 / 金額</em>
+          <p>自訂名稱與金額，適合未列在固定禮物表的打賞或禮物。</p>
+        </div>
+        <span class="service-item-action">贈送</span>
+      </button>
+    `
+    : "";
+
+  body.innerHTML = rows.length || giftCustomCard ? `${rows.map((item) => `
     <button class="service-item-card" type="button" data-${item.category === "gift" ? "service-gift" : "service-order"}="${item.id}">
       <div class="service-item-card-main">
         <span>${escapeHtml(item.subcategory || serviceCategoryText(item.category))}</span>
@@ -2364,7 +2613,7 @@ function renderServiceItems() {
         ${item.category === "gift" ? "贈送" : "點單"}
       </span>
     </button>
-  `).join("") : `<p class="muted">這個分類目前沒有可用項目。</p>`;
+  `).join("")}${giftCustomCard}` : `<p class="muted">這個分類目前沒有可用項目。</p>`;
 
   body.querySelectorAll("[data-service-order]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -2381,6 +2630,12 @@ function renderServiceItems() {
       if (item) {
         startGiftRecordFromService(item);
       }
+    });
+  });
+
+  body.querySelectorAll("[data-service-gift-custom]").forEach((button) => {
+    button.addEventListener("click", () => {
+      startCustomGiftRecord();
     });
   });
 
@@ -3661,7 +3916,7 @@ async function submitUser(event) {
 
     const selectedOrganizationId = Number(form.elements.organizationId?.value) ||
       existingUser?.organizationId ||
-      state.auth?.user?.organizationId;
+      currentOrganizationId();
 
     if (!selectedOrganizationId) {
       showAlert("請先建立或選擇有效的組織。");
@@ -3716,7 +3971,7 @@ async function submitLoginUser(event) {
 
     const selectedOrganizationId = Number(form.elements.organizationId?.value) ||
       existingLoginUser?.organizationId ||
-      state.auth?.user?.organizationId;
+      currentOrganizationId();
 
     if (!selectedOrganizationId) {
       showAlert("請先建立或選擇有效的組織。");
@@ -4150,6 +4405,22 @@ async function startGiftRecordFromService(item) {
 
   const form = document.getElementById("giftRecordForm");
   showAlert(`已帶入「${item.name}」到送禮紀錄。`, false);
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function startCustomGiftRecord() {
+  const navButton = document.querySelector('.nav-tabs button[data-view="giftRecords"]');
+  if (navButton) {
+    navButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  resetGiftRecordForm();
+  setGiftPickerValue("", { keepCustomFields: true });
+
+  const form = document.getElementById("giftRecordForm");
+  form.elements.giftName.focus();
+  showAlert("已切換為自訂禮物，請填名稱與金額。", false);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 

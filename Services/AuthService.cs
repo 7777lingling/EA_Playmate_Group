@@ -40,7 +40,8 @@ public sealed class AuthService
             return null;
         }
 
-        httpContext.Session.SetInt32(SessionOrganizationId, user.OrganizationId);
+        var currentOrganizationId = await ResolveCurrentOrganizationIdAsync(httpContext, user);
+        httpContext.Session.SetInt32(SessionOrganizationId, currentOrganizationId);
         httpContext.Session.SetString(SessionSystemRole, user.SystemRole);
         if (user.UserId.HasValue)
         {
@@ -251,6 +252,36 @@ public sealed class AuthService
         return true;
     }
 
+    public async Task<bool> SwitchOrganizationAsync(int loginUserId, int organizationId, HttpContext httpContext)
+    {
+        var loginUser = await _db.LoginUsers.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == loginUserId && x.IsActive);
+        if (loginUser is null || loginUser.SystemRole != "admin")
+        {
+            return false;
+        }
+
+        var organizationExists = await _db.Organizations.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(x => x.Id == organizationId && x.IsActive);
+        if (!organizationExists)
+        {
+            return false;
+        }
+
+        httpContext.Session.SetInt32(SessionOrganizationId, organizationId);
+        httpContext.Session.SetString(SessionSystemRole, loginUser.SystemRole);
+        if (loginUser.UserId.HasValue)
+        {
+            httpContext.Session.SetInt32(SessionMemberUserId, loginUser.UserId.Value);
+        }
+        else
+        {
+            httpContext.Session.Remove(SessionMemberUserId);
+        }
+
+        return true;
+    }
+
     public async Task RecordAuthEventAsync(
         int loginUserId,
         string action,
@@ -320,5 +351,23 @@ public sealed class AuthService
                 .Select(x => x.PermissionCode)
                 .ToListAsync();
         return dto;
+    }
+
+    private async Task<int> ResolveCurrentOrganizationIdAsync(HttpContext httpContext, Models.Entities.LoginUser user)
+    {
+        if (user.SystemRole != "admin")
+        {
+            return user.OrganizationId;
+        }
+
+        var sessionOrganizationId = httpContext.Session.GetInt32(SessionOrganizationId);
+        if (sessionOrganizationId.HasValue &&
+            await _db.Organizations.IgnoreQueryFilters().AsNoTracking()
+                .AnyAsync(x => x.Id == sessionOrganizationId.Value && x.IsActive))
+        {
+            return sessionOrganizationId.Value;
+        }
+
+        return user.OrganizationId;
     }
 }

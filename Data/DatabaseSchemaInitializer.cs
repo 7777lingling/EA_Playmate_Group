@@ -1093,29 +1093,109 @@ WHERE NOT EXISTS
     WHERE existing.seed_key = s.seed_key
 );
 
-WITH pilot_service_prices AS
+DECLARE @pilot_service_prices TABLE
 (
-    SELECT *
-    FROM (VALUES
-        (N'play-entertainment', N'play', N'一般娛樂', N'陪玩 - 娛樂陪', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 300, CAST(1 AS BIT)),
-        (N'play-technical-tier-1-3', N'play', N'一般排位', N'陪玩 - 排位 1-4 階', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 310, CAST(1 AS BIT)),
-        (N'play-technical-tier-4', N'play', N'一般排位', N'陪玩 - 排位 5-6 階', N'hour_person', CAST(210 AS DECIMAL(12,2)), N'210 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 320, CAST(1 AS BIT)),
-        (N'play-technical-tier-5', N'play', N'一般排位', N'陪玩 - 排位 7 階以上', N'hour_person', CAST(260 AS DECIMAL(12,2)), N'260 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 330, CAST(1 AS BIT)),
+    seed_key NVARCHAR(100) NOT NULL PRIMARY KEY,
+    category NVARCHAR(40) NOT NULL,
+    subcategory NVARCHAR(80) NULL,
+    name NVARCHAR(120) NOT NULL,
+    unit_type NVARCHAR(30) NOT NULL,
+    default_price DECIMAL(12,2) NULL,
+    price_note NVARCHAR(120) NULL,
+    remark NVARCHAR(400) NULL,
+    sort_order INT NOT NULL,
+    is_active BIT NOT NULL
+);
+
+DECLARE @target_price_organizations TABLE
+(
+    id INT NOT NULL PRIMARY KEY
+);
+
+INSERT INTO @target_price_organizations(id)
+SELECT id
+FROM dbo.organizations
+WHERE name = N'玉閣';
+
+INSERT INTO @pilot_service_prices
+SELECT *
+FROM (VALUES
+        (N'play-entertainment', N'play', N'一般專區', N'陪玩 - 娛樂', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / h', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；換人 +10 / 位；深夜 00:00-06:00 +30。', 300, CAST(1 AS BIT)),
+        (N'play-technical-tier-1-3', N'play', N'一般排位', N'陪玩 - 排位 1-4 階', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / h', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；換人 +10 / 位；深夜 00:00-06:00 +30。', 310, CAST(1 AS BIT)),
+        (N'play-technical-tier-4', N'play', N'一般排位', N'陪玩 - 排位 5-6 階', N'hour_person', CAST(210 AS DECIMAL(12,2)), N'210 / h', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；換人 +10 / 位；深夜 00:00-06:00 +30。', 320, CAST(1 AS BIT)),
+        (N'play-technical-tier-5', N'play', N'一般排位', N'陪玩 - 排位 7 階以上', N'hour_person', CAST(260 AS DECIMAL(12,2)), N'260 / h', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；換人 +10 / 位；深夜 00:00-06:00 +30。', 330, CAST(1 AS BIT)),
         (N'play-technical-tier-6', N'play', N'舊價目', N'陪玩 - 技術陪 六階', N'hour_person', CAST(230 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 5-6 階。', 340, CAST(0 AS BIT)),
         (N'play-technical-tier-7', N'play', N'舊價目', N'陪玩 - 技術陪 七階', N'hour_person', CAST(250 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 7 階以上。', 350, CAST(0 AS BIT)),
         (N'play-technical-tier-peak7', N'play', N'舊價目', N'陪玩 - 技術陪 巔七以上', N'hour_person', CAST(300 AS DECIMAL(12,2)), N'已停用', N'新版試行價已改用排位 7 階以上。', 360, CAST(0 AS BIT)),
         (N'play-teaching', N'play', N'舊價目', N'陪玩 - 教學陪', N'hour_person', CAST(100 AS DECIMAL(12,2)), N'已停用', N'新版試行價暫不列教學陪。', 370, CAST(0 AS BIT)),
-        (N'play-gold-entertainment', N'play', N'摸金／加頁', N'加頁 - 娛樂', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 380, CAST(1 AS BIT)),
-        (N'play-gold-technical', N'play', N'摸金／加頁', N'加頁 - 技術', N'hour_person', CAST(170 AS DECIMAL(12,2)), N'170 / 小時 / 人', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；深夜 00:00-06:00 +30。', 390, CAST(1 AS BIT)),
-        (N'play-gold-demon-protect', N'play', N'摸金／加頁', N'加頁 - 魔王護', N'hour_person', CAST(360 AS DECIMAL(12,2)), N'360 / 小時', N'二陪一，主打提高撤離保障與陪同強度。', 395, CAST(1 AS BIT)),
-        (N'special-companion-singing', N'special_companion', N'歌陪', N'歌陪 - 1 小時', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / 小時', N'歌陪 30 分鐘為 100。', 600, CAST(1 AS BIT)),
-        (N'special-companion-singing-half', N'special_companion', N'歌陪', N'歌陪 - 30 分鐘', N'custom', CAST(100 AS DECIMAL(12,2)), N'100 / 30 分鐘', NULL, 605, CAST(1 AS BIT)),
-        (N'special-companion-text', N'special_companion', N'小尬劇', N'小尬劇', N'item', CAST(20 AS DECIMAL(12,2)), N'20 / 張', NULL, 610, CAST(1 AS BIT)),
+        (N'play-gold-entertainment', N'play', N'加頁專區', N'加頁 - 娛樂', N'hour_person', CAST(160 AS DECIMAL(12,2)), N'160 / h', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；換人 +10 / 位；深夜 00:00-06:00 +30。', 380, CAST(1 AS BIT)),
+        (N'play-gold-technical', N'play', N'加頁專區', N'加頁 - 技術', N'hour_person', CAST(170 AS DECIMAL(12,2)), N'170 / h', N'指定陪陪 +20 / 位；帶朋友 +20 / 位；換人 +10 / 位；深夜 00:00-06:00 +30。', 390, CAST(1 AS BIT)),
+        (N'play-gold-demon-protect', N'play', N'加頁專區', N'加頁 - 魔王護', N'hour_person', CAST(360 AS DECIMAL(12,2)), N'360 / h', N'二陪一，保撤離率。', 395, CAST(1 AS BIT)),
+        (N'play-voice-chat', N'play', N'其他專區', N'語聊', N'hour_person', CAST(130 AS DECIMAL(12,2)), N'130 / h', NULL, 400, CAST(1 AS BIT)),
+        (N'play-singing-half', N'play', N'其他專區', N'歌陪 - 30 分鐘', N'custom', CAST(100 AS DECIMAL(12,2)), N'100 / 30min', NULL, 410, CAST(1 AS BIT)),
+        (N'play-singing-hour', N'play', N'其他專區', N'歌陪 - 1 小時', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'180 / h', NULL, 420, CAST(1 AS BIT)),
+        (N'special-companion-singing', N'special_companion', N'舊價目', N'歌陪 - 1 小時', N'hour_person', CAST(180 AS DECIMAL(12,2)), N'已停用', N'已併入陪玩區其他專區。', 600, CAST(0 AS BIT)),
+        (N'special-companion-singing-half', N'special_companion', N'舊價目', N'歌陪 - 30 分鐘', N'custom', CAST(100 AS DECIMAL(12,2)), N'已停用', N'已併入陪玩區其他專區。', 605, CAST(0 AS BIT)),
+        (N'special-companion-text', N'special_companion', N'舊價目', N'小尬劇', N'item', CAST(20 AS DECIMAL(12,2)), N'已停用', N'玉閣價目表未列此項。', 610, CAST(0 AS BIT)),
         (N'special-companion-punching-bag', N'special_companion', N'舊價目', N'特殊陪 - 受氣包', N'hour_person', CAST(150 AS DECIMAL(12,2)), N'已停用', N'新版試行價暫不列受氣包。', 620, CAST(0 AS BIT)),
-        (N'special-companion-voice', N'special_companion', N'語聊', N'語聊', N'hour_person', CAST(130 AS DECIMAL(12,2)), N'130 / 小時', NULL, 630, CAST(1 AS BIT)),
-        (N'special-companion-sleep', N'special_companion', N'舊價目', N'特殊陪 - 哄睡陪', N'hour_person', CAST(150 AS DECIMAL(12,2)), N'已停用', N'新版試行價暫不列哄睡陪。', 640, CAST(0 AS BIT))
-    ) AS v(seed_key, category, subcategory, name, unit_type, default_price, price_note, remark, sort_order, is_active)
-)
+        (N'special-companion-voice', N'special_companion', N'舊價目', N'語聊', N'hour_person', CAST(130 AS DECIMAL(12,2)), N'已停用', N'已併入陪玩區其他專區。', 630, CAST(0 AS BIT)),
+        (N'special-companion-sleep', N'special_companion', N'舊價目', N'特殊陪 - 哄睡陪', N'hour_person', CAST(150 AS DECIMAL(12,2)), N'已停用', N'新版試行價暫不列哄睡陪。', 640, CAST(0 AS BIT)),
+        (N'grind-weekly-limit', N'grind', N'一般模式', N'代肝 - 周上限', N'week', CAST(200 AS DECIMAL(12,2)), N'200 / 周', NULL, 700, CAST(1 AS BIT)),
+        (N'grind-story', N'grind', N'一般模式', N'代肝 - 劇情', N'item', CAST(60 AS DECIMAL(12,2)), N'60 / 個', NULL, 710, CAST(1 AS BIT)),
+        (N'grind-public-map', N'grind', N'一般模式', N'代肝 - 公共地圖', N'item', CAST(100 AS DECIMAL(12,2)), N'100 / 個', NULL, 720, CAST(1 AS BIT)),
+        (N'grind-event-reward', N'grind', N'一般模式', N'代肝 - 活動獎勵', N'item', CAST(80 AS DECIMAL(12,2)), N'80 / 個', NULL, 730, CAST(1 AS BIT)),
+        (N'grind-daily-rank-treasure', N'grind', N'一般模式', N'代肝 - 每日排位珍寶', N'day', CAST(50 AS DECIMAL(12,2)), N'50 / 天', N'不保勝；保勝 +10。', 740, CAST(1 AS BIT)),
+        (N'grind-daily-team-treasure', N'grind', N'一般模式', N'代肝 - 每日五排珍寶', N'day', CAST(50 AS DECIMAL(12,2)), N'50 / 天', N'不保勝；保勝 +10。', 750, CAST(1 AS BIT)),
+        (N'grind-arc-light', N'grind', N'加頁手記', N'弧光', N'item', CAST(2 AS DECIMAL(12,2)), N'2 / 根', NULL, 760, CAST(1 AS BIT)),
+        (N'grind-page', N'grind', N'加頁手記', N'添頁', N'item', CAST(2 AS DECIMAL(12,2)), N'2 / 張', NULL, 770, CAST(1 AS BIT)),
+        (N'grind-weapon-refine', N'grind', N'加頁手記', N'武器洗煉', N'item', CAST(4000 AS DECIMAL(12,2)), N'4000 / 把', NULL, 780, CAST(1 AS BIT)),
+        (N'grind-weapon-hole', N'grind', N'加頁手記', N'武器洗練', N'item', CAST(500 AS DECIMAL(12,2)), N'500 / 孔', NULL, 790, CAST(1 AS BIT)),
+        (N'grind-necklace-300m', N'grind', N'加頁手記', N'300萬項鍊', N'item', CAST(3500 AS DECIMAL(12,2)), N'3500 / 條', NULL, 800, CAST(1 AS BIT)),
+        (N'grind-necklace-140m', N'grind', N'加頁手記', N'140萬項鍊', N'item', CAST(650 AS DECIMAL(12,2)), N'650 / 條', NULL, 810, CAST(1 AS BIT)),
+        (N'grind-necklace-random', N'grind', N'加頁手記', N'隨機項鍊', N'item', CAST(500 AS DECIMAL(12,2)), N'500 / 條', NULL, 820, CAST(1 AS BIT)),
+        (N'boost-survivor-tier-1', N'boost', N'求生段位', N'代打 - 求生 一階', N'custom', CAST(10 AS DECIMAL(12,2)), N'10', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 900, CAST(1 AS BIT)),
+        (N'boost-survivor-tier-2', N'boost', N'求生段位', N'代打 - 求生 二階', N'custom', CAST(20 AS DECIMAL(12,2)), N'20', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 910, CAST(1 AS BIT)),
+        (N'boost-survivor-tier-3', N'boost', N'求生段位', N'代打 - 求生 三階', N'custom', CAST(35 AS DECIMAL(12,2)), N'35', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 920, CAST(1 AS BIT)),
+        (N'boost-survivor-tier-4', N'boost', N'求生段位', N'代打 - 求生 四階', N'custom', CAST(50 AS DECIMAL(12,2)), N'50', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 930, CAST(1 AS BIT)),
+        (N'boost-survivor-tier-5', N'boost', N'求生段位', N'代打 - 求生 五階', N'custom', CAST(60 AS DECIMAL(12,2)), N'60', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 940, CAST(1 AS BIT)),
+        (N'boost-survivor-tier-6', N'boost', N'求生段位', N'代打 - 求生 六階', N'custom', CAST(80 AS DECIMAL(12,2)), N'80', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 950, CAST(1 AS BIT)),
+        (N'boost-survivor-tier-7', N'boost', N'求生段位', N'代打 - 求生 七階', N'custom', CAST(100 AS DECIMAL(12,2)), N'100', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 960, CAST(1 AS BIT)),
+        (N'boost-survivor-peak7', N'boost', N'求生段位', N'代打 - 求生 巔七', N'custom', CAST(125 AS DECIMAL(12,2)), N'125', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 970, CAST(1 AS BIT)),
+        (N'boost-hunter-tier-1', N'boost', N'監管段位', N'代打 - 監管 一階', N'custom', CAST(10 AS DECIMAL(12,2)), N'10', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 980, CAST(1 AS BIT)),
+        (N'boost-hunter-tier-2', N'boost', N'監管段位', N'代打 - 監管 二階', N'custom', CAST(20 AS DECIMAL(12,2)), N'20', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 990, CAST(1 AS BIT)),
+        (N'boost-hunter-tier-3', N'boost', N'監管段位', N'代打 - 監管 三階', N'custom', CAST(35 AS DECIMAL(12,2)), N'35', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 1000, CAST(1 AS BIT)),
+        (N'boost-hunter-tier-4', N'boost', N'監管段位', N'代打 - 監管 四階', N'custom', CAST(50 AS DECIMAL(12,2)), N'50', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 1010, CAST(1 AS BIT)),
+        (N'boost-hunter-tier-5', N'boost', N'監管段位', N'代打 - 監管 五階', N'custom', CAST(60 AS DECIMAL(12,2)), N'60', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 1020, CAST(1 AS BIT)),
+        (N'boost-hunter-tier-6', N'boost', N'監管段位', N'代打 - 監管 六階', N'custom', CAST(75 AS DECIMAL(12,2)), N'75', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 1030, CAST(1 AS BIT)),
+        (N'boost-hunter-tier-7', N'boost', N'監管段位', N'代打 - 監管 七階', N'custom', CAST(95 AS DECIMAL(12,2)), N'95', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 1040, CAST(1 AS BIT)),
+        (N'boost-hunter-peak7', N'boost', N'監管段位', N'代打 - 監管 巔七', N'custom', CAST(120 AS DECIMAL(12,2)), N'120', N'保勝價格依段位而定；有想要的牌子，可私訊詢價。', 1050, CAST(1 AS BIT)),
+        (N'gift-broken-silver', N'gift', N'古風禮物區', N'碎銀', N'item', CAST(50 AS DECIMAL(12,2)), N'50', NULL, 1100, CAST(1 AS BIT)),
+        (N'gift-jade-pendant', N'gift', N'古風禮物區', N'玉佩', N'item', CAST(120 AS DECIMAL(12,2)), N'120', NULL, 1110, CAST(1 AS BIT)),
+        (N'gift-lovesick-hairpin', N'gift', N'古風禮物區', N'相思簪', N'item', CAST(250 AS DECIMAL(12,2)), N'250', NULL, 1120, CAST(1 AS BIT)),
+        (N'gift-golden-buyao', N'gift', N'古風禮物區', N'金步搖', N'item', CAST(520 AS DECIMAL(12,2)), N'520', NULL, 1130, CAST(1 AS BIT)),
+        (N'gift-phoenix-token', N'gift', N'古風禮物區', N'鳳凰金令', N'item', CAST(888 AS DECIMAL(12,2)), N'888', NULL, 1140, CAST(1 AS BIT)),
+        (N'gift-imperial-jade-seal', N'gift', N'古風禮物區', N'傳國玉璽', N'item', CAST(5888 AS DECIMAL(12,2)), N'5888', NULL, 1150, CAST(1 AS BIT))
+    ) AS v(seed_key, category, subcategory, name, unit_type, default_price, price_note, remark, sort_order, is_active);
+
+UPDATE target
+SET
+    is_active = 0,
+    updated_at = SYSUTCDATETIME()
+FROM dbo.service_items target
+WHERE target.category IN (N'boost', N'grind', N'play', N'special_companion', N'gift', N'deposit_bonus')
+  AND EXISTS
+  (
+      SELECT 1
+      FROM @target_price_organizations organization_scope
+      WHERE organization_scope.id = target.organization_id
+  )
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM @pilot_service_prices source
+      WHERE source.seed_key = target.seed_key
+  );
+
 UPDATE target
 SET
     category = source.category,
@@ -1129,7 +1209,47 @@ SET
     is_active = source.is_active,
     updated_at = SYSUTCDATETIME()
 FROM dbo.service_items target
-INNER JOIN pilot_service_prices source ON source.seed_key = target.seed_key;
+INNER JOIN @pilot_service_prices source ON source.seed_key = target.seed_key
+INNER JOIN @target_price_organizations organization_scope ON organization_scope.id = target.organization_id;
+
+INSERT INTO dbo.service_items
+(
+    organization_id,
+    seed_key,
+    category,
+    subcategory,
+    name,
+    unit_type,
+    default_price,
+    price_note,
+    remark,
+    sort_order,
+    is_active,
+    created_at
+)
+SELECT
+    organization_source.id,
+    source.seed_key,
+    source.category,
+    source.subcategory,
+    source.name,
+    source.unit_type,
+    source.default_price,
+    source.price_note,
+    source.remark,
+    source.sort_order,
+    source.is_active,
+    SYSUTCDATETIME()
+FROM dbo.organizations organization_source
+INNER JOIN @target_price_organizations organization_scope ON organization_scope.id = organization_source.id
+CROSS JOIN @pilot_service_prices source
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.service_items existing
+    WHERE existing.organization_id = organization_source.id
+      AND existing.seed_key = source.seed_key
+);
 """);
 
         await db.Database.ExecuteSqlRawAsync("""

@@ -23,6 +23,12 @@ public sealed class ServiceItemsController : ControllerBase
     public async Task<ActionResult<List<ServiceItemDto>>> GetServiceItems([FromQuery] bool activeOnly = false)
     {
         var query = _db.ServiceItems.IgnoreQueryFilters().AsNoTracking();
+        var organizationId = HttpContext.Session.GetInt32(AuthService.SessionOrganizationId) ?? 0;
+        if (organizationId > 0)
+        {
+            query = query.Where(x => x.OrganizationId == organizationId);
+        }
+
         if (activeOnly)
         {
             query = query.Where(x => x.IsActive);
@@ -39,7 +45,14 @@ public sealed class ServiceItemsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ServiceItemDto>> GetServiceItem(int id)
     {
-        var item = await _db.ServiceItems.IgnoreQueryFilters().AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+        var organizationId = HttpContext.Session.GetInt32(AuthService.SessionOrganizationId) ?? 0;
+        var query = _db.ServiceItems.IgnoreQueryFilters().AsNoTracking();
+        if (organizationId > 0)
+        {
+            query = query.Where(x => x.OrganizationId == organizationId);
+        }
+
+        var item = await query.FirstOrDefaultAsync(x => x.Id == id);
         return item is null ? NotFound() : Ok(ServiceItemMapper.ToDto(item));
     }
 

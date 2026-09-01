@@ -10,6 +10,12 @@ public sealed class AuthMeDto
 {
     public bool AuthRequired { get; set; }
     public bool IsAuthenticated { get; set; }
+    public int? CurrentOrganizationId { get; set; }
     public LoginUserDto? User { get; set; }
     public UserPreferenceDto? Preferences { get; set; }
+}
+
+public sealed class SwitchOrganizationRequestDto
+{
+    public int OrganizationId { get; set; }
 }
