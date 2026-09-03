@@ -2765,8 +2765,6 @@ input[type="checkbox"] {
   }
 
   .stats-grid,
-  .response-time-grid,
-  .response-time-list,
   .two,
   .form-list {
     grid-template-columns: 1fr;
@@ -4599,123 +4597,6 @@ tbody tr:hover td {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin: 0 0 18px;
-}
-
-.response-time-panel {
-  display: grid;
-  gap: 14px;
-  margin: 0 0 18px;
-}
-
-.response-time-status {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 4px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #f5f8f5;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.response-time-status.good {
-  border-color: rgb(36 128 113 / 20%);
-  background: rgb(36 128 113 / 10%);
-  color: var(--accent);
-}
-
-.response-time-status.warning {
-  border-color: rgb(185 133 44 / 22%);
-  background: rgb(185 133 44 / 12%);
-  color: var(--warn);
-}
-
-.response-time-status.danger {
-  border-color: rgb(190 62 62 / 20%);
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.response-time-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.response-time-grid article {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.response-time-grid span,
-.response-time-list span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.response-time-grid strong {
-  color: var(--ink);
-  font-size: 22px;
-  line-height: 1.15;
-}
-
-.response-time-meter {
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgb(15 71 63 / 8%);
-}
-
-.response-time-meter span {
-  display: block;
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), var(--gold));
-  transition: width .2s ease;
-}
-
-.response-time-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.response-time-list article {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgb(255 255 255 / 84%);
-}
-
-.response-time-list article.failed {
-  border-color: rgb(190 62 62 / 18%);
-  background: rgb(255 241 241 / 76%);
-}
-
-.response-time-list article > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.response-time-list strong {
-  flex: 0 0 auto;
-  color: var(--ink);
-  font-size: 13px;
 }
 
 .ops-home-strip article {

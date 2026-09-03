@@ -7,7 +7,9 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using StackExchange.Profiling;
 using System.Reflection;
+using System.Text.Encodings.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -107,6 +109,14 @@ builder.Services.AddScoped<MoneyLogService>();
 builder.Services.AddScoped<AttachmentRequirementService>();
 builder.Services.AddScoped<FileAttachmentService>();
 builder.Services.AddScoped<UserPreferenceService>();
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddMiniProfiler(options =>
+    {
+        options.RouteBasePath = "/profiler";
+    }).AddEntityFramework();
+}
 
 builder.Services.AddCors(options =>
 {
@@ -239,6 +249,40 @@ app.Use(async (context, next) =>
         "permission_denied",
         $"權限不足，需要 {requiredPermissions}。");
 });
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseMiniProfiler();
+    app.Use(async (context, next) =>
+    {
+        if (HttpMethods.IsGet(context.Request.Method) &&
+            (context.Request.Path == "/" || context.Request.Path == "/index.html"))
+        {
+            var webRoot = app.Environment.WebRootPath ??
+                Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+            var indexPath = Path.Combine(webRoot, "index.html");
+
+            if (File.Exists(indexPath))
+            {
+                var html = await File.ReadAllTextAsync(indexPath);
+                var includes = MiniProfiler.Current?.RenderIncludes(context);
+
+                if (includes is not null)
+                {
+                    using var writer = new StringWriter();
+                    includes.WriteTo(writer, HtmlEncoder.Default);
+                    html = html.Replace("</body>", writer.ToString() + Environment.NewLine + "</body>", StringComparison.OrdinalIgnoreCase);
+                }
+
+                context.Response.ContentType = "text/html; charset=utf-8";
+                await context.Response.WriteAsync(html);
+                return;
+            }
+        }
+
+        await next();
+    });
+}
 
 app.UseDefaultFiles();
 app.UseStaticFiles();

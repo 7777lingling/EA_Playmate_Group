@@ -29,12 +29,6 @@ const state = {
   orderServiceCategory: "play",
   orderAmountManuallyEdited: false,
   orderBaseAmountManuallyEdited: false,
-  responseTime: {
-    samples: [],
-    lastMs: null,
-    averageMs: null,
-    maxMs: null
-  },
   auth: null
 };
 
@@ -1775,20 +1769,10 @@ async function api(path, options = {}) {
           "Content-Type": "application/json",
           ...(options.headers || {})
         };
-  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-  let response;
-
-  try {
-    response = await fetch(path, {
-      headers,
-      ...fetchOptions
-    });
-  } catch (error) {
-    recordResponseTime(path, elapsedMs(startedAt), false, 0);
-    throw error;
-  }
-
-  recordResponseTime(path, elapsedMs(startedAt), response.ok, response.status);
+  const response = await fetch(path, {
+    headers,
+    ...fetchOptions
+  });
 
   if (!response.ok) {
     if (response.status === 401 && !skipAuthRedirect) {
@@ -1819,135 +1803,6 @@ async function api(path, options = {}) {
   }
 
   return response.json();
-}
-
-function elapsedMs(startedAt) {
-  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-  return Math.max(0, Math.round(now - startedAt));
-}
-
-function recordResponseTime(path, durationMs, ok, status) {
-  if (!state.responseTime) {
-    return;
-  }
-
-  const samples = state.responseTime.samples;
-  samples.unshift({
-    path,
-    durationMs,
-    ok,
-    status,
-    at: new Date().toISOString()
-  });
-
-  if (samples.length > 30) {
-    samples.length = 30;
-  }
-
-  const completed = samples.filter((sample) => sample.ok);
-  const measured = completed.length ? completed : samples;
-  const total = measured.reduce((sum, sample) => sum + sample.durationMs, 0);
-
-  state.responseTime.lastMs = durationMs;
-  state.responseTime.averageMs = measured.length ? Math.round(total / measured.length) : null;
-  state.responseTime.maxMs = measured.length ? Math.max(...measured.map((sample) => sample.durationMs)) : null;
-
-  renderResponseTimePanel();
-}
-
-function renderResponseTimePanel() {
-  const panel = document.getElementById("responseTimePanel");
-  if (!panel) {
-    return;
-  }
-
-  const samples = state.responseTime?.samples || [];
-  const lastMs = state.responseTime?.lastMs;
-  const averageMs = state.responseTime?.averageMs;
-  const maxMs = state.responseTime?.maxMs;
-  const latest = samples[0];
-  const status = document.getElementById("responseTimeStatus");
-
-  setText("responseTimeLast", formatMilliseconds(lastMs));
-  setText("responseTimeAverage", formatMilliseconds(averageMs));
-  setText("responseTimeMax", formatMilliseconds(maxMs));
-  setText("responseTimeSampleCount", samples.length);
-
-  if (status) {
-    status.className = `response-time-status ${responseTimeTone(averageMs, latest?.ok)}`;
-    status.textContent = responseTimeLabel(averageMs, latest?.ok);
-  }
-
-  const meter = document.getElementById("responseTimeMeterBar");
-  if (meter) {
-    const width = averageMs == null ? 0 : Math.min(100, Math.max(6, Math.round((averageMs / 1500) * 100)));
-    meter.style.width = `${width}%`;
-  }
-
-  const list = document.getElementById("responseTimeList");
-  if (!list) {
-    return;
-  }
-
-  if (!samples.length) {
-    list.innerHTML = "<span>尚無 API 樣本</span>";
-    return;
-  }
-
-  list.innerHTML = samples.slice(0, 6).map((sample) => `
-    <article class="${sample.ok ? "" : "failed"}">
-      <span>${escapeHtml(shortApiPath(sample.path))}</span>
-      <strong>${sample.durationMs} ms</strong>
-    </article>
-  `).join("");
-}
-
-function setText(id, value) {
-  const element = document.getElementById(id);
-  if (element) {
-    element.textContent = value;
-  }
-}
-
-function formatMilliseconds(value) {
-  return value == null ? "-- ms" : `${Math.round(value)} ms`;
-}
-
-function responseTimeTone(averageMs, ok) {
-  if (ok === false) {
-    return "danger";
-  }
-  if (averageMs == null) {
-    return "";
-  }
-  if (averageMs <= 300) {
-    return "good";
-  }
-  if (averageMs <= 800) {
-    return "warning";
-  }
-  return "danger";
-}
-
-function responseTimeLabel(averageMs, ok) {
-  if (ok === false) {
-    return "錯誤";
-  }
-  if (averageMs == null) {
-    return "待測";
-  }
-  if (averageMs <= 300) {
-    return "快速";
-  }
-  if (averageMs <= 800) {
-    return "正常";
-  }
-  return "偏慢";
-}
-
-function shortApiPath(path) {
-  const value = String(path || "");
-  return value.replace(/^\/api\//, "");
 }
 
 async function submitLogin(event) {
